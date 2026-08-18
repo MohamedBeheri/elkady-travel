@@ -6,7 +6,6 @@ backend/db.sqlite3
 backend/.env
 backend/media/
 backend/staticfiles/
-backend/frontend_dist/
 
 # Frontend
 frontend/node_modules/
@@ -18,3 +17,4 @@ frontend/dist/
 
 # Presentation / build artifacts (not code)
 *.pdf
+# built SPA (frontend_dist) IS committed so Render's Python service serves it without Node
