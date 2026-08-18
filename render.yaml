@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: trips-system
+    name: elkady-travel
     runtime: python
     rootDir: backend
     plan: free
