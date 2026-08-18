@@ -1,0 +1,92 @@
+import { Card, Table, Tag, Button, Modal, Select, Input, Upload, App as AntdApp, Descriptions, Alert } from 'antd'
+import { UploadOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import {
+  useSubscriptionsQuery, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
+} from '../app/api'
+
+const STATUS_COLOR: Record<string, string> = {
+  payment_pending: 'orange', payment_submitted: 'blue', under_review: 'blue',
+  confirmed: 'green', rejected: 'red', cancelled: 'default', expired: 'default',
+}
+const TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شهري', daily: 'يومي' }
+
+export default function MyBookings() {
+  const { message } = AntdApp.useApp()
+  const { data } = useSubscriptionsQuery()
+  const { data: methods } = usePaymentMethodsQuery()
+  const { data: accounts } = usePaymentAccountsQuery()
+  const [submitPayment, { isLoading }] = useSubmitPaymentMutation()
+
+  const [open, setOpen] = useState(false)
+  const [current, setCurrent] = useState<any>(null)
+  const [methodId, setMethodId] = useState<number>()
+  const [reference, setReference] = useState('')
+  const [file, setFile] = useState<any>(null)
+
+  const openPay = (row: any) => { setCurrent(row); setMethodId(undefined); setReference(''); setFile(null); setOpen(true) }
+  const account = (accounts?.results || accounts || []).find((a: any) => a.method === methodId)
+
+  const submit = async () => {
+    if (!methodId) { message.error('اختر وسيلة الدفع'); return }
+    if (!file) { message.error('ارفع صورة إثبات الدفع'); return }
+    const fd = new FormData()
+    fd.append('payment_method', String(methodId))
+    fd.append('payment_reference', reference)
+    fd.append('payment_proof', file)
+    try {
+      await submitPayment({ id: current.id, body: fd }).unwrap()
+      message.success('تم إرسال إثبات الدفع للمراجعة')
+      setOpen(false)
+    } catch {
+      message.error('تعذر الإرسال')
+    }
+  }
+
+  return (
+    <Card title="حجوزاتي والمدفوعات">
+      <Table
+        rowKey="id"
+        dataSource={data?.results || []}
+        scroll={{ x: 700 }}
+        columns={[
+          { title: 'النوع', dataIndex: 'subscription_type', render: (v) => <Tag color="cyan">{TYPE_LABEL[v]}</Tag> },
+          { title: 'المسار', dataIndex: 'route_name' },
+          { title: 'الجامعة', dataIndex: 'university_name' },
+          { title: 'المبلغ', dataIndex: 'amount', render: (v) => `${Number(v).toLocaleString()} ج.م` },
+          { title: 'الحالة', dataIndex: 'status_display', render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
+          {
+            title: 'إجراء', render: (_, r: any) => (
+              ['payment_pending', 'rejected'].includes(r.status)
+                ? <Button size="small" type="primary" onClick={() => openPay(r)}>ادفع الآن</Button>
+                : r.status === 'payment_submitted' ? <span style={{ color: '#64748b' }}>بانتظار المراجعة</span>
+                : r.rejection_reason ? <span style={{ color: '#ef4444' }}>{r.rejection_reason}</span> : '—'
+            ),
+          },
+        ]}
+      />
+
+      <Modal title="دفع الاشتراك" open={open} onOk={submit} confirmLoading={isLoading} onCancel={() => setOpen(false)} okText="إرسال إثبات الدفع">
+        <Alert type="warning" style={{ marginBottom: 12 }}
+          message="حوّل المبلغ إلى الحساب الظاهر ثم ارفع صورة الإيصال. لا يُعتمد الدفع إلا بعد مراجعة الإدارة." />
+        <div style={{ marginBottom: 12 }}>وسيلة الدفع:</div>
+        <Select
+          style={{ width: '100%', marginBottom: 12 }}
+          placeholder="اختر وسيلة الدفع" value={methodId} onChange={setMethodId}
+          options={(methods?.results || methods || []).map((m: any) => ({ value: m.id, label: m.name }))}
+        />
+        {account && (
+          <Descriptions size="small" bordered column={1} style={{ marginBottom: 12 }}>
+            <Descriptions.Item label="اسم الحساب">{account.holder_name}</Descriptions.Item>
+            <Descriptions.Item label="الرقم">{account.number}</Descriptions.Item>
+            {account.instructions && <Descriptions.Item label="تعليمات">{account.instructions}</Descriptions.Item>}
+          </Descriptions>
+        )}
+        <Input placeholder="مرجع التحويل (اختياري)" value={reference} onChange={(e) => setReference(e.target.value)} style={{ marginBottom: 12 }} />
+        <Upload beforeUpload={(f) => { setFile(f); return false }} maxCount={1} fileList={file ? [file] : []} onRemove={() => setFile(null)}>
+          <Button icon={<UploadOutlined />}>رفع صورة الإيصال</Button>
+        </Upload>
+      </Modal>
+    </Card>
+  )
+}

@@ -1,0 +1,20 @@
+# Python / Django
+backend/venv/
+**/__pycache__/
+*.pyc
+backend/db.sqlite3
+backend/.env
+backend/media/
+backend/staticfiles/
+backend/frontend_dist/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+
+# Presentation / build artifacts (not code)
+*.pdf

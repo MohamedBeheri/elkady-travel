@@ -1,0 +1,89 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+  background: #eef2f9;
+  color: #0f172a;
+}
+/* ---- Banner-topped login (uses the ready ELKADY banners) ---- */
+.auth-bg {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #0A2242 0%, #0B2E5E 55%, #123a73 100%);
+  padding: 24px;
+}
+.auth-wrap {
+  width: 100%; max-width: 560px;
+  border-radius: 18px; overflow: hidden;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.45);
+  background: #fff;
+}
+.auth-banner { width: 100%; display: block; }
+.auth-card { padding: 28px 30px 30px; }
+@media (max-width: 560px) { .auth-card { padding: 22px 18px; } }
+.brand-logo {
+  width: 118px; height: 118px; border-radius: 50%;
+  object-fit: contain;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(240,126,27,0.35), 0 0 0 4px rgba(240,126,27,0.12);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 50px; margin: 0 auto 16px;
+}
+.brand-logo--fallback {
+  background: linear-gradient(135deg, #F7A54A, #EC6A16);
+}
+.sidebar-logo {
+  width: 46px; height: 46px; border-radius: 50%;
+  object-fit: contain; background: #fff; flex-shrink: 0;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+}
+
+/* ---- Page hero using a ready ELKADY banner + welcome bar ---- */
+.page-hero {
+  border-radius: 16px; overflow: hidden; margin-bottom: 22px;
+  box-shadow: 0 10px 26px rgba(11,46,94,0.14);
+}
+.page-hero img { width: 100%; display: block; }
+.page-hero.compact img { height: 118px; object-fit: cover; object-position: center 42%; }
+.page-hero .hero-bar {
+  background: #0B2E5E; color: #fff; padding: 12px 22px;
+  display: flex; align-items: center; gap: 10px; font-size: 16px; flex-wrap: wrap;
+}
+.page-hero .hero-bar b { font-weight: 800; }
+.page-hero .hero-bar .tag { color: #F5A44E; }
+
+/* ---- Expressive image-top action cards ---- */
+.img-card {
+  border-radius: 16px; overflow: hidden; background: #fff; cursor: pointer;
+  border: 1px solid #eef1f6; box-shadow: 0 6px 18px rgba(11,46,94,0.08);
+  transition: transform .12s, box-shadow .12s; height: 100%;
+}
+.img-card:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(240,126,27,0.22); }
+.img-card .thumb { height: 108px; background-size: cover; background-position: center; position: relative; }
+.img-card .thumb .ic {
+  position: absolute; inset-inline-start: 14px; bottom: -22px; width: 52px; height: 52px; border-radius: 14px;
+  background: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18); color: #F07E1B;
+}
+.img-card .body { padding: 30px 16px 16px; }
+.img-card .body h3 { margin: 0; font-size: 15px; font-weight: 800; color: #0B2E5E; }
+.img-card .body p { margin: 4px 0 0; font-size: 12.5px; color: #64748b; }
+
+/* ---- Admin dashboard KPI tiles ---- */
+.kpi-tile {
+  background: #fff; border-radius: 14px; padding: 16px 18px; display: flex; align-items: center; gap: 14px;
+  border: 1px solid #eef1f6; box-shadow: 0 4px 14px rgba(11,46,94,0.06); height: 100%;
+  border-inline-start: 4px solid var(--kc, #F07E1B);
+}
+.kpi-tile .ico {
+  width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; background: color-mix(in srgb, var(--kc, #F07E1B) 14%, #fff); color: var(--kc, #F07E1B);
+}
+.kpi-tile .n { font-size: 24px; font-weight: 800; color: #0B2E5E; line-height: 1.1; }
+.kpi-tile .l { font-size: 12.5px; color: #64748b; }
+.sec-head { font-weight: 800; font-size: 16px; color: #0B2E5E; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.sec-head::before { content: ''; width: 5px; height: 18px; border-radius: 3px; background: #F07E1B; display: inline-block; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.pickup-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; background: #fff; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }

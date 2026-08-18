@@ -1,0 +1,76 @@
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from config.permissions import STAFF_ROLES
+from apps.notifications.models import notify
+from .models import Subscription
+from .serializers import SubscriptionCreateSerializer, SubscriptionSerializer
+
+
+class SubscriptionViewSet(viewsets.ModelViewSet):
+    queryset = Subscription.objects.select_related(
+        'student', 'route', 'route__destination', 'university', 'pickup_point', 'payment_method',
+    ).all()
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['status', 'subscription_type', 'route', 'university', 'student']
+    search_fields = ['student__full_name', 'student__national_id', 'student__phone']
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return SubscriptionCreateSerializer
+        return SubscriptionSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.user.role == 'student':
+            return qs.filter(student=self.request.user)
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='submit-payment')
+    def submit_payment(self, request, pk=None):
+        """Student uploads proof: method, reference, screenshot. Enters review queue."""
+        sub = self.get_object()
+        sub.payment_method_id = request.data.get('payment_method') or sub.payment_method_id
+        sub.payment_reference = request.data.get('payment_reference', sub.payment_reference)
+        if 'payment_proof' in request.FILES:
+            sub.payment_proof = request.FILES['payment_proof']
+        sub.save()
+        sub.submit_payment()  # RULE 12: still requires admin approval
+        return Response(SubscriptionSerializer(sub).data)
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Admin verifies payment → booking CONFIRMED (RULE 13)."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        sub = self.get_object()
+        sub.approve(request.user)
+        notify(sub.student, 'تم تأكيد اشتراكك',
+               f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}',
+               link='/bookings', severity='success')
+        return Response(SubscriptionSerializer(sub).data)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        sub = self.get_object()
+        reason = request.data.get('rejection_reason', '')
+        sub.reject(request.user, reason)
+        notify(sub.student, 'تم رفض إثبات الدفع', reason or 'يرجى إعادة رفع إثبات دفع صحيح',
+               link='/bookings', severity='error')
+        return Response(SubscriptionSerializer(sub).data)
+
+    @action(detail=False, methods=['get'], url_path='payment-queue')
+    def payment_queue(self, request):
+        """Admin queue of payments awaiting review."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        qs = self.get_queryset().filter(status__in=[
+            Subscription.Status.PAYMENT_SUBMITTED, Subscription.Status.UNDER_REVIEW,
+        ])
+        page = self.paginate_queryset(qs)
+        ser = SubscriptionSerializer(page or qs, many=True)
+        return self.get_paginated_response(ser.data) if page is not None else Response(ser.data)

@@ -1,0 +1,32 @@
+from django.conf import settings
+from django.contrib import admin
+from django.http import FileResponse, Http404
+from django.urls import include, path, re_path
+from django.views.static import serve
+
+from .views import dashboard_stats, dashboard_charts
+
+
+def spa(request, *args, **kwargs):
+    """Serve the built SPA's index.html for any non-API route (client-side routing)."""
+    index = settings.FRONTEND_DIR / 'index.html'
+    if not index.exists():
+        raise Http404('Frontend build not found')
+    return FileResponse(open(index, 'rb'))
+
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/', include([
+        path('dashboard/stats/', dashboard_stats, name='dashboard_stats'),
+        path('dashboard/charts/', dashboard_charts, name='dashboard_charts'),
+        path('auth/', include('apps.users.urls')),
+        path('config/', include('apps.config_app.urls')),
+        path('bookings/', include('apps.bookings.urls')),
+        path('operations/', include('apps.operations.urls')),
+        path('tourism/', include('apps.tourism.urls')),
+        path('notifications/', include('apps.notifications.urls')),
+    ])),
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^(?!api/|admin/|media/|static/|assets/).*$', spa, name='spa'),
+]

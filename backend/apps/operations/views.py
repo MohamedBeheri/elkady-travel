@@ -1,0 +1,356 @@
+from collections import defaultdict
+
+from django.db.models import Count, Q
+from django.utils import timezone
+from rest_framework import viewsets
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from config.permissions import STAFF_ROLES
+from apps.bookings.models import Subscription
+from apps.config_app.models import MorningSlot, Route, ReturnSlot, SeatCapacity
+from apps.notifications.models import notify
+from .layouts import LAYOUTS, layout_capacity
+from .models import DailyTrip, ReturnBooking, SeatRequest, TermSeatLock
+from .serializers import (
+    DailyTripSerializer, ReturnBookingSerializer, SeatRequestSerializer,
+)
+from .services import (
+    allocate_trip, book_specific_seat, build_seatmap, cancel_seat,
+    confirm_seat_payment, make_qr, release_seat, request_seat, run_daily_allocation,
+)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def layouts(request):
+    """Vehicle seat layouts (bus50 / hiace15) for the interactive seat map."""
+    return Response(LAYOUTS)
+
+
+def _get_or_create_trip(date, route, slot):
+    """Fetch (or lazily create) the operational trip, seeding capacity/layout from config."""
+    trip = DailyTrip.objects.filter(date=date, route=route, morning_slot=slot).first()
+    if trip:
+        return trip
+    cap = SeatCapacity.objects.filter(route=route, morning_slot=slot).first()
+    layout = cap.layout if cap else 'bus50'
+    total = cap.total_seats if cap else layout_capacity(layout)
+    return DailyTrip.objects.create(date=date, route=route, morning_slot=slot,
+                                    layout=layout, total_seats=total)
+
+
+def _active_priority(student, route):
+    """Best confirmed subscription tier for this student on this route (term>monthly>daily)."""
+    subs = Subscription.objects.filter(
+        student=student, route=route, status=Subscription.Status.CONFIRMED,
+    ).values_list('subscription_type', flat=True)
+    subs = set(subs)
+    if 'term' in subs:
+        return 'term', Subscription.objects.filter(
+            student=student, route=route, subscription_type='term',
+            status=Subscription.Status.CONFIRMED).first()
+    if 'monthly' in subs:
+        return 'monthly', Subscription.objects.filter(
+            student=student, route=route, subscription_type='monthly',
+            status=Subscription.Status.CONFIRMED).first()
+    return 'daily', None
+
+
+class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = DailyTrip.objects.select_related('route', 'route__destination', 'morning_slot').all()
+    serializer_class = DailyTripSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['date', 'route', 'morning_slot']
+
+    @action(detail=False, methods=['get'], url_path='board')
+    def board(self, request):
+        """Admin operational board for a date, grouped by slot → route (§16)."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        date = request.query_params.get('date') or timezone.localdate().isoformat()
+        trips = self.get_queryset().filter(date=date)
+        data = DailyTripSerializer(trips, many=True).data
+        return Response({'date': date, 'trips': data})
+
+    @action(detail=True, methods=['get'], url_path='passengers')
+    def passengers(self, request, pk=None):
+        """Passenger list for one trip, grouped by pickup point then university (§17/18)."""
+        trip = self.get_object()
+        reqs = trip.seat_requests.filter(
+            status=SeatRequest.Status.CONFIRMED,
+        ).select_related('student', 'university', 'pickup_point').order_by(
+            'pickup_point__sequence', 'university__name', 'student__full_name',
+        )
+        by_pickup = defaultdict(list)
+        for r in reqs:
+            key = r.pickup_point.name if r.pickup_point else 'غير محدد'
+            by_pickup[key].append(SeatRequestSerializer(r).data)
+        groups = [{'pickup': k, 'passengers': v} for k, v in by_pickup.items()]
+        return Response({
+            'trip': DailyTripSerializer(trip).data,
+            'groups': groups,
+        })
+
+    @action(detail=True, methods=['get'], url_path='seatmap')
+    def seatmap(self, request, pk=None):
+        """Interactive seat map for a trip: per-seat state for the current viewer."""
+        trip = self.get_object()
+        is_staff = request.user.role in STAFF_ROLES
+        data = build_seatmap(trip, viewer=request.user, is_staff=is_staff)
+        return Response({'trip': DailyTripSerializer(trip).data, **data})
+
+    @action(detail=False, methods=['get'], url_path='seatmap-for')
+    def seatmap_for(self, request):
+        """Seat map by date/route/slot (creates the trip lazily) for the booking flow."""
+        date = request.query_params.get('date')
+        route_id = request.query_params.get('route')
+        slot_id = request.query_params.get('morning_slot')
+        if not (date and route_id and slot_id):
+            return Response({'detail': 'البيانات ناقصة'}, status=400)
+        trip = _get_or_create_trip(date, Route.objects.get(pk=route_id), MorningSlot.objects.get(pk=slot_id))
+        is_staff = request.user.role in STAFF_ROLES
+        data = build_seatmap(trip, viewer=request.user, is_staff=is_staff)
+        return Response({'trip': DailyTripSerializer(trip).data, **data})
+
+    @action(detail=True, methods=['post'], url_path='release-seat')
+    def release_seat_action(self, request, pk=None):
+        """Admin frees a seat (فحت). Term seats freed for this date only (absence)."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        trip = self.get_object()
+        seat = int(request.data.get('seat_number'))
+        result = release_seat(trip=trip, seat_number=seat, by_user=request.user)
+        return Response({'ok': True, 'result': result})
+
+    @action(detail=True, methods=['post'], url_path='allocate')
+    def allocate(self, request, pk=None):
+        """Manually trigger allocation for one trip."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        allocate_trip(int(pk))
+        trip = self.get_object()
+        return Response(DailyTripSerializer(trip).data)
+
+    @action(detail=False, methods=['post'], url_path='run-allocation')
+    def run_allocation(self, request):
+        """Run the 10 PM deadline allocation across all trips of a date (§12)."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        date = request.data.get('date') or timezone.localdate().isoformat()
+        count = run_daily_allocation(date)
+        # Notify newly confirmed / still-waiting students.
+        for trip in DailyTrip.objects.filter(date=date):
+            for r in trip.seat_requests.exclude(status=SeatRequest.Status.CANCELLED).select_related('student'):
+                if r.status == SeatRequest.Status.CONFIRMED:
+                    notify(r.student, 'تم تأكيد مقعدك', f'رحلة {trip.date} - {trip.route}',
+                           link='/daily', severity='success')
+                else:
+                    notify(r.student, 'أنت في قائمة الانتظار',
+                           f'ترتيبك {r.queue_position} لرحلة {trip.date} - {trip.route}',
+                           link='/daily', severity='warning')
+        return Response({'allocated_trips': count, 'date': date})
+
+
+class SeatRequestViewSet(viewsets.ModelViewSet):
+    queryset = SeatRequest.objects.select_related(
+        'daily_trip', 'daily_trip__route', 'student', 'university', 'pickup_point',
+    ).all()
+    serializer_class = SeatRequestSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['status', 'daily_trip', 'student', 'priority_type']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.user.role == 'student':
+            return qs.filter(student=self.request.user)
+        return qs
+
+    @action(detail=False, methods=['post'], url_path='book')
+    def book(self, request):
+        """Student books tomorrow's daily seat. Priority derives from confirmed subscription."""
+        user = request.user
+        date = request.data.get('date')
+        route_id = request.data.get('route')
+        slot_id = request.data.get('morning_slot')
+        university_id = request.data.get('university') or (user.university_id)
+        pickup_id = request.data.get('pickup_point')
+        if not (date and route_id and slot_id and university_id):
+            return Response({'detail': 'البيانات ناقصة'}, status=400)
+
+        route = Route.objects.get(pk=route_id)
+        slot = MorningSlot.objects.get(pk=slot_id)
+        trip = _get_or_create_trip(date, route, slot)
+        priority_type, sub = _active_priority(user, route)
+
+        req = request_seat(
+            daily_trip=trip, student=user, subscription=sub,
+            priority_type=priority_type, university_id=university_id,
+            pickup_point_id=pickup_id,
+        )
+        return Response(SeatRequestSerializer(req).data, status=201)
+
+    @action(detail=False, methods=['post'], url_path='book-seat')
+    def book_seat(self, request):
+        """Student picks a specific seat on the seat map."""
+        user = request.user
+        date = request.data.get('date')
+        route_id = request.data.get('route')
+        slot_id = request.data.get('morning_slot')
+        seat_number = request.data.get('seat_number')
+        university_id = request.data.get('university') or user.university_id
+        if not (date and route_id and slot_id and seat_number and university_id):
+            return Response({'detail': 'البيانات ناقصة'}, status=400)
+
+        route = Route.objects.get(pk=route_id)
+        slot = MorningSlot.objects.get(pk=slot_id)
+        trip = _get_or_create_trip(date, route, slot)
+        priority_type, sub = _active_priority(user, route)
+        try:
+            kind, obj, msg = book_specific_seat(
+                trip=trip, student=user, seat_number=int(seat_number),
+                university_id=university_id, priority_type=priority_type, subscription=sub,
+            )
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=409)
+        return Response({'kind': kind, 'message': msg, 'seat_number': int(seat_number)}, status=201)
+
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        """Admin confirms a HELD daily booking's payment → CONFIRMED + QR."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        req = self.get_object()
+        confirm_seat_payment(req)
+        notify(req.student, 'تم تأكيد مقعدك',
+               f'مقعد رقم {req.seat_number} — رحلة {req.daily_trip.date}',
+               link='/tickets', severity='success')
+        return Response(SeatRequestSerializer(req).data)
+
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Cancel a seat → releases it and promotes next in line (RULE 10/11)."""
+        req = self.get_object()
+        cancel_seat(req)
+        req.refresh_from_db()
+        return Response(SeatRequestSerializer(req).data)
+
+    @action(detail=False, methods=['get'])
+    def tickets(self, request):
+        """The student's active seat tickets (per-trip bookings + term seat) with QR."""
+        user = request.user
+        out = []
+        reqs = SeatRequest.objects.filter(
+            student=user, seat_number__isnull=False,
+            status__in=[SeatRequest.Status.HELD, SeatRequest.Status.CONFIRMED],
+        ).select_related('daily_trip', 'daily_trip__route', 'daily_trip__morning_slot')
+        for r in reqs:
+            confirmed = r.status == SeatRequest.Status.CONFIRMED
+            payload = f'ELKADY|{r.qr_token or "-"}|مقعد {r.seat_number}|{r.daily_trip.date}|{r.daily_trip.route.name}|{user.full_name}'
+            out.append({
+                'kind': 'daily', 'id': r.id, 'seat_number': r.seat_number,
+                'date': str(r.daily_trip.date), 'route': r.daily_trip.route.name,
+                'slot': r.daily_trip.morning_slot.name, 'status': r.status,
+                'status_display': r.get_status_display(),
+                'qr': make_qr(payload) if confirmed else '', 'token': r.qr_token,
+            })
+        for lock in TermSeatLock.objects.filter(student=user, active=True).select_related('route', 'morning_slot'):
+            payload = f'ELKADY|TERM|مقعد {lock.seat_number}|{lock.route.name}|{lock.morning_slot.name}|{user.full_name}'
+            out.append({
+                'kind': 'term', 'id': lock.id, 'seat_number': lock.seat_number,
+                'date': 'طوال الترم', 'route': lock.route.name, 'slot': lock.morning_slot.name,
+                'status': 'confirmed', 'status_display': 'مؤكد (ترم)',
+                'qr': make_qr(payload), 'token': f'TERM-{lock.id}',
+            })
+        return Response(out)
+
+
+class ReturnBookingViewSet(viewsets.ModelViewSet):
+    queryset = ReturnBooking.objects.select_related(
+        'student', 'return_slot', 'university',
+    ).all()
+    serializer_class = ReturnBookingSerializer
+    permission_classes = [IsAuthenticated]
+    filterset_fields = ['date', 'return_slot', 'university', 'status']
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.user.role == 'student':
+            return qs.filter(student=self.request.user)
+        return qs
+
+    @action(detail=False, methods=['get'], url_path='availability')
+    def availability(self, request):
+        """Seats left per return slot for a date (§14)."""
+        date = request.query_params.get('date') or timezone.localdate().isoformat()
+        slots = ReturnSlot.objects.filter(active=True)
+        taken = dict(
+            ReturnBooking.objects.filter(date=date, status=ReturnBooking.Status.CONFIRMED)
+            .values_list('return_slot').annotate(c=Count('id'))
+        )
+        out = []
+        for s in slots:
+            used = taken.get(s.id, 0)
+            out.append({
+                'id': s.id, 'name': s.name,
+                'departure_time': s.departure_time.strftime('%H:%M'),
+                'capacity': s.capacity, 'used': used,
+                'available': max(s.capacity - used, 0),
+                'full': used >= s.capacity,
+            })
+        return Response({'date': date, 'slots': out})
+
+    @action(detail=False, methods=['post'], url_path='book')
+    def book(self, request):
+        """Book a return seat if capacity allows."""
+        user = request.user
+        date = request.data.get('date')
+        slot_id = request.data.get('return_slot')
+        university_id = request.data.get('university') or user.university_id
+        if not (date and slot_id and university_id):
+            return Response({'detail': 'البيانات ناقصة'}, status=400)
+        slot = ReturnSlot.objects.get(pk=slot_id)
+        used = ReturnBooking.objects.filter(
+            date=date, return_slot=slot, status=ReturnBooking.Status.CONFIRMED).count()
+        if used >= slot.capacity:
+            return Response({'detail': 'لا توجد مقاعد متاحة لهذا الموعد.'}, status=409)
+        booking, _ = ReturnBooking.objects.update_or_create(
+            student=user, date=date,
+            defaults={'return_slot': slot, 'university_id': university_id,
+                      'status': ReturnBooking.Status.CONFIRMED},
+        )
+        return Response(ReturnBookingSerializer(booking).data, status=201)
+
+    @action(detail=True, methods=['post'], url_path='change')
+    def change(self, request, pk=None):
+        """Change return time only if the new slot has room (RULE 9: reserve new, then release old)."""
+        booking = self.get_object()
+        new_slot_id = request.data.get('return_slot')
+        slot = ReturnSlot.objects.get(pk=new_slot_id)
+        used = ReturnBooking.objects.filter(
+            date=booking.date, return_slot=slot, status=ReturnBooking.Status.CONFIRMED,
+        ).exclude(pk=booking.pk).count()
+        if used >= slot.capacity:
+            return Response({'detail': 'لا توجد مقاعد متاحة لهذا الموعد.'}, status=409)
+        booking.return_slot = slot
+        booking.save(update_fields=['return_slot'])
+        return Response(ReturnBookingSerializer(booking).data)
+
+    @action(detail=False, methods=['get'], url_path='passengers')
+    def passengers(self, request):
+        """Return passenger list for a slot, grouped by university (§17)."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        date = request.query_params.get('date') or timezone.localdate().isoformat()
+        slot_id = request.query_params.get('return_slot')
+        qs = ReturnBooking.objects.filter(date=date, status=ReturnBooking.Status.CONFIRMED)
+        if slot_id:
+            qs = qs.filter(return_slot_id=slot_id)
+        qs = qs.select_related('student', 'university', 'return_slot').order_by(
+            'return_slot__departure_time', 'university__name', 'student__full_name')
+        by_uni = defaultdict(list)
+        for b in qs:
+            by_uni[b.university.name].append(ReturnBookingSerializer(b).data)
+        groups = [{'university': k, 'passengers': v} for k, v in by_uni.items()]
+        return Response({'date': date, 'groups': groups})
