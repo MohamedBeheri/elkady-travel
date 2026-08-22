@@ -1,4 +1,5 @@
-import { Card, Tabs, Table, Button, Modal, Form, Input, Select, InputNumber, Switch, DatePicker, Tag, Space, App as AntdApp } from 'antd'
+import { Card, Tabs, Table, Button, Modal, Form, Input, Select, InputNumber, Switch, DatePicker, Tag, Space, Drawer, App as AntdApp } from 'antd'
+import SeatGenderEditor from '../components/SeatGenderEditor'
 import { PlusOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
@@ -6,7 +7,7 @@ import {
   useRoutesQuery, useSaveRouteMutation, useDestinationsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
   useUniversitiesQuery, useSaveUniversityMutation,
-  useCollegesQuery, useSaveCollegeMutation,
+  useCollegesQuery, useSaveCollegeMutation, useLayoutsQuery,
   usePricesQuery, useSavePriceMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
@@ -85,7 +86,7 @@ function RoutesTab() {
 }
 
 /* ---------- generic simple CRUD tab ---------- */
-function SimpleTab({ title, rows, columns, fields, onSave }: any) {
+function SimpleTab({ title, rows, columns, fields, onSave, extraAction }: any) {
   const { message } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
@@ -106,7 +107,12 @@ function SimpleTab({ title, rows, columns, fields, onSave }: any) {
     <>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} style={{ marginBottom: 12 }}>إضافة</Button>
       <Table rowKey="id" dataSource={rows} pagination={false}
-        columns={[...columns, { title: '', render: (_: any, r: any) => <Button size="small" onClick={() => openModal(r)}>تعديل</Button> }]} />
+        columns={[...columns, { title: '', render: (_: any, r: any) => (
+          <Space>
+            {extraAction && extraAction(r)}
+            <Button size="small" onClick={() => openModal(r)}>تعديل</Button>
+          </Space>
+        ) }]} />
       <Modal title={title} open={open} onOk={submit} onCancel={() => setOpen(false)}>
         <Form form={form} layout="vertical">
           {fields.map((f: any) => (
@@ -173,9 +179,12 @@ function SchedulesTab() {
   const { data: rslots } = useReturnSlotsQuery()
   const { data: caps } = useCapacitiesQuery()
   const { data: routes } = useRoutesQuery({ active: true })
+  const { data: layouts } = useLayoutsQuery()
   const [saveM] = useSaveMorningSlotMutation()
   const [saveR] = useSaveReturnSlotMutation()
-  const [saveC] = useSaveCapacityMutation()
+  const [saveC, { isLoading: savingC }] = useSaveCapacityMutation()
+  const [genderCap, setGenderCap] = useState<any>(null)
+  const layout = genderCap && layouts ? layouts[genderCap.layout || 'bus50'] : null
   return (
     <div style={{ display: 'grid', gap: 24 }}>
       <Card size="small" title="مواعيد الذهاب">
@@ -203,8 +212,21 @@ function SchedulesTab() {
             { name: 'female_seats', label: 'مقاعد الإناث (أرقام مفصولة بفاصلة)' },
             { name: 'male_seats', label: 'مقاعد الذكور (أرقام مفصولة بفاصلة)' },
             { name: 'booking_note', label: 'تعليمات الحجز' },
-          ]} />
+          ]}
+          extraAction={(r: any) => (
+            <Button size="small" type="primary" ghost onClick={() => setGenderCap(r)}>تخطيط بصري ♀♂</Button>
+          )} />
       </Card>
+
+      <Drawer title={genderCap ? `تخصيص نوع المقاعد — ${genderCap.route_name} (${genderCap.slot_name})` : ''}
+        open={!!genderCap} onClose={() => setGenderCap(null)} width={560}>
+        {genderCap && layout && (
+          <SeatGenderEditor
+            layout={layout} female={genderCap.female_seats} male={genderCap.male_seats} saving={savingC}
+            onSave={async (v) => { await saveC({ id: genderCap.id, ...v }).unwrap(); setGenderCap(null) }}
+          />
+        )}
+      </Drawer>
     </div>
   )
 }

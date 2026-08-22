@@ -66,7 +66,7 @@ class SeatCapacitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SeatCapacity
-        fields = ['id', 'route', 'route_name', 'morning_slot', 'slot_name', 'total_seats',
+        fields = ['id', 'route', 'route_name', 'morning_slot', 'slot_name', 'layout', 'total_seats',
                   'female_seats', 'male_seats', 'booking_note']
 
 
