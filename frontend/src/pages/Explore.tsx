@@ -1,10 +1,10 @@
 import {
-  Button, Card, Col, Row, Tag, Segmented, Empty, Divider, Select, DatePicker,
+  Button, Card, Col, Row, Tag, Segmented, Empty, Select, DatePicker,
   Form, Input, InputNumber, App as AntdApp, Alert, Result,
 } from 'antd'
 import {
   EnvironmentOutlined, ClockCircleOutlined, RollbackOutlined, CarOutlined,
-  LoginOutlined, UserAddOutlined, PhoneOutlined, CompassOutlined, SearchOutlined,
+  LoginOutlined, UserAddOutlined, CompassOutlined, SearchOutlined,
 } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -12,18 +12,20 @@ import dayjs from 'dayjs'
 import {
   useExploreQuery, useLazyAvailabilityQuery, usePublicTourismRequestMutation,
 } from '../app/api'
+import { useAppSelector } from '../app/store'
 
 const TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شهري', daily: 'يومي' }
 const TYPE_COLOR: Record<string, string> = { term: 'green', monthly: 'orange', daily: 'gold' }
 
 /* ---------- availability checker ---------- */
-function AvailabilityChecker({ data }: { data: any }) {
+function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
   const [uni, setUni] = useState<string>()
   const [routeId, setRouteId] = useState<number>()
   const [slotId, setSlotId] = useState<number>()
   const [date, setDate] = useState(dayjs().add(1, 'day'))
   const [check, { data: res, isFetching }] = useLazyAvailabilityQuery()
   const { message } = AntdApp.useApp()
+  const navigate = useNavigate()
 
   const routes = data?.routes || []
   const uniObj = (data?.universities || []).find((u: any) => u.name === uni)
@@ -70,7 +72,7 @@ function AvailabilityChecker({ data }: { data: any }) {
               description={`المشغول ${res.occupied} من ${res.capacity} مقعد.`} />
           )}
           <div style={{ marginTop: 12, textAlign: 'center' }}>
-            <Button type="primary" disabled={res.full} onClick={() => (window.location.href = '/login')}>
+            <Button type="primary" disabled={res.full} onClick={() => navigate(bookTo)}>
               {res.full ? 'ممتلئة' : 'احجز مقعدك الآن'}
             </Button>
           </div>
@@ -130,7 +132,7 @@ function TourismForm({ data }: { data: any }) {
 }
 
 /* ---------- university routes catalogue ---------- */
-function UniversityRoutes({ data, navigate }: { data: any; navigate: any }) {
+function UniversityRoutes({ data, navigate, bookTo }: { data: any; navigate: any; bookTo: string }) {
   const [dest, setDest] = useState('all')
   const routes = data?.routes || []
   const destinations = Array.from(new Set(routes.map((r: any) => r.destination)))
@@ -138,7 +140,7 @@ function UniversityRoutes({ data, navigate }: { data: any; navigate: any }) {
 
   return (
     <>
-      <AvailabilityChecker data={data} />
+      <AvailabilityChecker data={data} bookTo={bookTo} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div className="sec-head" style={{ margin: 0 }}>خطوط السير المتاحة</div>
@@ -176,7 +178,7 @@ function UniversityRoutes({ data, navigate }: { data: any; navigate: any }) {
                   <Tag key={p.sequence} bordered style={{ borderRadius: 20 }}>{p.sequence}. {p.name}</Tag>
                 )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
               </div>
-              <Button type="primary" block onClick={() => navigate('/login')}>احجز هذا الخط</Button>
+              <Button type="primary" block onClick={() => navigate(bookTo)}>احجز هذا الخط</Button>
             </Card>
           </Col>
         ))}
@@ -216,47 +218,37 @@ export default function Explore() {
   const navigate = useNavigate()
   const { data } = useExploreQuery()
   const [mode, setMode] = useState<'uni' | 'tourism'>('uni')
+  const user = useAppSelector((s) => s.auth.user)
+  const isStudent = user?.role === 'student'
+  const bookTo = isStudent ? '/daily' : '/login'
 
   return (
-    <div style={{ minHeight: '100vh', background: '#eef2f8' }}>
-      <div style={{ background: '#0B2E5E', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src="/logo.png" alt="القاضي" style={{ width: 42, height: 42, borderRadius: '50%', background: '#fff' }} />
-          <div style={{ lineHeight: 1.2 }}>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>القاضي</div>
-            <div style={{ fontSize: 10, color: '#F5A44E', fontWeight: 700, letterSpacing: 1 }}>ELKADY TRAVEL</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Button icon={<LoginOutlined />} onClick={() => navigate('/login')} ghost>دخول</Button>
-          <Button icon={<UserAddOutlined />} type="primary" onClick={() => navigate('/register')}>حساب جديد</Button>
+    <div>
+      <div className="page-hero">
+        <img src="/hero-b1.png" alt="ELKADY TRAVEL" />
+        <div className="hero-bar">
+          {isStudent
+            ? <><span>أهلاً <b>{user?.full_name}</b> 👋</span><span className="tag">— اختر رحلتك واحجز مقعدك</span></>
+            : <><span><b>خطوط السير والمواعيد والأسعار</b></span><span className="tag">— تصفّح بحرية، وسجّل الدخول عند الحجز</span></>}
         </div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '18px 16px 40px' }}>
-        <div className="page-hero" style={{ marginTop: 18 }}>
-          <img src="/hero-b1.png" alt="ELKADY TRAVEL" />
-          <div className="hero-bar">
-            <span><b>خطوط السير والمواعيد والأسعار</b></span>
-            <span className="tag">— تصفّح بحرية، وسجّل الدخول عند الحجز</span>
-          </div>
-        </div>
+      {/* main category switch */}
+      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <Segmented
+          size="large" value={mode} onChange={(v) => setMode(v as any)}
+          options={[
+            { value: 'uni', label: <span style={{ padding: '0 10px' }}><CarOutlined /> رحلات الجامعات</span> },
+            { value: 'tourism', label: <span style={{ padding: '0 10px' }}><CompassOutlined /> رحلات سياحية مخصصة</span> },
+          ]}
+        />
+      </div>
 
-        {/* main category switch */}
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <Segmented
-            size="large" value={mode} onChange={(v) => setMode(v as any)}
-            options={[
-              { value: 'uni', label: <span style={{ padding: '0 10px' }}><CarOutlined /> رحلات الجامعات</span> },
-              { value: 'tourism', label: <span style={{ padding: '0 10px' }}><CompassOutlined /> رحلات سياحية مخصصة</span> },
-            ]}
-          />
-        </div>
+      {mode === 'uni'
+        ? <UniversityRoutes data={data} navigate={navigate} bookTo={bookTo} />
+        : <TourismForm data={data} />}
 
-        {mode === 'uni'
-          ? <UniversityRoutes data={data} navigate={navigate} />
-          : <TourismForm data={data} />}
-
+      {!user && (
         <Card style={{ marginTop: 22, textAlign: 'center', background: 'linear-gradient(120deg,#0B2E5E,#123a73 55%,#EC6A16)', border: 'none' }}>
           <div style={{ color: '#fff', fontSize: 20, fontWeight: 800, marginBottom: 6 }}>جاهز تحجز رحلتك؟</div>
           <div style={{ color: 'rgba(255,255,255,0.9)', marginBottom: 16 }}>سجّل الدخول بحسابك أو أنشئ حساباً جديداً في دقيقة.</div>
@@ -265,13 +257,7 @@ export default function Explore() {
             <Button size="large" type="primary" icon={<UserAddOutlined />} onClick={() => navigate('/register')}>إنشاء حساب جديد</Button>
           </div>
         </Card>
-
-        <Divider />
-        <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
-          {data?.company?.phone && <div><PhoneOutlined /> {data.company.phone}</div>}
-          <div style={{ marginTop: 6 }}>القاضي — ELKADY TRAVEL · جميع الحقوق محفوظة</div>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

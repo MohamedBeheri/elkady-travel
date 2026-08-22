@@ -1,11 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAppSelector } from './app/store'
 import AppLayout from './components/AppLayout'
+import SiteLayout from './components/SiteLayout'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Explore from './pages/Explore'
 // student
-import StudentHome from './pages/StudentHome'
 import BookSubscription from './pages/BookSubscription'
 import MyBookings from './pages/MyBookings'
 import DailyBooking from './pages/DailyBooking'
@@ -30,11 +30,14 @@ export default function App() {
   const access = useAppSelector((s) => s.auth.access)
   const user = useAppSelector((s) => s.auth.user)
 
+  // ---- Public visitor (not logged in): the external site + auth screens ----
   if (!access || !user) {
     return (
       <Routes>
-        <Route path="/" element={<Explore />} />
-        <Route path="/explore" element={<Explore />} />
+        <Route element={<SiteLayout />}>
+          <Route path="/" element={<Explore />} />
+          <Route path="/explore" element={<Explore />} />
+        </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -42,35 +45,38 @@ export default function App() {
     )
   }
 
-  const isStaff = STAFF.includes(user.role)
+  // ---- Staff: admin dashboard with sidebar ----
+  if (STAFF.includes(user.role)) {
+    return (
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/payments" element={<PaymentQueue />} />
+          <Route path="/subscriptions" element={<Subscriptions />} />
+          <Route path="/waiting" element={<WaitingLists />} />
+          <Route path="/board" element={<TripBoard />} />
+          <Route path="/returns" element={<ReturnLists />} />
+          <Route path="/config" element={<Config />} />
+          <Route path="/tourism" element={<TourismAdmin />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    )
+  }
 
+  // ---- Student: the SAME external site (top-nav), no sidebar dashboard ----
   return (
     <Routes>
-      <Route element={<AppLayout />}>
-        {isStaff ? (
-          <>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/payments" element={<PaymentQueue />} />
-            <Route path="/subscriptions" element={<Subscriptions />} />
-            <Route path="/waiting" element={<WaitingLists />} />
-            <Route path="/board" element={<TripBoard />} />
-            <Route path="/returns" element={<ReturnLists />} />
-            <Route path="/config" element={<Config />} />
-            <Route path="/tourism" element={<TourismAdmin />} />
-            <Route path="/users" element={<Users />} />
-          </>
-        ) : (
-          <>
-            <Route path="/" element={<StudentHome />} />
-            <Route path="/book" element={<BookSubscription />} />
-            <Route path="/my-bookings" element={<MyBookings />} />
-            <Route path="/daily" element={<DailyBooking />} />
-            <Route path="/tickets" element={<Tickets />} />
-            <Route path="/return" element={<ReturnTrip />} />
-            <Route path="/tourism" element={<TourismRequest />} />
-            <Route path="/profile" element={<Profile />} />
-          </>
-        )}
+      <Route element={<SiteLayout />}>
+        <Route path="/" element={<Explore />} />
+        <Route path="/book" element={<BookSubscription />} />
+        <Route path="/my-bookings" element={<MyBookings />} />
+        <Route path="/daily" element={<DailyBooking />} />
+        <Route path="/tickets" element={<Tickets />} />
+        <Route path="/return" element={<ReturnTrip />} />
+        <Route path="/tourism" element={<TourismRequest />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
