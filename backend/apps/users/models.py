@@ -14,6 +14,17 @@ class User(AbstractUser):
         TOURISM_MANAGER = 'tourism_manager', _('مدير السياحة')
         STUDENT = 'student', _('طالب')
 
+    class Gender(models.TextChoices):
+        MALE = 'male', _('ذكر')
+        FEMALE = 'female', _('أنثى')
+
+    class Year(models.TextChoices):
+        Y1 = '1', _('الفرقة الأولى')
+        Y2 = '2', _('الفرقة الثانية')
+        Y3 = '3', _('الفرقة الثالثة')
+        Y4 = '4', _('الفرقة الرابعة')
+        Y5 = '5', _('الفرقة الخامسة')
+
     role = models.CharField(
         max_length=20, choices=Role.choices,
         default=Role.STUDENT, verbose_name=_('الدور'),
@@ -22,9 +33,20 @@ class User(AbstractUser):
     national_id = models.CharField(max_length=20, blank=True, verbose_name=_('الرقم القومي'))
     phone = models.CharField(max_length=20, blank=True, verbose_name=_('رقم الهاتف'))
     address = models.CharField(max_length=255, blank=True, verbose_name=_('العنوان'))
+    date_of_birth = models.DateField(null=True, blank=True, verbose_name=_('تاريخ الميلاد'))
+    gender = models.CharField(
+        max_length=6, choices=Gender.choices, blank=True, verbose_name=_('النوع'),
+    )
     university = models.ForeignKey(
         'config_app.University', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='students', verbose_name=_('الجامعة'),
+    )
+    college = models.ForeignKey(
+        'config_app.College', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='students', verbose_name=_('الكلية'),
+    )
+    academic_year = models.CharField(
+        max_length=1, choices=Year.choices, blank=True, verbose_name=_('الفرقة الدراسية'),
     )
 
     class Meta:

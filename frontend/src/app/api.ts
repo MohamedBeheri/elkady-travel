@@ -21,7 +21,7 @@ export const api = createApi({
   reducerPath: 'api',
   baseQuery,
   tagTypes: [
-    'User', 'Route', 'University', 'Destination', 'Pickup', 'Slot', 'ReturnSlot',
+    'User', 'Route', 'University', 'College', 'Destination', 'Pickup', 'Slot', 'ReturnSlot',
     'Capacity', 'Price', 'PayMethod', 'PayAccount', 'Company',
     'Subscription', 'DailyTrip', 'SeatRequest', 'ReturnBooking', 'SeatMap', 'Ticket',
     'Tourism', 'Quotation', 'Vehicle', 'Notification', 'Dashboard',
@@ -52,6 +52,16 @@ export const api = createApi({
     dashboardCharts: b.query<any, void>({ query: () => 'dashboard/charts/', providesTags: ['Dashboard'] }),
     explore: b.query<any, void>({ query: () => 'public/explore/' }),
     publicUniversities: b.query<any, void>({ query: () => 'public/universities/' }),
+    publicColleges: b.query<any, number | void>({
+      query: (universityId) => `public/colleges/${universityId ? `?university=${universityId}` : ''}`,
+    }),
+    colleges: b.query<any, Record<string, any> | void>({
+      query: (p) => `config/colleges/${qs(p as any)}`, providesTags: ['College'],
+    }),
+    saveCollege: b.mutation<any, any>({
+      query: ({ id, ...body }) => ({ url: id ? `config/colleges/${id}/` : 'config/colleges/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['College'],
+    }),
     availability: b.query<any, { route: number; morning_slot: number; date: string }>({
       query: (p) => `public/availability/${qs(p)}`,
     }),
@@ -251,6 +261,7 @@ export const {
   useLoginMutation, useRegisterMutation, useMeQuery, useUpdateProfileMutation,
   useUsersQuery, useSaveUserMutation, useDashboardQuery, useDashboardChartsQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
+  usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation,
   useDestinationsQuery, useSaveDestinationMutation,
   useUniversitiesQuery, useSaveUniversityMutation,
   useRoutesQuery, useSaveRouteMutation,

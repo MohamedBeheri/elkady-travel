@@ -5,11 +5,11 @@ from rest_framework.response import Response
 
 from config.permissions import IsStaff, ReadOnlyOrStaff
 from .models import (
-    CompanySettings, Destination, MorningSlot, PaymentAccount, PaymentMethod,
+    College, CompanySettings, Destination, MorningSlot, PaymentAccount, PaymentMethod,
     PickupPoint, PricingRule, ReturnSlot, Route, SeatCapacity, University,
 )
 from .serializers import (
-    CompanySettingsSerializer, DestinationSerializer, MorningSlotSerializer,
+    CollegeSerializer, CompanySettingsSerializer, DestinationSerializer, MorningSlotSerializer,
     PaymentAccountSerializer, PaymentMethodSerializer, PickupPointSerializer,
     PricingRuleSerializer, ReturnSlotSerializer, RouteSerializer,
     SeatCapacitySerializer, UniversitySerializer,
@@ -28,6 +28,13 @@ class UniversityViewSet(viewsets.ModelViewSet):
     serializer_class = UniversitySerializer
     permission_classes = [ReadOnlyOrStaff]
     filterset_fields = ['active', 'destination']
+
+
+class CollegeViewSet(viewsets.ModelViewSet):
+    queryset = College.objects.select_related('university').all()
+    serializer_class = CollegeSerializer
+    permission_classes = [ReadOnlyOrStaff]
+    filterset_fields = ['active', 'university']
 
 
 class RouteViewSet(viewsets.ModelViewSet):

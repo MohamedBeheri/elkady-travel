@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
-    CompanySettings, Destination, MorningSlot, PaymentAccount, PaymentMethod,
+    College, CompanySettings, Destination, MorningSlot, PaymentAccount, PaymentMethod,
     PickupPoint, PricingRule, ReturnSlot, Route, SeatCapacity, University,
 )
 
@@ -18,6 +18,14 @@ class UniversitySerializer(serializers.ModelSerializer):
     class Meta:
         model = University
         fields = ['id', 'name', 'name_en', 'destination', 'destination_name', 'active']
+
+
+class CollegeSerializer(serializers.ModelSerializer):
+    university_name = serializers.CharField(source='university.name', read_only=True)
+
+    class Meta:
+        model = College
+        fields = ['id', 'university', 'university_name', 'name', 'active']
 
 
 class PickupPointSerializer(serializers.ModelSerializer):
@@ -58,7 +66,8 @@ class SeatCapacitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SeatCapacity
-        fields = ['id', 'route', 'route_name', 'morning_slot', 'slot_name', 'total_seats']
+        fields = ['id', 'route', 'route_name', 'morning_slot', 'slot_name', 'total_seats',
+                  'female_seats', 'male_seats', 'booking_note']
 
 
 class PricingRuleSerializer(serializers.ModelSerializer):

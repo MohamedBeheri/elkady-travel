@@ -2,7 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    DestinationViewSet, MorningSlotViewSet, PaymentAccountViewSet,
+    CollegeViewSet, DestinationViewSet, MorningSlotViewSet, PaymentAccountViewSet,
     PaymentMethodViewSet, PickupPointViewSet, PricingRuleViewSet,
     ReturnSlotViewSet, RouteViewSet, SeatCapacityViewSet, UniversityViewSet,
     company_settings,
@@ -11,6 +11,7 @@ from .views import (
 router = DefaultRouter()
 router.register('destinations', DestinationViewSet)
 router.register('universities', UniversityViewSet)
+router.register('colleges', CollegeViewSet)
 router.register('routes', RouteViewSet)
 router.register('pickup-points', PickupPointViewSet)
 router.register('morning-slots', MorningSlotViewSet)

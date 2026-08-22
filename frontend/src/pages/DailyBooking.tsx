@@ -7,11 +7,13 @@ import {
   useSeatmapForQuery, useBookSpecificSeatMutation,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
+import { useAppSelector } from '../app/store'
 
 export default function DailyBooking() {
   const [form] = Form.useForm()
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
+  const gender = useAppSelector((s) => s.auth.user?.gender)
   const [routeId, setRouteId] = useState<number>()
   const [query, setQuery] = useState<{ date: string; route: number; morning_slot: number } | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
@@ -94,7 +96,7 @@ export default function DailyBooking() {
         <Card title={`خريطة المقاعد ${seatmap?.trip ? `— ${seatmap.trip.route_name} (${seatmap.trip.slot_name})` : ''}`}>
           {isFetching ? <Spin /> : seatmap && (
             <div style={{ textAlign: 'center' }}>
-              <SeatMap layout={seatmap.layout} seats={seatmap.seats} selected={selected} onSelect={setSelected} />
+              <SeatMap layout={seatmap.layout} seats={seatmap.seats} selected={selected} onSelect={setSelected} viewerGender={gender} />
               <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
               <div style={{ marginTop: 18 }}>
                 <Button type="primary" size="large" disabled={!selected} loading={isLoading} onClick={confirm}>

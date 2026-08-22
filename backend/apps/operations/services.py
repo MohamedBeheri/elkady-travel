@@ -120,13 +120,32 @@ def cancel_seat(seat_request):
 # Interactive seat-map: state, booking, term locks, absences, admin release.
 # ---------------------------------------------------------------------------
 
+def _seat_gender_map(trip):
+    """Return {seat_number: 'male'|'female'} designated by admin for this route/slot."""
+    from apps.config_app.models import SeatCapacity
+    cap = SeatCapacity.objects.filter(route=trip.route, morning_slot=trip.morning_slot).first()
+    out = {}
+    if not cap:
+        return out
+
+    def parse(s):
+        return [int(x) for x in str(s).replace('،', ',').split(',') if x.strip().isdigit()]
+    for n in parse(cap.female_seats):
+        out[n] = 'female'
+    for n in parse(cap.male_seats):
+        out[n] = 'male'
+    return out
+
+
 def build_seatmap(trip, viewer=None, is_staff=False):
     """Compute the per-seat state for a trip's seat map.
 
     States: empty · held · booked · term (locked for a term subscriber) · mine.
+    Each seat also carries a `gender` designation ('male'/'female'/'') set by admin.
     """
     layout_id = trip.layout if trip.layout in LAYOUTS else DEFAULT_LAYOUT
     layout = LAYOUTS[layout_id]
+    genders = _seat_gender_map(trip)
 
     # Term locks on this route/slot, minus students absent on this date.
     locks = {}
@@ -162,6 +181,7 @@ def build_seatmap(trip, viewer=None, is_staff=False):
             'number': n,
             'state': 'mine' if mine else state,
             'raw_state': state,
+            'gender': genders.get(n, ''),
             'student': student_name if is_staff else ('أنت' if mine else ''),
         })
     return {'layout': layout, 'seats': seats}
@@ -200,6 +220,11 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
         raise ValueError('رقم المقعد غير صحيح لهذه المركبة.')
     if _seat_occupied(trip, seat_number, exclude_student=student):
         raise ValueError('هذا المقعد محجوز بالفعل، اختر مقعداً آخر.')
+    # Gender-designated seats (admin-configured) must match the student's gender.
+    seat_gender = _seat_gender_map(trip).get(seat_number, '')
+    if seat_gender and student.gender and seat_gender != student.gender:
+        label = 'الإناث' if seat_gender == 'female' else 'الذكور'
+        raise ValueError(f'هذا المقعد مخصص لـ{label} فقط، اختر مقعداً آخر.')
 
     if priority_type == 'term':
         existing = TermSeatLock.objects.filter(

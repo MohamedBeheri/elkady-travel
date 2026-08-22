@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from apps.bookings.models import Subscription
 from apps.config_app.models import (
-    CompanySettings, MorningSlot, PricingRule, ReturnSlot, Route, SeatCapacity, University,
+    College, CompanySettings, MorningSlot, PricingRule, ReturnSlot, Route, SeatCapacity, University,
 )
 from apps.operations.models import DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
 from apps.operations.layouts import layout_capacity
@@ -84,6 +84,19 @@ def public_universities(request):
     return Response([
         {'id': u.id, 'name': u.name}
         for u in University.objects.filter(active=True).order_by('name')
+    ])
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_colleges(request):
+    """Public college list, optionally filtered by university (for sign-up)."""
+    qs = College.objects.filter(active=True).select_related('university')
+    uni = request.query_params.get('university')
+    if uni:
+        qs = qs.filter(university_id=uni)
+    return Response([
+        {'id': c.id, 'name': c.name, 'university': c.university_id} for c in qs.order_by('name')
     ])
 
 

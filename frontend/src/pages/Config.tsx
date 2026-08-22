@@ -6,6 +6,7 @@ import {
   useRoutesQuery, useSaveRouteMutation, useDestinationsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
   useUniversitiesQuery, useSaveUniversityMutation,
+  useCollegesQuery, useSaveCollegeMutation,
   usePricesQuery, useSavePriceMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
@@ -139,6 +140,19 @@ function UniversitiesTab() {
     ]} />
 }
 
+function CollegesTab() {
+  const { data } = useCollegesQuery()
+  const { data: unis } = useUniversitiesQuery({ active: true })
+  const [save] = useSaveCollegeMutation()
+  return <SimpleTab title="كلية" rows={data?.results || []} onSave={save}
+    columns={[{ title: 'الكلية', dataIndex: 'name' }, { title: 'الجامعة', dataIndex: 'university_name' }, { title: 'نشط', dataIndex: 'active', render: (v: any) => v ? 'نعم' : 'لا' }]}
+    fields={[
+      { name: 'name', label: 'اسم الكلية', required: true },
+      { name: 'university', label: 'الجامعة', type: 'select', required: true, options: (unis?.results || []).map((u: any) => ({ value: u.id, label: u.name })) },
+      { name: 'active', label: 'نشط', type: 'switch', initial: true },
+    ]} />
+}
+
 function PricesTab() {
   const { data } = usePricesQuery()
   const { data: routes } = useRoutesQuery({ active: true })
@@ -174,13 +188,21 @@ function SchedulesTab() {
           columns={[{ title: 'الاسم', dataIndex: 'name' }, { title: 'الوقت', dataIndex: 'departure_time' }, { title: 'السعة', dataIndex: 'capacity' }]}
           fields={[{ name: 'code', label: 'الكود', required: true }, { name: 'name', label: 'الاسم', required: true }, { name: 'departure_time', label: 'الوقت', type: 'time', required: true }, { name: 'capacity', label: 'السعة', type: 'number', required: true }, { name: 'active', label: 'نشط', type: 'switch', initial: true }]} />
       </Card>
-      <Card size="small" title="سعة المقاعد (لكل مسار وموعد)">
+      <Card size="small" title="سعة المقاعد وتخصيص النوع (لكل مسار وموعد)">
         <SimpleTab title="سعة" rows={caps?.results || caps || []} onSave={saveC}
-          columns={[{ title: 'المسار', dataIndex: 'route_name' }, { title: 'الموعد', dataIndex: 'slot_name' }, { title: 'المقاعد', dataIndex: 'total_seats' }]}
+          columns={[
+            { title: 'المسار', dataIndex: 'route_name' }, { title: 'الموعد', dataIndex: 'slot_name' },
+            { title: 'المقاعد', dataIndex: 'total_seats' },
+            { title: 'مقاعد إناث', dataIndex: 'female_seats', render: (v: any) => v || '—' },
+            { title: 'مقاعد ذكور', dataIndex: 'male_seats', render: (v: any) => v || '—' },
+          ]}
           fields={[
             { name: 'route', label: 'المسار', type: 'select', required: true, options: (routes?.results || []).map((r: any) => ({ value: r.id, label: r.name })) },
             { name: 'morning_slot', label: 'الموعد', type: 'select', required: true, options: (mslots?.results || mslots || []).map((s: any) => ({ value: s.id, label: s.name })) },
             { name: 'total_seats', label: 'إجمالي المقاعد', type: 'number', required: true },
+            { name: 'female_seats', label: 'مقاعد الإناث (أرقام مفصولة بفاصلة)' },
+            { name: 'male_seats', label: 'مقاعد الذكور (أرقام مفصولة بفاصلة)' },
+            { name: 'booking_note', label: 'تعليمات الحجز' },
           ]} />
       </Card>
     </div>
@@ -209,6 +231,7 @@ export default function Config() {
         items={[
           { key: 'routes', label: 'المسارات ونقاط الالتقاط', children: <RoutesTab /> },
           { key: 'unis', label: 'الجامعات', children: <UniversitiesTab /> },
+          { key: 'colleges', label: 'الكليات', children: <CollegesTab /> },
           { key: 'prices', label: 'الأسعار', children: <PricesTab /> },
           { key: 'schedules', label: 'المواعيد والسعات', children: <SchedulesTab /> },
           { key: 'payments', label: 'حسابات الاستلام', children: <PaymentsTab /> },

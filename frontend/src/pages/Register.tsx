@@ -1,20 +1,33 @@
-import { Button, Form, Input, Select, Typography, App as AntdApp } from 'antd'
+import { Button, Form, Input, Select, DatePicker, Typography, App as AntdApp } from 'antd'
+import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useRegisterMutation, useLoginMutation, usePublicUniversitiesQuery } from '../app/api'
+import { useRegisterMutation, useLoginMutation, usePublicUniversitiesQuery, usePublicCollegesQuery } from '../app/api'
 import { useAppDispatch } from '../app/store'
 import { setCredentials } from '../app/authSlice'
 
+const YEARS = [
+  { value: '1', label: 'الفرقة الأولى' },
+  { value: '2', label: 'الفرقة الثانية' },
+  { value: '3', label: 'الفرقة الثالثة' },
+  { value: '4', label: 'الفرقة الرابعة' },
+  { value: '5', label: 'الفرقة الخامسة' },
+]
+
 export default function Register() {
+  const [form] = Form.useForm()
   const [register, { isLoading }] = useRegisterMutation()
   const [login] = useLoginMutation()
+  const [uniId, setUniId] = useState<number>()
   const { data: unis } = usePublicUniversitiesQuery()
+  const { data: colleges } = usePublicCollegesQuery(uniId, { skip: !uniId })
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const { message } = AntdApp.useApp()
 
   const onFinish = async (values: any) => {
     try {
-      await register(values).unwrap()
+      const payload = { ...values, date_of_birth: values.date_of_birth?.format('YYYY-MM-DD') }
+      await register(payload).unwrap()
       const res = await login({ username: values.username, password: values.password }).unwrap()
       dispatch(setCredentials({ access: res.access, refresh: res.refresh, user: res.user }))
       message.success('تم إنشاء الحساب')
@@ -30,42 +43,51 @@ export default function Register() {
       <div className="auth-wrap" style={{ maxWidth: 560 }}>
         <img className="auth-banner" src="/hero-b3.png" alt="ELKADY TRAVEL" />
         <div className="auth-card">
-        <Typography.Title level={3} style={{ textAlign: 'center', marginTop: 0, color: '#0B2E5E' }}>حساب طالب جديد</Typography.Title>
-        <Form layout="vertical" onFinish={onFinish}>
-          <Form.Item name="full_name" label="الاسم الكامل" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="national_id" label="الرقم القومي" rules={[{ required: true }]}>
+          <Typography.Title level={3} style={{ textAlign: 'center', marginTop: 0, color: '#0B2E5E' }}>حساب طالب جديد</Typography.Title>
+          <Form form={form} layout="vertical" onFinish={onFinish}>
+            <Form.Item name="full_name" label="الاسم الكامل" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
-            <Form.Item name="phone" label="رقم الهاتف" rules={[{ required: true }]}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Form.Item name="phone" label="رقم الهاتف" rules={[{ required: true }]}>
+                <Input inputMode="tel" />
+              </Form.Item>
+              <Form.Item name="date_of_birth" label="تاريخ الميلاد" rules={[{ required: true }]}>
+                <DatePicker style={{ width: '100%' }} placeholder="اختر التاريخ" />
+              </Form.Item>
+            </div>
+            <Form.Item name="gender" label="النوع" rules={[{ required: true }]}>
+              <Select placeholder="النوع" options={[{ value: 'male', label: 'ذكر' }, { value: 'female', label: 'أنثى' }]} />
+            </Form.Item>
+            <Form.Item name="university" label="الجامعة" rules={[{ required: true }]}>
+              <Select placeholder="اختر الجامعة"
+                onChange={(v) => { setUniId(v); form.setFieldsValue({ college: undefined }) }}
+                options={(unis?.results || unis || []).map((u: any) => ({ value: u.id, label: u.name }))} />
+            </Form.Item>
+            <Form.Item name="college" label="الكلية" rules={[{ required: true }]}>
+              <Select placeholder={uniId ? 'اختر الكلية' : 'اختر الجامعة أولاً'} disabled={!uniId}
+                options={(colleges || []).map((c: any) => ({ value: c.id, label: c.name }))} />
+            </Form.Item>
+            <Form.Item name="academic_year" label="الفرقة الدراسية" rules={[{ required: true }]}>
+              <Select placeholder="اختر الفرقة" options={YEARS} />
+            </Form.Item>
+            <Form.Item name="address" label="العنوان">
               <Input />
             </Form.Item>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Form.Item name="username" label="اسم المستخدم" rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="password" label="كلمة المرور" rules={[{ required: true, min: 6 }]}>
+                <Input.Password />
+              </Form.Item>
+            </div>
+            <Button type="primary" htmlType="submit" block loading={isLoading} style={{ height: 46, fontSize: 16 }}>إنشاء الحساب</Button>
+          </Form>
+          <div style={{ textAlign: 'center', marginTop: 16, color: '#64748b' }}>
+            لديك حساب؟ <Link to="/login" style={{ fontWeight: 700 }}>تسجيل الدخول</Link>
           </div>
-          <Form.Item name="university" label="الجامعة" rules={[{ required: true }]}>
-            <Select
-              placeholder="اختر الجامعة"
-              options={(unis?.results || unis || []).map((u: any) => ({ value: u.id, label: u.name }))}
-            />
-          </Form.Item>
-          <Form.Item name="address" label="العنوان">
-            <Input />
-          </Form.Item>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="username" label="اسم المستخدم" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="password" label="كلمة المرور" rules={[{ required: true, min: 6 }]}>
-              <Input.Password />
-            </Form.Item>
-          </div>
-          <Button type="primary" htmlType="submit" block loading={isLoading}>إنشاء الحساب</Button>
-        </Form>
-        <div style={{ textAlign: 'center', marginTop: 16, color: '#64748b' }}>
-          لديك حساب؟ <Link to="/login">تسجيل الدخول</Link>
         </div>
-      </div>
       </div>
     </div>
   )

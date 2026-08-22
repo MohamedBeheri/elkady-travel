@@ -42,6 +42,23 @@ class University(models.Model):
         return self.name
 
 
+class College(models.Model):
+    university = models.ForeignKey(
+        University, on_delete=models.CASCADE, related_name='colleges',
+        verbose_name=_('الجامعة'),
+    )
+    name = models.CharField(max_length=150, verbose_name=_('اسم الكلية'))
+    active = models.BooleanField(default=True, verbose_name=_('نشط'))
+
+    class Meta:
+        verbose_name = _('كلية')
+        verbose_name_plural = _('الكليات')
+        ordering = ['university', 'name']
+
+    def __str__(self):
+        return f'{self.name} - {self.university.name}'
+
+
 class Route(models.Model):
     """An origin corridor → destination, e.g. Shebin/Quesna/Benha → Badr."""
     code = models.CharField(max_length=40, unique=True, verbose_name=_('الكود'))
@@ -133,6 +150,17 @@ class SeatCapacity(models.Model):
         max_length=12, choices=LAYOUT_CHOICES, default='bus50', verbose_name=_('نوع المركبة'),
     )
     total_seats = models.PositiveIntegerField(default=49, verbose_name=_('إجمالي المقاعد'))
+    female_seats = models.CharField(
+        max_length=255, blank=True, verbose_name=_('مقاعد الإناث'),
+        help_text=_('أرقام المقاعد المخصصة للإناث مفصولة بفاصلة، مثال: 1,2,7,8'),
+    )
+    male_seats = models.CharField(
+        max_length=255, blank=True, verbose_name=_('مقاعد الذكور'),
+        help_text=_('أرقام المقاعد المخصصة للذكور مفصولة بفاصلة'),
+    )
+    booking_note = models.CharField(
+        max_length=255, blank=True, verbose_name=_('تعليمات الحجز'),
+    )
 
     class Meta:
         verbose_name = _('سعة مقاعد')

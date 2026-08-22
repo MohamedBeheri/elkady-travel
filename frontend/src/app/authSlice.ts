@@ -9,8 +9,15 @@ export interface User {
   national_id?: string
   phone?: string
   address?: string
+  date_of_birth?: string
+  gender?: string
+  gender_display?: string
   university?: number | null
   university_name?: string
+  college?: number | null
+  college_name?: string
+  academic_year?: string
+  year_display?: string
 }
 
 interface AuthState {

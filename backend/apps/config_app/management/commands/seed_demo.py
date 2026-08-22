@@ -30,6 +30,14 @@ class Command(BaseCommand):
         for name, en, dest in unis:
             University.objects.get_or_create(name=name, defaults={'name_en': en, 'destination': dest})
 
+        # ---- Colleges (per university) ----
+        from apps.config_app.models import College
+        common_colleges = ['الهندسة', 'الطب', 'الصيدلة', 'طب الأسنان', 'الحاسبات والمعلومات',
+                           'إدارة الأعمال', 'الإعلام', 'العلاج الطبيعي']
+        for uni in University.objects.all():
+            for cname in common_colleges:
+                College.objects.get_or_create(university=uni, name=cname)
+
         # ---- Routes (origin corridor → destination) ----
         routes_def = [
             ('SHEBIN_BADR', 'شبين/قويسنا/بنها', 'شبين/قويسنا/بنها → بدر', badr,

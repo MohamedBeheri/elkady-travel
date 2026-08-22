@@ -7,12 +7,17 @@ from .models import User
 class UserSerializer(serializers.ModelSerializer):
     role_display = serializers.CharField(source='get_role_display', read_only=True)
     university_name = serializers.CharField(source='university.name', read_only=True)
+    college_name = serializers.CharField(source='college.name', read_only=True)
+    gender_display = serializers.CharField(source='get_gender_display', read_only=True)
+    year_display = serializers.CharField(source='get_academic_year_display', read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'full_name', 'role', 'role_display',
-            'national_id', 'phone', 'address', 'university', 'university_name', 'is_active',
+            'national_id', 'phone', 'address', 'date_of_birth', 'gender', 'gender_display',
+            'university', 'university_name', 'college', 'college_name',
+            'academic_year', 'year_display', 'is_active',
         ]
 
 
@@ -23,7 +28,8 @@ class UserWriteSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'password', 'full_name', 'role',
-            'national_id', 'phone', 'address', 'university', 'is_active',
+            'national_id', 'phone', 'address', 'date_of_birth', 'gender',
+            'university', 'college', 'academic_year', 'is_active',
         ]
 
     def create(self, validated_data):
@@ -51,7 +57,8 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'password', 'full_name',
-            'national_id', 'phone', 'address', 'university',
+            'phone', 'address', 'date_of_birth', 'gender',
+            'university', 'college', 'academic_year',
         ]
 
     def create(self, validated_data):
