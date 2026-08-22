@@ -4,7 +4,10 @@ from django.http import FileResponse, Http404
 from django.urls import include, path, re_path
 from django.views.static import serve
 
-from .views import dashboard_stats, dashboard_charts, public_explore, public_universities
+from .views import (
+    dashboard_stats, dashboard_charts, public_explore, public_universities,
+    public_availability, public_tourism_request,
+)
 
 
 def spa(request, *args, **kwargs):
@@ -22,6 +25,8 @@ urlpatterns = [
         path('dashboard/charts/', dashboard_charts, name='dashboard_charts'),
         path('public/explore/', public_explore, name='public_explore'),
         path('public/universities/', public_universities, name='public_universities'),
+        path('public/availability/', public_availability, name='public_availability'),
+        path('public/tourism-request/', public_tourism_request, name='public_tourism_request'),
         path('auth/', include('apps.users.urls')),
         path('config/', include('apps.config_app.urls')),
         path('bookings/', include('apps.bookings.urls')),

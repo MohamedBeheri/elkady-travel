@@ -52,6 +52,12 @@ export const api = createApi({
     dashboardCharts: b.query<any, void>({ query: () => 'dashboard/charts/', providesTags: ['Dashboard'] }),
     explore: b.query<any, void>({ query: () => 'public/explore/' }),
     publicUniversities: b.query<any, void>({ query: () => 'public/universities/' }),
+    availability: b.query<any, { route: number; morning_slot: number; date: string }>({
+      query: (p) => `public/availability/${qs(p)}`,
+    }),
+    publicTourismRequest: b.mutation<any, any>({
+      query: (body) => ({ url: 'public/tourism-request/', method: 'POST', body }),
+    }),
 
     // ---- config lookups ----
     destinations: b.query<any, void>({ query: () => 'config/destinations/', providesTags: ['Destination'] }),
@@ -244,6 +250,7 @@ export const api = createApi({
 export const {
   useLoginMutation, useRegisterMutation, useMeQuery, useUpdateProfileMutation,
   useUsersQuery, useSaveUserMutation, useDashboardQuery, useDashboardChartsQuery, useExploreQuery, usePublicUniversitiesQuery,
+  useLazyAvailabilityQuery, usePublicTourismRequestMutation,
   useDestinationsQuery, useSaveDestinationMutation,
   useUniversitiesQuery, useSaveUniversityMutation,
   useRoutesQuery, useSaveRouteMutation,

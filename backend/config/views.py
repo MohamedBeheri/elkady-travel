@@ -8,12 +8,73 @@ from rest_framework.response import Response
 
 from apps.bookings.models import Subscription
 from apps.config_app.models import (
-    CompanySettings, MorningSlot, PricingRule, ReturnSlot, Route, University,
+    CompanySettings, MorningSlot, PricingRule, ReturnSlot, Route, SeatCapacity, University,
 )
-from apps.operations.models import DailyTrip, ReturnBooking, SeatRequest
+from apps.operations.models import DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
+from apps.operations.layouts import layout_capacity
 from apps.operations.services import build_seatmap
-from apps.tourism.models import Quotation, TourismRequest
+from apps.tourism.models import Quotation, TourismRequest, VehicleType
 from apps.users.models import User
+
+
+def _trip_availability(route, slot, date):
+    """Read-only seat availability for a route/slot/date (no trip is created)."""
+    trip = DailyTrip.objects.filter(date=date, route=route, morning_slot=slot).first()
+    if trip:
+        sm = build_seatmap(trip)
+        occ = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'held', 'term'))
+        return trip.total_seats, occ, trip.layout
+    cap_obj = SeatCapacity.objects.filter(route=route, morning_slot=slot).first()
+    layout = cap_obj.layout if cap_obj else 'bus50'
+    cap = cap_obj.total_seats if cap_obj else layout_capacity(layout)
+    occ = 0
+    for lock in TermSeatLock.objects.filter(route=route, morning_slot=slot, active=True):
+        if not SeatAbsence.objects.filter(term_lock=lock, date=date).exists():
+            occ += 1
+    return cap, occ, layout
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_availability(request):
+    """Public seat-availability lookup for a specific line + day + slot."""
+    route_id = request.query_params.get('route')
+    slot_id = request.query_params.get('morning_slot')
+    date = request.query_params.get('date')
+    if not (route_id and slot_id and date):
+        return Response({'detail': 'اختر الخط والموعد والتاريخ'}, status=400)
+    try:
+        route = Route.objects.get(pk=route_id)
+        slot = MorningSlot.objects.get(pk=slot_id)
+    except (Route.DoesNotExist, MorningSlot.DoesNotExist):
+        return Response({'detail': 'بيانات غير صحيحة'}, status=404)
+    cap, occ, layout = _trip_availability(route, slot, date)
+    available = max(cap - occ, 0)
+    return Response({
+        'route': route.name, 'slot': slot.name, 'date': date, 'layout': layout,
+        'capacity': cap, 'occupied': occ, 'available': available, 'full': available <= 0,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def public_tourism_request(request):
+    """Public tourism/custom-trip inquiry (guest — no login needed)."""
+    d = request.data
+    required = ['full_name', 'phone', 'origin', 'destination', 'travel_date']
+    if any(not d.get(f) for f in required):
+        return Response({'detail': 'من فضلك أكمل: الاسم، الهاتف، من، إلى، التاريخ'}, status=400)
+    vehicle = None
+    if d.get('vehicle_type'):
+        vehicle = VehicleType.objects.filter(pk=d.get('vehicle_type')).first()
+    req = TourismRequest.objects.create(
+        full_name=d['full_name'], phone=d['phone'],
+        national_id=d.get('national_id', ''), address=d.get('address', ''),
+        origin=d['origin'], destination=d['destination'], travel_date=d['travel_date'],
+        vehicle_type=vehicle, travelers=int(d.get('travelers') or 1),
+        trip_type=d.get('trip_type', 'private'), notes=d.get('notes', ''),
+    )
+    return Response({'id': req.id, 'message': 'تم استلام طلبك، وسيتواصل معك فريقنا بعرض السعر.'}, status=201)
 
 
 @api_view(['GET'])
@@ -57,13 +118,21 @@ def public_explore(request):
     return Response({
         'company': {'name': company.name, 'tagline': company.tagline, 'phone': company.phone},
         'routes': routes,
+        'universities': [
+            {'id': u.id, 'name': u.name, 'destination': u.destination.name}
+            for u in University.objects.filter(active=True).select_related('destination').order_by('name')
+        ],
         'morning_slots': [
-            {'name': s.name, 'time': s.departure_time.strftime('%H:%M')}
+            {'id': s.id, 'name': s.name, 'time': s.departure_time.strftime('%H:%M')}
             for s in MorningSlot.objects.filter(active=True).order_by('departure_time')
         ],
         'return_slots': [
             {'name': s.name, 'time': s.departure_time.strftime('%H:%M'), 'capacity': s.capacity}
             for s in ReturnSlot.objects.filter(active=True).order_by('departure_time')
+        ],
+        'vehicle_types': [
+            {'id': v.id, 'name': v.name, 'capacity': v.capacity}
+            for v in VehicleType.objects.filter(active=True)
         ],
     })
 

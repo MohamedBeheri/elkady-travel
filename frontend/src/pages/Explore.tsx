@@ -1,27 +1,224 @@
-import { Button, Card, Col, Row, Tag, Segmented, Empty, Divider } from 'antd'
+import {
+  Button, Card, Col, Row, Tag, Segmented, Empty, Divider, Select, DatePicker,
+  Form, Input, InputNumber, App as AntdApp, Alert, Result,
+} from 'antd'
 import {
   EnvironmentOutlined, ClockCircleOutlined, RollbackOutlined, CarOutlined,
-  LoginOutlined, UserAddOutlined, PhoneOutlined,
+  LoginOutlined, UserAddOutlined, PhoneOutlined, CompassOutlined, SearchOutlined,
 } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useExploreQuery } from '../app/api'
+import dayjs from 'dayjs'
+import {
+  useExploreQuery, useLazyAvailabilityQuery, usePublicTourismRequestMutation,
+} from '../app/api'
 
 const TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شهري', daily: 'يومي' }
 const TYPE_COLOR: Record<string, string> = { term: 'green', monthly: 'orange', daily: 'gold' }
 
-export default function Explore() {
-  const navigate = useNavigate()
-  const { data } = useExploreQuery()
-  const [dest, setDest] = useState('all')
+/* ---------- availability checker ---------- */
+function AvailabilityChecker({ data }: { data: any }) {
+  const [uni, setUni] = useState<string>()
+  const [routeId, setRouteId] = useState<number>()
+  const [slotId, setSlotId] = useState<number>()
+  const [date, setDate] = useState(dayjs().add(1, 'day'))
+  const [check, { data: res, isFetching }] = useLazyAvailabilityQuery()
+  const { message } = AntdApp.useApp()
 
+  const routes = data?.routes || []
+  const uniObj = (data?.universities || []).find((u: any) => u.name === uni)
+  const routeOpts = (uniObj ? routes.filter((r: any) => r.destination === uniObj.destination) : routes)
+
+  const run = () => {
+    if (!routeId || !slotId) { message.warning('اختر الخط والموعد'); return }
+    check({ route: routeId, morning_slot: slotId, date: date.format('YYYY-MM-DD') })
+  }
+
+  return (
+    <Card style={{ marginBottom: 20, borderTop: '4px solid #0B2E5E' }}
+      title={<span style={{ fontWeight: 800 }}><SearchOutlined style={{ color: '#F07E1B' }} /> استعلام عن الأماكن المتاحة</span>}>
+      <Row gutter={[12, 12]}>
+        <Col xs={24} sm={12} md={6}>
+          <Select style={{ width: '100%' }} placeholder="الجامعة" allowClear value={uni}
+            onChange={(v) => { setUni(v); setRouteId(undefined) }}
+            options={(data?.universities || []).map((u: any) => ({ value: u.name, label: u.name }))} />
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <Select style={{ width: '100%' }} placeholder="الخط" value={routeId} onChange={setRouteId}
+            options={routeOpts.map((r: any) => ({ value: r.id, label: r.name }))} />
+        </Col>
+        <Col xs={24} sm={12} md={5}>
+          <Select style={{ width: '100%' }} placeholder="الموعد" value={slotId} onChange={setSlotId}
+            options={(data?.morning_slots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
+        </Col>
+        <Col xs={24} sm={12} md={4}>
+          <DatePicker style={{ width: '100%' }} value={date} onChange={(d) => d && setDate(d)} allowClear={false} />
+        </Col>
+        <Col xs={24} md={3}>
+          <Button type="primary" block icon={<SearchOutlined />} loading={isFetching} onClick={run}>استعلام</Button>
+        </Col>
+      </Row>
+
+      {res && (
+        <div style={{ marginTop: 16 }}>
+          {res.full ? (
+            <Alert type="error" showIcon message={`الرحلة ممتلئة — ${res.route} (${res.slot})`}
+              description={`السعة ${res.capacity} مقعد — لا توجد أماكن متاحة في هذا التاريخ.`} />
+          ) : (
+            <Alert type="success" showIcon
+              message={`متاح ${res.available} مكان — ${res.route} (${res.slot})`}
+              description={`المشغول ${res.occupied} من ${res.capacity} مقعد.`} />
+          )}
+          <div style={{ marginTop: 12, textAlign: 'center' }}>
+            <Button type="primary" disabled={res.full} onClick={() => (window.location.href = '/login')}>
+              {res.full ? 'ممتلئة' : 'احجز مقعدك الآن'}
+            </Button>
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/* ---------- tourism request form ---------- */
+function TourismForm({ data }: { data: any }) {
+  const [form] = Form.useForm()
+  const { message } = AntdApp.useApp()
+  const [submit, { isLoading }] = usePublicTourismRequestMutation()
+  const [done, setDone] = useState(false)
+
+  const onFinish = async (v: any) => {
+    try {
+      await submit({ ...v, travel_date: v.travel_date.format('YYYY-MM-DD') }).unwrap()
+      setDone(true); form.resetFields()
+    } catch (e: any) {
+      message.error(e?.data?.detail || 'تعذر إرسال الطلب')
+    }
+  }
+
+  if (done) return (
+    <Card><Result status="success" title="تم استلام طلبك"
+      subTitle="سيتواصل معك فريق القاضي بعرض السعر قريباً."
+      extra={<Button type="primary" onClick={() => setDone(false)}>طلب رحلة أخرى</Button>} /></Card>
+  )
+
+  return (
+    <Card title={<span style={{ fontWeight: 800 }}><CompassOutlined style={{ color: '#7c3aed' }} /> طلب رحلة سياحية / مخصصة</span>}>
+      <Alert type="info" showIcon style={{ marginBottom: 16 }}
+        message="قدّم طلبك بالتفاصيل، وسيراجعه فريقنا ويرسل لك عرض سعر مخصص — لا حاجة لتسجيل الدخول." />
+      <Form form={form} layout="vertical" onFinish={onFinish}
+        initialValues={{ trip_type: 'private', travelers: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+          <Form.Item name="full_name" label="الاسم" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="phone" label="رقم الهاتف" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="origin" label="من" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="destination" label="إلى" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="travel_date" label="تاريخ الرحلة" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="vehicle_type" label="نوع المركبة">
+            <Select allowClear options={(data?.vehicle_types || []).map((v: any) => ({ value: v.id, label: `${v.name} (${v.capacity})` }))} />
+          </Form.Item>
+          <Form.Item name="travelers" label="عدد المسافرين"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="trip_type" label="نوع الرحلة">
+            <Select options={[{ value: 'private', label: 'رحلة خاصة (مركبة كاملة)' }, { value: 'seat', label: 'فردي / بالمقعد' }]} />
+          </Form.Item>
+        </div>
+        <Form.Item name="notes" label="ملاحظات"><Input.TextArea rows={2} /></Form.Item>
+        <Button type="primary" htmlType="submit" loading={isLoading} icon={<CompassOutlined />}>إرسال الطلب</Button>
+      </Form>
+    </Card>
+  )
+}
+
+/* ---------- university routes catalogue ---------- */
+function UniversityRoutes({ data, navigate }: { data: any; navigate: any }) {
+  const [dest, setDest] = useState('all')
   const routes = data?.routes || []
   const destinations = Array.from(new Set(routes.map((r: any) => r.destination)))
   const filtered = dest === 'all' ? routes : routes.filter((r: any) => r.destination === dest)
 
   return (
+    <>
+      <AvailabilityChecker data={data} />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div className="sec-head" style={{ margin: 0 }}>خطوط السير المتاحة</div>
+        <Segmented value={dest} onChange={(v) => setDest(v as string)}
+          options={[{ value: 'all', label: 'كل الوجهات' }, ...destinations.map((d: any) => ({ value: d, label: d }))]} />
+      </div>
+
+      <Row gutter={[16, 16]}>
+        {filtered.length === 0 && <Col span={24}><Empty description="لا توجد خطوط" /></Col>}
+        {filtered.map((r: any) => (
+          <Col xs={24} md={12} key={r.id}>
+            <Card styles={{ body: { padding: 18 } }} style={{ height: '100%', borderTop: '4px solid #F07E1B' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#fff6ee', color: '#F07E1B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+                  <CarOutlined />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 16, color: '#0B2E5E' }}>{r.name}</div>
+                  <div style={{ color: '#64748b', fontSize: 13 }}>الوجهة: {r.destination}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {['term', 'monthly', 'daily'].filter((k) => r.prices[k] != null).map((k) => (
+                  <div key={k} style={{ border: '1px solid #eef1f6', borderRadius: 10, padding: '6px 12px', textAlign: 'center', flex: 1, minWidth: 90 }}>
+                    <Tag color={TYPE_COLOR[k]} style={{ marginInlineEnd: 0 }}>{TYPE_LABEL[k]}</Tag>
+                    <div style={{ fontWeight: 800, color: '#0B2E5E', marginTop: 4 }}>{Number(r.prices[k]).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 600 }}>ج.م</span></div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>
+                <EnvironmentOutlined style={{ color: '#F07E1B' }} /> نقاط الالتقاط:
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                {r.pickup_points.length ? r.pickup_points.map((p: any) => (
+                  <Tag key={p.sequence} bordered style={{ borderRadius: 20 }}>{p.sequence}. {p.name}</Tag>
+                )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
+              </div>
+              <Button type="primary" block onClick={() => navigate('/login')}>احجز هذا الخط</Button>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 22 }}>
+        <Col xs={24} md={12}>
+          <Card title={<span style={{ fontWeight: 800 }}><ClockCircleOutlined style={{ color: '#F07E1B' }} /> مواعيد الذهاب</span>}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {(data?.morning_slots || []).map((s: any) => (
+                <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
+                  <div style={{ color: '#64748b', fontSize: 12 }}>{s.name}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card title={<span style={{ fontWeight: 800 }}><RollbackOutlined style={{ color: '#F07E1B' }} /> مواعيد العودة</span>}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {(data?.return_slots || []).map((s: any) => (
+                <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
+                  <div style={{ color: '#64748b', fontSize: 12 }}>{s.capacity} مقعد</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
+      </Row>
+    </>
+  )
+}
+
+export default function Explore() {
+  const navigate = useNavigate()
+  const { data } = useExploreQuery()
+  const [mode, setMode] = useState<'uni' | 'tourism'>('uni')
+
+  return (
     <div style={{ minHeight: '100vh', background: '#eef2f8' }}>
-      {/* top nav */}
       <div style={{ background: '#0B2E5E', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/logo.png" alt="القاضي" style={{ width: 42, height: 42, borderRadius: '50%', background: '#fff' }} />
@@ -36,7 +233,6 @@ export default function Explore() {
         </div>
       </div>
 
-      {/* hero */}
       <div style={{ maxWidth: 1180, margin: '0 auto', padding: '18px 16px 40px' }}>
         <div className="page-hero" style={{ marginTop: 18 }}>
           <img src="/hero-b1.png" alt="ELKADY TRAVEL" />
@@ -46,89 +242,21 @@ export default function Explore() {
           </div>
         </div>
 
-        {/* filter */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-          <div className="sec-head" style={{ margin: 0 }}>خطوط السير المتاحة</div>
+        {/* main category switch */}
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
           <Segmented
-            value={dest} onChange={(v) => setDest(v as string)}
-            options={[{ value: 'all', label: 'كل الوجهات' }, ...destinations.map((d: any) => ({ value: d, label: d }))]}
+            size="large" value={mode} onChange={(v) => setMode(v as any)}
+            options={[
+              { value: 'uni', label: <span style={{ padding: '0 10px' }}><CarOutlined /> رحلات الجامعات</span> },
+              { value: 'tourism', label: <span style={{ padding: '0 10px' }}><CompassOutlined /> رحلات سياحية مخصصة</span> },
+            ]}
           />
         </div>
 
-        {/* routes grid */}
-        <Row gutter={[16, 16]}>
-          {filtered.length === 0 && <Col span={24}><Empty description="لا توجد خطوط" /></Col>}
-          {filtered.map((r: any) => (
-            <Col xs={24} md={12} key={r.id}>
-              <Card
-                styles={{ body: { padding: 18 } }}
-                style={{ height: '100%', borderTop: '4px solid #F07E1B' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: '#fff6ee', color: '#F07E1B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
-                    <CarOutlined />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: '#0B2E5E' }}>{r.name}</div>
-                    <div style={{ color: '#64748b', fontSize: 13 }}>الوجهة: {r.destination}</div>
-                  </div>
-                </div>
+        {mode === 'uni'
+          ? <UniversityRoutes data={data} navigate={navigate} />
+          : <TourismForm data={data} />}
 
-                {/* prices */}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                  {['term', 'monthly', 'daily'].filter((k) => r.prices[k] != null).map((k) => (
-                    <div key={k} style={{ border: '1px solid #eef1f6', borderRadius: 10, padding: '6px 12px', textAlign: 'center', flex: 1, minWidth: 90 }}>
-                      <Tag color={TYPE_COLOR[k]} style={{ marginInlineEnd: 0 }}>{TYPE_LABEL[k]}</Tag>
-                      <div style={{ fontWeight: 800, color: '#0B2E5E', marginTop: 4 }}>{Number(r.prices[k]).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 600 }}>ج.م</span></div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* pickup points */}
-                <div style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>
-                  <EnvironmentOutlined style={{ color: '#F07E1B' }} /> نقاط الالتقاط:
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-                  {r.pickup_points.length ? r.pickup_points.map((p: any) => (
-                    <Tag key={p.sequence} bordered style={{ borderRadius: 20 }}>{p.sequence}. {p.name}</Tag>
-                  )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
-                </div>
-
-                <Button type="primary" block onClick={() => navigate('/login')}>احجز هذا الخط</Button>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-
-        {/* schedules */}
-        <Row gutter={[16, 16]} style={{ marginTop: 22 }}>
-          <Col xs={24} md={12}>
-            <Card title={<span style={{ fontWeight: 800 }}><ClockCircleOutlined style={{ color: '#F07E1B' }} /> مواعيد الذهاب</span>}>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {(data?.morning_slots || []).map((s: any) => (
-                  <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
-                    <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
-                    <div style={{ color: '#64748b', fontSize: 12 }}>{s.name}</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} md={12}>
-            <Card title={<span style={{ fontWeight: 800 }}><RollbackOutlined style={{ color: '#F07E1B' }} /> مواعيد العودة</span>}>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {(data?.return_slots || []).map((s: any) => (
-                  <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
-                    <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
-                    <div style={{ color: '#64748b', fontSize: 12 }}>{s.capacity} مقعد</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </Col>
-        </Row>
-
-        {/* CTA */}
         <Card style={{ marginTop: 22, textAlign: 'center', background: 'linear-gradient(120deg,#0B2E5E,#123a73 55%,#EC6A16)', border: 'none' }}>
           <div style={{ color: '#fff', fontSize: 20, fontWeight: 800, marginBottom: 6 }}>جاهز تحجز رحلتك؟</div>
           <div style={{ color: 'rgba(255,255,255,0.9)', marginBottom: 16 }}>سجّل الدخول بحسابك أو أنشئ حساباً جديداً في دقيقة.</div>
