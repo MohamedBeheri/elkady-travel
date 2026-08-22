@@ -50,6 +50,8 @@ export const api = createApi({
     // ---- dashboard ----
     dashboard: b.query<any, void>({ query: () => 'dashboard/stats/', providesTags: ['Dashboard'] }),
     dashboardCharts: b.query<any, void>({ query: () => 'dashboard/charts/', providesTags: ['Dashboard'] }),
+    explore: b.query<any, void>({ query: () => 'public/explore/' }),
+    publicUniversities: b.query<any, void>({ query: () => 'public/universities/' }),
 
     // ---- config lookups ----
     destinations: b.query<any, void>({ query: () => 'config/destinations/', providesTags: ['Destination'] }),
@@ -241,7 +243,7 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useRegisterMutation, useMeQuery, useUpdateProfileMutation,
-  useUsersQuery, useSaveUserMutation, useDashboardQuery, useDashboardChartsQuery,
+  useUsersQuery, useSaveUserMutation, useDashboardQuery, useDashboardChartsQuery, useExploreQuery, usePublicUniversitiesQuery,
   useDestinationsQuery, useSaveDestinationMutation,
   useUniversitiesQuery, useSaveUniversityMutation,
   useRoutesQuery, useSaveRouteMutation,

@@ -3,14 +3,69 @@ from collections import defaultdict
 from django.db.models import Count, Sum
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.bookings.models import Subscription
+from apps.config_app.models import (
+    CompanySettings, MorningSlot, PricingRule, ReturnSlot, Route, University,
+)
 from apps.operations.models import DailyTrip, ReturnBooking, SeatRequest
 from apps.operations.services import build_seatmap
 from apps.tourism.models import Quotation, TourismRequest
 from apps.users.models import User
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_universities(request):
+    """Public university list for the sign-up form (no auth needed)."""
+    return Response([
+        {'id': u.id, 'name': u.name}
+        for u in University.objects.filter(active=True).order_by('name')
+    ])
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_explore(request):
+    """Public (no-auth) catalogue: routes, pickup points, times, and prices.
+
+    Lets visitors browse lines/places/schedules/prices before signing in.
+    Booking still requires authentication (enforced on the booking endpoints).
+    """
+    prices = defaultdict(dict)
+    for pr in PricingRule.objects.filter(active=True).select_related('route'):
+        prices[pr.route_id][pr.subscription_type] = float(pr.price)
+
+    routes = []
+    for r in Route.objects.filter(active=True).select_related('destination').prefetch_related('pickup_points'):
+        routes.append({
+            'id': r.id,
+            'code': r.code,
+            'name': r.name,
+            'origin_label': r.origin_label,
+            'destination': r.destination.name,
+            'pickup_points': [
+                {'name': p.name, 'sequence': p.sequence, 'location': p.location}
+                for p in r.pickup_points.filter(active=True).order_by('sequence')
+            ],
+            'prices': prices.get(r.id, {}),
+        })
+
+    company = CompanySettings.load()
+    return Response({
+        'company': {'name': company.name, 'tagline': company.tagline, 'phone': company.phone},
+        'routes': routes,
+        'morning_slots': [
+            {'name': s.name, 'time': s.departure_time.strftime('%H:%M')}
+            for s in MorningSlot.objects.filter(active=True).order_by('departure_time')
+        ],
+        'return_slots': [
+            {'name': s.name, 'time': s.departure_time.strftime('%H:%M'), 'capacity': s.capacity}
+            for s in ReturnSlot.objects.filter(active=True).order_by('departure_time')
+        ],
+    })
 
 
 @api_view(['GET'])

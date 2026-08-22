@@ -40,6 +40,9 @@ export default function Login() {
           <div style={{ textAlign: 'center', marginTop: 18, color: '#64748b' }}>
             طالب جديد؟ <Link to="/register" style={{ fontWeight: 700 }}>أنشئ حساباً</Link>
           </div>
+          <div style={{ textAlign: 'center', marginTop: 8 }}>
+            <Link to="/explore" style={{ color: '#F07E1B', fontWeight: 700 }}>تصفّح الخطوط والمواعيد والأسعار ←</Link>
+          </div>
         </div>
       </div>
     </div>

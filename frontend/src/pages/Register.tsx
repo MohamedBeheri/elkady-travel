@@ -1,13 +1,13 @@
 import { Button, Form, Input, Select, Typography, App as AntdApp } from 'antd'
 import { useNavigate, Link } from 'react-router-dom'
-import { useRegisterMutation, useLoginMutation, useUniversitiesQuery } from '../app/api'
+import { useRegisterMutation, useLoginMutation, usePublicUniversitiesQuery } from '../app/api'
 import { useAppDispatch } from '../app/store'
 import { setCredentials } from '../app/authSlice'
 
 export default function Register() {
   const [register, { isLoading }] = useRegisterMutation()
   const [login] = useLoginMutation()
-  const { data: unis } = useUniversitiesQuery({ active: true })
+  const { data: unis } = usePublicUniversitiesQuery()
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const { message } = AntdApp.useApp()
@@ -46,7 +46,7 @@ export default function Register() {
           <Form.Item name="university" label="الجامعة" rules={[{ required: true }]}>
             <Select
               placeholder="اختر الجامعة"
-              options={(unis?.results || []).map((u: any) => ({ value: u.id, label: u.name }))}
+              options={(unis?.results || unis || []).map((u: any) => ({ value: u.id, label: u.name }))}
             />
           </Form.Item>
           <Form.Item name="address" label="العنوان">

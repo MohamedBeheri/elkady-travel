@@ -3,6 +3,7 @@ import { useAppSelector } from './app/store'
 import AppLayout from './components/AppLayout'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import Explore from './pages/Explore'
 // student
 import StudentHome from './pages/StudentHome'
 import BookSubscription from './pages/BookSubscription'
@@ -32,9 +33,11 @@ export default function App() {
   if (!access || !user) {
     return (
       <Routes>
+        <Route path="/" element={<Explore />} />
+        <Route path="/explore" element={<Explore />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )
   }
