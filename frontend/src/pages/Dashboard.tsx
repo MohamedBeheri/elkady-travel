@@ -3,7 +3,8 @@ import {
   TeamOutlined, ClockCircleOutlined, DollarOutlined, CarOutlined,
   CompassOutlined, CheckCircleOutlined, WalletOutlined, RiseOutlined,
 } from '@ant-design/icons'
-import { useDashboardQuery, useDashboardChartsQuery } from '../app/api'
+import { CarOutlined as CarIcon, ToolOutlined, IdcardOutlined, ApartmentOutlined } from '@ant-design/icons'
+import { useDashboardQuery, useDashboardChartsQuery, useFleetDashboardQuery } from '../app/api'
 import { useAppSelector } from '../app/store'
 import { Donut, BarList, LineChart } from '../components/Charts'
 
@@ -31,6 +32,7 @@ const LAYOUT_LABEL: Record<string, string> = { bus50: 'أتوبيس ٥٠', hiace
 export default function Dashboard() {
   const { data } = useDashboardQuery(undefined, { pollingInterval: 60000 })
   const { data: charts } = useDashboardChartsQuery(undefined, { pollingInterval: 60000 })
+  const { data: fleet } = useFleetDashboardQuery(undefined, { pollingInterval: 60000 })
   const user = useAppSelector((s) => s.auth.user)
   const s = data?.students, t = data?.transport, p = data?.payments, tr = data?.tourism
 
@@ -91,6 +93,17 @@ export default function Dashboard() {
           </Card>
         </Col>
       </Row>
+
+      <Section title="الأسطول">
+        <Kpi title="المركبات المتاحة" value={fleet?.vehicles_available ?? 0} icon={<CarIcon />} color={GREEN} />
+        <Kpi title="في الرحلات" value={fleet?.vehicles_in_trip ?? 0} icon={<CarIcon />} color={ORANGE} />
+        <Kpi title="في الصيانة" value={fleet?.vehicles_maintenance ?? 0} icon={<ToolOutlined />} color={GOLD} />
+        <Kpi title="سائقون نشطون" value={fleet?.drivers_active ?? 0} icon={<IdcardOutlined />} color={NAVY} />
+        <Kpi title="تعيينات اليوم" value={fleet?.assignments_today ?? 0} icon={<ApartmentOutlined />} color={PURPLE} />
+        <Kpi title="مصروفات تحتاج مراجعة" value={fleet?.expenses_pending ?? 0} icon={<DollarOutlined />} color={GOLD} />
+        <Kpi title="مصروفات اليوم" value={Number(fleet?.expenses_today ?? 0).toLocaleString()} suffix="ج.م" icon={<DollarOutlined />} color={GREEN} />
+        <Kpi title="مصروفات الشهر" value={Number(fleet?.expenses_month ?? 0).toLocaleString()} suffix="ج.م" icon={<WalletOutlined />} color={NAVY} />
+      </Section>
 
       <Section title="التشغيل">
         <Kpi title="رحلات اليوم" value={t?.today_trips ?? 0} icon={<CarOutlined />} color={NAVY} />
