@@ -15,6 +15,7 @@ from django.core.management import call_command
 from apps.users.models import User
 if not User.objects.exists():
     call_command('seed_demo')
+    call_command('seed_fleet')
 else:
     print('Data exists — seed skipped.')
 PY

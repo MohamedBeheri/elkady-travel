@@ -25,6 +25,7 @@ export const api = createApi({
     'Capacity', 'Price', 'PayMethod', 'PayAccount', 'Company',
     'Subscription', 'DailyTrip', 'SeatRequest', 'ReturnBooking', 'SeatMap', 'Ticket',
     'Tourism', 'Quotation', 'Vehicle', 'Notification', 'Dashboard',
+    'FVehicle', 'FDriver', 'Assignment', 'Expense', 'Maintenance', 'Fine', 'Audit', 'FleetDash',
   ],
   endpoints: (b) => ({
     // ---- auth ----
@@ -246,6 +247,72 @@ export const api = createApi({
       invalidatesTags: ['Quotation', 'Tourism', 'Dashboard'],
     }),
 
+    // ---- fleet ----
+    fleetDashboard: b.query<any, void>({ query: () => 'fleet/dashboard/', providesTags: ['FleetDash'] }),
+    vehicles2: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/vehicles/${qs(p as any)}`, providesTags: ['FVehicle'],
+    }),
+    saveVehicle: b.mutation<any, any>({
+      query: ({ id, ...body }) => ({ url: id ? `fleet/vehicles/${id}/` : 'fleet/vehicles/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['FVehicle', 'FleetDash'],
+    }),
+    vehicleHistory: b.query<any, number>({ query: (id) => `fleet/vehicles/${id}/history/` }),
+    drivers: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/drivers/${qs(p as any)}`, providesTags: ['FDriver'],
+    }),
+    saveDriver: b.mutation<any, any>({
+      query: ({ id, ...body }) => ({ url: id ? `fleet/drivers/${id}/` : 'fleet/drivers/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['FDriver'],
+    }),
+    driverAlerts: b.query<any, void>({ query: () => 'fleet/drivers/license-alerts/', providesTags: ['FDriver'] }),
+    driverReport: b.query<any, number>({ query: (id) => `fleet/drivers/${id}/report/` }),
+    assignments: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/assignments/${qs(p as any)}`, providesTags: ['Assignment'],
+    }),
+    saveAssignment: b.mutation<any, any>({
+      query: ({ id, ...body }) => ({ url: id ? `fleet/assignments/${id}/` : 'fleet/assignments/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['Assignment', 'FleetDash'],
+    }),
+    myToday: b.query<any, void>({ query: () => 'fleet/assignments/my-today/', providesTags: ['Assignment'] }),
+    startTrip: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/assignments/${id}/start/`, method: 'POST' }), invalidatesTags: ['Assignment', 'FVehicle'],
+    }),
+    completeTrip: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/assignments/${id}/complete/`, method: 'POST' }), invalidatesTags: ['Assignment', 'FVehicle'],
+    }),
+    expenses: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/expenses/${qs(p as any)}`, providesTags: ['Expense'],
+    }),
+    createExpense: b.mutation<any, FormData>({
+      query: (body) => ({ url: 'fleet/expenses/', method: 'POST', body }), invalidatesTags: ['Expense', 'FleetDash'],
+    }),
+    approveExpense: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/expenses/${id}/approve/`, method: 'POST' }), invalidatesTags: ['Expense', 'FleetDash'],
+    }),
+    rejectExpense: b.mutation<any, { id: number; rejection_reason: string }>({
+      query: ({ id, ...body }) => ({ url: `fleet/expenses/${id}/reject/`, method: 'POST', body }), invalidatesTags: ['Expense', 'FleetDash'],
+    }),
+    maintenance: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/maintenance/${qs(p as any)}`, providesTags: ['Maintenance'],
+    }),
+    saveMaintenance: b.mutation<any, any>({
+      query: ({ id, ...body }) => ({ url: id ? `fleet/maintenance/${id}/` : 'fleet/maintenance/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['Maintenance'],
+    }),
+    fines: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/fines/${qs(p as any)}`, providesTags: ['Fine'],
+    }),
+    saveFine: b.mutation<any, any>({
+      query: ({ id, ...body }) => ({ url: id ? `fleet/fines/${id}/` : 'fleet/fines/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['Fine'],
+    }),
+    auditLogs: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/audit-logs/${qs(p as any)}`, providesTags: ['Audit'],
+    }),
+    vehicleExpenseReport: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/reports/vehicle-expenses/${qs(p as any)}`,
+    }),
+
     // ---- notifications ----
     unreadNotifications: b.query<any, void>({
       query: () => 'notifications/unread/', providesTags: ['Notification'],
@@ -284,4 +351,11 @@ export const {
   useAcceptTourismMutation, useRejectTourismMutation,
   useCreateQuotationMutation, useSendQuotationMutation,
   useUnreadNotificationsQuery, useMarkAllReadMutation,
+  // fleet
+  useFleetDashboardQuery, useVehicles2Query, useSaveVehicleMutation, useVehicleHistoryQuery,
+  useDriversQuery, useSaveDriverMutation, useDriverAlertsQuery, useDriverReportQuery,
+  useAssignmentsQuery, useSaveAssignmentMutation, useMyTodayQuery, useStartTripMutation, useCompleteTripMutation,
+  useExpensesQuery, useCreateExpenseMutation, useApproveExpenseMutation, useRejectExpenseMutation,
+  useMaintenanceQuery, useSaveMaintenanceMutation, useFinesQuery, useSaveFineMutation,
+  useAuditLogsQuery, useVehicleExpenseReportQuery,
 } = api

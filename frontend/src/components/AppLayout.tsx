@@ -2,8 +2,9 @@ import { Layout, Menu, Avatar, Dropdown, Badge, Popover, List, Tag, Button, Grid
 import {
   DashboardOutlined, DollarOutlined, TeamOutlined, ClockCircleOutlined,
   CarOutlined, RollbackOutlined, SettingOutlined, CompassOutlined,
-  UserOutlined, LogoutOutlined, BellOutlined, HomeOutlined, ScheduleOutlined,
-  HistoryOutlined, IdcardOutlined, MenuOutlined, QrcodeOutlined,
+  UserOutlined, LogoutOutlined, BellOutlined, IdcardOutlined, MenuOutlined,
+  ToolOutlined, WarningOutlined, BarChartOutlined, AuditOutlined, ProfileOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
@@ -63,33 +64,51 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const isStaff = STAFF.includes(user?.role || '')
 
-  const staffItems = [
+  const role = user?.role || ''
+  const isAdmin = role === 'admin'
+  const isFleet = ['admin', 'bus_supervisor', 'transport_manager', 'operations'].includes(role)
+
+  const items: any[] = [
     { key: '/', icon: <DashboardOutlined />, label: 'لوحة التحكم' },
-    { key: '/payments', icon: <DollarOutlined />, label: 'تأكيد المدفوعات' },
-    { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
-    { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
-    { key: '/board', icon: <CarOutlined />, label: 'رحلات الغد' },
-    { key: '/returns', icon: <RollbackOutlined />, label: 'رحلات العودة' },
-    { key: '/tourism', icon: <CompassOutlined />, label: 'السياحة والرحلات' },
-    ...(user?.role === 'admin' ? [
-      { key: '/config', icon: <SettingOutlined />, label: 'الإعدادات والتهيئة' },
-      { key: '/users', icon: <IdcardOutlined />, label: 'المستخدمون' },
-    ] : []),
+    {
+      key: 'g-ops', icon: <CarOutlined />, label: 'التشغيل', children: [
+        { key: '/board', icon: <CarOutlined />, label: 'رحلات الغد' },
+        { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
+        { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
+        { key: '/returns', icon: <RollbackOutlined />, label: 'رحلات العودة' },
+        { key: '/payments', icon: <DollarOutlined />, label: 'تأكيد المدفوعات' },
+        { key: '/tourism', icon: <CompassOutlined />, label: 'السياحة والرحلات' },
+      ],
+    },
+    ...(isFleet ? [{
+      key: 'g-fleet', icon: <ApartmentOutlined />, label: 'الأسطول', children: [
+        { key: '/fleet/vehicles', icon: <CarOutlined />, label: 'المركبات' },
+        { key: '/fleet/drivers', icon: <IdcardOutlined />, label: 'السائقون' },
+        { key: '/fleet/assignments', icon: <ProfileOutlined />, label: 'التعيينات اليومية' },
+      ],
+    }, {
+      key: 'g-exp', icon: <DollarOutlined />, label: 'المصروفات', children: [
+        { key: '/fleet/expenses', icon: <DollarOutlined />, label: 'مصروفات الرحلات' },
+        { key: '/fleet/maintenance', icon: <ToolOutlined />, label: 'الصيانة والورش' },
+        { key: '/fleet/fines', icon: <WarningOutlined />, label: 'الغرامات المرورية' },
+      ],
+    }, {
+      key: 'g-rep', icon: <BarChartOutlined />, label: 'التقارير', children: [
+        { key: '/fleet/reports', icon: <BarChartOutlined />, label: 'مصروفات المركبات' },
+      ],
+    }] : []),
+    ...(isAdmin ? [{
+      key: 'g-sys', icon: <SettingOutlined />, label: 'النظام', children: [
+        { key: '/config', icon: <SettingOutlined />, label: 'الإعدادات والتهيئة' },
+        { key: '/users', icon: <IdcardOutlined />, label: 'المستخدمون' },
+        { key: '/fleet/audit', icon: <AuditOutlined />, label: 'سجل التدقيق' },
+      ],
+    }] : []),
   ]
 
-  const studentItems = [
-    { key: '/', icon: <HomeOutlined />, label: 'الرئيسية' },
-    { key: '/book', icon: <ScheduleOutlined />, label: 'حجز اشتراك' },
-    { key: '/my-bookings', icon: <HistoryOutlined />, label: 'حجوزاتي والدفع' },
-    { key: '/daily', icon: <CarOutlined />, label: 'حجز رحلة يومية' },
-    { key: '/tickets', icon: <QrcodeOutlined />, label: 'تذاكري و QR' },
-    { key: '/return', icon: <RollbackOutlined />, label: 'رحلة العودة' },
-    { key: '/tourism', icon: <CompassOutlined />, label: 'رحلة سياحية' },
-    { key: '/profile', icon: <UserOutlined />, label: 'ملفي الشخصي' },
-  ]
-
-  const items = isStaff ? staffItems : studentItems
-  const selectedKey = items.map((i) => i.key).filter((k) => k === '/' ? location.pathname === '/' : location.pathname.startsWith(k)).sort((a, b) => b.length - a.length)[0] || '/'
+  const allKeys = items.flatMap((i: any) => [i.key, ...(i.children || []).map((c: any) => c.key)]).filter((k: string) => k.startsWith('/'))
+  const selectedKey = allKeys.filter((k: string) => k === '/' ? location.pathname === '/' : location.pathname.startsWith(k)).sort((a: string, b: string) => b.length - a.length)[0] || '/'
+  const openKeys = items.filter((i: any) => (i.children || []).some((c: any) => c.key === selectedKey)).map((i: any) => i.key)
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -114,8 +133,9 @@ export default function AppLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[selectedKey]}
+          defaultOpenKeys={openKeys}
           items={items}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => { if (String(key).startsWith('/')) navigate(key) }}
         />
       </Sider>
 

@@ -23,8 +23,19 @@ import ReturnLists from './pages/ReturnLists'
 import Config from './pages/Config'
 import TourismAdmin from './pages/TourismAdmin'
 import Users from './pages/Users'
+// fleet (admin)
+import Vehicles from './pages/fleet/Vehicles'
+import Drivers from './pages/fleet/Drivers'
+import Assignments from './pages/fleet/Assignments'
+import Expenses from './pages/fleet/Expenses'
+import Maintenance from './pages/fleet/Maintenance'
+import Fines from './pages/fleet/Fines'
+import FleetReports from './pages/fleet/FleetReports'
+import AuditLogs from './pages/fleet/AuditLogs'
+// driver
+import DriverPortal from './pages/DriverPortal'
 
-const STAFF = ['admin', 'transport_manager', 'payment_officer', 'operations', 'tourism_manager']
+const STAFF = ['admin', 'transport_manager', 'payment_officer', 'operations', 'bus_supervisor', 'tourism_manager']
 
 export default function App() {
   const access = useAppSelector((s) => s.auth.access)
@@ -59,6 +70,28 @@ export default function App() {
           <Route path="/config" element={<Config />} />
           <Route path="/tourism" element={<TourismAdmin />} />
           <Route path="/users" element={<Users />} />
+          {/* Fleet management */}
+          <Route path="/fleet/vehicles" element={<Vehicles />} />
+          <Route path="/fleet/drivers" element={<Drivers />} />
+          <Route path="/fleet/assignments" element={<Assignments />} />
+          <Route path="/fleet/expenses" element={<Expenses />} />
+          <Route path="/fleet/maintenance" element={<Maintenance />} />
+          <Route path="/fleet/fines" element={<Fines />} />
+          <Route path="/fleet/reports" element={<FleetReports />} />
+          <Route path="/fleet/audit" element={<AuditLogs />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    )
+  }
+
+  // ---- Driver: own portal inside the site shell ----
+  if (user.role === 'driver') {
+    return (
+      <Routes>
+        <Route element={<SiteLayout />}>
+          <Route path="/" element={<DriverPortal />} />
+          <Route path="/driver" element={<DriverPortal />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

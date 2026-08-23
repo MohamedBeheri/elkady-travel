@@ -8,6 +8,8 @@ const ROLE_OPTS = [
   { value: 'transport_manager', label: 'مدير النقل' },
   { value: 'payment_officer', label: 'مسؤول المدفوعات' },
   { value: 'operations', label: 'مشرف التشغيل' },
+  { value: 'bus_supervisor', label: 'مشرف الأسطول' },
+  { value: 'driver', label: 'سائق' },
   { value: 'tourism_manager', label: 'مدير السياحة' },
 ]
 const ROLE_COLOR: Record<string, string> = { admin: 'red', student: 'default' }
