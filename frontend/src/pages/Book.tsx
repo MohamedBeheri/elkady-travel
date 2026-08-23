@@ -27,6 +27,7 @@ function DailyBooking({ routes, slots, unis, preRoute }: any) {
   const navigate = useNavigate()
   const gender = useAppSelector((s) => s.auth.user?.gender)
   const [routeId, setRouteId] = useState<number | undefined>(preRoute)
+  const [tripType, setTripType] = useState<'single' | 'round'>('single')
   const [query, setQuery] = useState<any>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [step, setStep] = useState<'seat' | 'return' | 'done'>('seat')
@@ -48,14 +49,15 @@ function DailyBooking({ routes, slots, unis, preRoute }: any) {
     const v = form.getFieldsValue()
     try {
       const res = await bookSeat({ date: v.date.format('YYYY-MM-DD'), route: v.route, morning_slot: v.morning_slot, seat_number: selected, university: v.university }).unwrap()
-      setBookedInfo({ ...res, seat: selected }); setStep('return')
+      setBookedInfo({ ...res, seat: selected })
+      setStep(tripType === 'round' ? 'return' : 'done')
     } catch (e: any) { message.error(e?.data?.detail || 'تعذر الحجز') }
   }
 
   const doReturn = async (slotId: number) => {
     const v = form.getFieldsValue()
     try {
-      await bookReturn({ date: v.date.format('YYYY-MM-DD'), return_slot: slotId, university: v.university }).unwrap()
+      await bookReturn({ date: v.date.format('YYYY-MM-DD'), return_slot: slotId, university: v.university, route: v.route }).unwrap()
       message.success('تم حجز رحلة العودة'); setStep('done')
     } catch (e: any) { message.error(e?.data?.detail || 'تعذر حجز العودة') }
   }
@@ -67,8 +69,17 @@ function DailyBooking({ routes, slots, unis, preRoute }: any) {
 
   return (
     <div>
-      <Alert type="info" showIcon style={{ marginBottom: 16 }}
-        message="اختر التاريخ والمسار والموعد لعرض خريطة المقاعد، ثم اختر مقعدك. أصحاب الترم/الشهري لهم الأولوية." />
+      <Alert type="info" showIcon style={{ marginBottom: 12 }}
+        message="اختر التاريخ والمسار والموعد لعرض خريطة المقاعد، ثم اختر مقعدك."
+        description="جميع الطلاب يختارون مقاعدهم من هنا: مشترك الترم يختار مقعده الثابت لمرة واحدة، ومشترك الشهري يحجز مقعده يومياً بأولوية، وطالب اليومي يحجز مقعداً متاحاً." />
+      <div style={{ marginBottom: 14 }}>
+        <span style={{ marginInlineEnd: 10, fontWeight: 600 }}>نوع الرحلة:</span>
+        <Radio.Group value={tripType} onChange={(e) => setTripType(e.target.value)} optionType="button" buttonStyle="solid">
+          <Radio.Button value="single">ذهاب فقط</Radio.Button>
+          <Radio.Button value="round">ذهاب + عودة</Radio.Button>
+        </Radio.Group>
+        <span style={{ marginInlineStart: 12, color: '#64748b', fontSize: 13 }}>للعودة فقط استخدم تبويب «العودة».</span>
+      </div>
       <Form form={form} layout="inline" onFinish={loadMap} initialValues={{ date: dayjs().add(1, 'day'), route: preRoute }} style={{ rowGap: 12, marginBottom: 8 }}>
         <Form.Item name="date" label="التاريخ" rules={[{ required: true }]}><DatePicker /></Form.Item>
         <Form.Item name="route" label="المسار" rules={[{ required: true }]}>

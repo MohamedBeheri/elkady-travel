@@ -22,10 +22,10 @@ const STYLE: Record<string, { bg: string; fg: string; border: string }> = {
   booked:   { bg: '#F07E1B', fg: '#ffffff', border: '#d86c10' },
   term:     { bg: '#64748b', fg: '#ffffff', border: '#475569' },
 }
-// Gender tint for AVAILABLE gendered seats.
+// Gender tint for AVAILABLE gendered seats — strong, clearly distinct fills.
 const GENDER = {
-  female: { bg: '#fdf2f8', border: '#ec4899', fg: '#9d174d', icon: '♀' },
-  male:   { bg: '#eff6ff', border: '#3b82f6', fg: '#1e40af', icon: '♂' },
+  female: { bg: '#fbcfe8', border: '#db2777', fg: '#831843', icon: '♀' },
+  male:   { bg: '#bfdbfe', border: '#2563eb', fg: '#1e3a8a', icon: '♂' },
 }
 
 function Seat({ cell, selected, onSelect, staff, viewerGender }: {
@@ -102,7 +102,7 @@ export default function SeatMap({ layout, seats, selected, onSelect, staff, view
 export function SeatLegend() {
   const items: [string, string][] = [
     ['متاح', '#ffffff'], ['مقعدك', '#16a34a'], ['معلق', '#F9B233'], ['محجوز', '#F07E1B'],
-    ['مقفول بالترم', '#64748b'], ['مقعد إناث ♀', '#fdf2f8'], ['مقعد ذكور ♂', '#eff6ff'],
+    ['مقفول بالترم', '#64748b'], ['مقعد إناث ♀', '#fbcfe8'], ['مقعد ذكور ♂', '#bfdbfe'],
   ]
   return (
     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 14 }}>

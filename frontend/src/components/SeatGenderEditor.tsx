@@ -13,8 +13,8 @@ const parse = (s: string) =>
   new Set(String(s || '').replace(/،/g, ',').split(',').map((x) => x.trim()).filter((x) => /^\d+$/.test(x)).map(Number))
 
 const GENDER = {
-  female: { bg: '#fdf2f8', border: '#ec4899', fg: '#9d174d', icon: '♀' },
-  male: { bg: '#eff6ff', border: '#3b82f6', fg: '#1e40af', icon: '♂' },
+  female: { bg: '#fbcfe8', border: '#db2777', fg: '#831843', icon: '♀' },
+  male: { bg: '#bfdbfe', border: '#2563eb', fg: '#1e3a8a', icon: '♂' },
   none: { bg: '#ffffff', border: '#f3c896', fg: '#8a4b16', icon: '' },
 }
 

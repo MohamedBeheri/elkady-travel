@@ -49,11 +49,18 @@ class ReturnBookingSerializer(serializers.ModelSerializer):
     slot_name = serializers.CharField(source='return_slot.name', read_only=True)
     departure_time = serializers.TimeField(source='return_slot.departure_time', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    direction = serializers.SerializerMethodField()
 
     class Meta:
         model = ReturnBooking
         fields = [
             'id', 'student', 'student_name', 'date', 'return_slot', 'slot_name',
-            'departure_time', 'university', 'university_name', 'status',
+            'departure_time', 'university', 'university_name', 'route', 'direction', 'status',
             'status_display', 'created_at',
         ]
+
+    def get_direction(self, obj):
+        # Return trip = destination → origin (reverse of the going route).
+        if obj.route:
+            return f'{obj.route.destination.name} ← {obj.route.origin_label}'
+        return ''

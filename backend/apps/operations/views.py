@@ -318,6 +318,7 @@ class ReturnBookingViewSet(viewsets.ModelViewSet):
         booking, _ = ReturnBooking.objects.update_or_create(
             student=user, date=date,
             defaults={'return_slot': slot, 'university_id': university_id,
+                      'route_id': request.data.get('route'),
                       'status': ReturnBooking.Status.CONFIRMED},
         )
         return Response(ReturnBookingSerializer(booking).data, status=201)

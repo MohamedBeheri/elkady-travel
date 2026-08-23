@@ -178,6 +178,10 @@ class ReturnBooking(models.Model):
         'config_app.University', on_delete=models.PROTECT, related_name='return_bookings',
         verbose_name=_('الجامعة'),
     )
+    route = models.ForeignKey(
+        'config_app.Route', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='return_bookings', verbose_name=_('المسار'),
+    )
     status = models.CharField(
         max_length=12, choices=Status.choices,
         default=Status.CONFIRMED, verbose_name=_('الحالة'),
