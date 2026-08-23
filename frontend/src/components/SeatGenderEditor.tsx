@@ -46,8 +46,9 @@ export default function SeatGenderEditor({ layout, female, male, onSave, saving 
         اضغط على المقعد للتبديل: <b style={{ color: '#8a4b16' }}>عادي</b> ← <b style={{ color: '#9d174d' }}>إناث ♀</b> ← <b style={{ color: '#1e40af' }}>ذكور ♂</b> ← عادي.
       </div>
       <div style={{ display: 'inline-block', background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 16, padding: 18 }}>
-        <div style={{ textAlign: 'center', fontWeight: 700, color: '#0B2E5E', marginBottom: 12 }}>{layout.name}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ textAlign: 'center', fontWeight: 700, color: '#0B2E5E', marginBottom: 4 }}>{layout.name}</div>
+        <div style={{ textAlign: 'left', fontSize: 11, color: '#64748b', marginBottom: 8 }}>🚍 مقعد السائق (يسار = اتجاه القيادة)</div>
+        <div style={{ direction: 'ltr', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {layout.rows.map((row, ri) => (
             <div key={ri} style={{ display: 'flex', gap: 8 }}>
               {row.map((cell, ci) => {

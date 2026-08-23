@@ -38,14 +38,14 @@ class Command(BaseCommand):
             for cname in common_colleges:
                 College.objects.get_or_create(university=uni, name=cname)
 
-        # ---- Routes (origin corridor → destination) ----
+        # ---- Routes (origin corridor ← destination) ----
         routes_def = [
-            ('SHEBIN_BADR', 'شبين/قويسنا/بنها', 'شبين/قويسنا/بنها → بدر', badr,
+            ('SHEBIN_BADR', 'شبين/قويسنا/بنها', 'شبين/قويسنا/بنها ← بدر', badr,
              ['شبين الكوم', 'قويسنا', 'بنها']),
-            ('SHEBIN_SHOROUK', 'شبين/قويسنا/بنها', 'شبين/قويسنا/بنها → الشروق', shorouk,
+            ('SHEBIN_SHOROUK', 'شبين/قويسنا/بنها', 'شبين/قويسنا/بنها ← الشروق', shorouk,
              ['شبين الكوم', 'قويسنا', 'بنها']),
-            ('BAGOUR_BADR', 'الباجور', 'الباجور → بدر', badr, ['الباجور', 'منوف']),
-            ('BAGOUR_SHOROUK', 'الباجور', 'الباجور → الشروق', shorouk, ['الباجور', 'منوف']),
+            ('BAGOUR_BADR', 'الباجور', 'الباجور ← بدر', badr, ['الباجور', 'منوف']),
+            ('BAGOUR_SHOROUK', 'الباجور', 'الباجور ← الشروق', shorouk, ['الباجور', 'منوف']),
         ]
         routes = {}
         for code, origin, name, dest, points in routes_def:

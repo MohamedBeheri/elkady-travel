@@ -78,8 +78,10 @@ export default function SeatMap({ layout, seats, selected, onSelect, staff, view
   const byNum = new Map(seats.map((s) => [s.number, s]))
   return (
     <div style={{ display: 'inline-block', background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 16, padding: 18 }}>
-      <div style={{ textAlign: 'center', fontWeight: 700, color: '#0B2E5E', marginBottom: 12 }}>{layout.name}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
+      <div style={{ textAlign: 'center', fontWeight: 700, color: '#0B2E5E', marginBottom: 4 }}>{layout.name}</div>
+      <div style={{ textAlign: 'left', fontSize: 11, color: '#64748b', marginBottom: 8 }}>🚍 مقعد السائق (يسار = اتجاه القيادة)</div>
+      {/* LTR so the driver sits on the left, matching the real vehicle orientation. */}
+      <div style={{ direction: 'ltr', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'stretch' }}>
         {layout.rows.map((row, ri) => (
           <div key={ri} style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
             {row.map((cell, ci) => {

@@ -41,8 +41,8 @@ class Command(BaseCommand):
             self.stdout.write(f'  {name}: {r.pickup_points.count()} نقطة')
             return r
 
-        r1 = make_route('SHEBIN_REGIONAL', 'شبين/قويسنا/بنها', 'شبين → قويسنا → بنها → الإقليمي', ROUTE1)
-        make_route('BAGOUR_REGIONAL', 'الباجور', 'الباجور → الطريق الإقليمي', ROUTE2)
+        r1 = make_route('SHEBIN_REGIONAL', 'شبين/قويسنا/بنها', 'شبين ← قويسنا ← بنها ← الإقليمي', ROUTE1)
+        make_route('BAGOUR_REGIONAL', 'الباجور', 'الباجور ← الطريق الإقليمي', ROUTE2)
 
         # ---- Fleet demo ----
         vehicles = []
