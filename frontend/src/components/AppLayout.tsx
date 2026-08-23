@@ -72,6 +72,7 @@ export default function AppLayout() {
     { key: '/', icon: <DashboardOutlined />, label: 'لوحة التحكم' },
     {
       key: 'g-ops', icon: <CarOutlined />, label: 'التشغيل', children: [
+        ...(isFleet ? [{ key: '/operations', icon: <DashboardOutlined />, label: 'لوحة المشرف' }] : []),
         { key: '/board', icon: <CarOutlined />, label: 'رحلات الغد' },
         { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
         { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
@@ -95,6 +96,7 @@ export default function AppLayout() {
     }, {
       key: 'g-rep', icon: <BarChartOutlined />, label: 'التقارير', children: [
         { key: '/fleet/reports', icon: <BarChartOutlined />, label: 'مصروفات المركبات' },
+        { key: '/fleet/trip-cost', icon: <DollarOutlined />, label: 'تكلفة الرحلات' },
       ],
     }] : []),
     ...(isAdmin ? [{

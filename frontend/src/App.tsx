@@ -31,6 +31,8 @@ import Expenses from './pages/fleet/Expenses'
 import Maintenance from './pages/fleet/Maintenance'
 import Fines from './pages/fleet/Fines'
 import FleetReports from './pages/fleet/FleetReports'
+import TripCost from './pages/fleet/TripCost'
+import OperationsDashboard from './pages/fleet/OperationsDashboard'
 import AuditLogs from './pages/fleet/AuditLogs'
 // driver
 import DriverPortal from './pages/DriverPortal'
@@ -78,6 +80,8 @@ export default function App() {
           <Route path="/fleet/maintenance" element={<Maintenance />} />
           <Route path="/fleet/fines" element={<Fines />} />
           <Route path="/fleet/reports" element={<FleetReports />} />
+          <Route path="/fleet/trip-cost" element={<TripCost />} />
+          <Route path="/operations" element={<OperationsDashboard />} />
           <Route path="/fleet/audit" element={<AuditLogs />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

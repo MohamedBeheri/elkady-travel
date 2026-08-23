@@ -287,6 +287,98 @@ def vehicle_expense_report(request):
 
 @api_view(['GET'])
 @permission_classes([IsFleetManager])
+def trip_cost_report(request):
+    """Operating cost per trip = Fuel + Tolls + Other (approved) for each assignment.
+
+    Maintenance/workshop/fines are NOT counted as trip cost (per business logic §27).
+    """
+    month = request.query_params.get('month') or timezone.localdate().strftime('%Y-%m')
+    try:
+        year, mon = [int(x) for x in month.split('-')]
+    except Exception:
+        return Response({'detail': 'صيغة الشهر YYYY-MM'}, status=400)
+
+    q = VehicleAssignment.objects.filter(date__year=year, date__month=mon).exclude(status='cancelled')
+    route_id = request.query_params.get('route')
+    if route_id:
+        q = q.filter(route_id=route_id)
+    q = q.select_related('driver', 'vehicle', 'route', 'daily_trip')
+
+    rows = []
+    for a in q.order_by('date'):
+        # Approved fuel/tolls/other on the same day + vehicle = this trip's cost.
+        exp = TripExpense.objects.filter(
+            status='approved', kind__in=['fuel', 'tolls', 'other'],
+            date=a.date, vehicle=a.vehicle,
+        )
+        fuel = float(exp.filter(kind='fuel').aggregate(t=Sum('amount'))['t'] or 0)
+        tolls = float(exp.filter(kind='tolls').aggregate(t=Sum('amount'))['t'] or 0)
+        other = float(exp.filter(kind='other').aggregate(t=Sum('amount'))['t'] or 0)
+        rows.append({
+            'assignment_id': a.id, 'date': str(a.date),
+            'route': a.route.name if a.route else (a.daily_trip and a.daily_trip.route.name) or '—',
+            'vehicle': a.vehicle.plate_number, 'driver': a.driver.full_name,
+            'fuel': fuel, 'tolls': tolls, 'other': other, 'trip_cost': fuel + tolls + other,
+        })
+    return Response({'month': month, 'rows': rows,
+                     'total': sum(r['trip_cost'] for r in rows)})
+
+
+@api_view(['GET'])
+@permission_classes([IsFleetManager])
+def operations_dashboard(request):
+    """Supervisor board for a given day: trips, assignments, gaps, pickup distribution."""
+    from apps.operations.models import DailyTrip, SeatRequest
+    date = request.query_params.get('date') or str(timezone.localdate())
+
+    trips = DailyTrip.objects.filter(date=date).select_related('route', 'route__destination', 'morning_slot')
+    assignments = VehicleAssignment.objects.filter(date=date).exclude(status='cancelled').select_related('driver', 'vehicle', 'daily_trip', 'route')
+    by_trip = {}
+    for a in assignments:
+        if a.daily_trip_id:
+            by_trip.setdefault(a.daily_trip_id, []).append(a)
+
+    trip_rows, missing = [], []
+    for t in trips:
+        confirmed = t.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).count()
+        assigns = by_trip.get(t.id, [])
+        row = {
+            'id': t.id, 'route': t.route.name, 'slot': t.morning_slot.name,
+            'destination': t.route.destination.name, 'passengers': confirmed,
+            'capacity': t.total_seats,
+            'vehicle': assigns[0].vehicle.plate_number if assigns else '',
+            'driver': assigns[0].driver.full_name if assigns else '',
+            'assigned': bool(assigns),
+        }
+        trip_rows.append(row)
+        if not assigns:
+            missing.append({'route': t.route.name, 'slot': t.morning_slot.name})
+
+    # Pickup point distribution across today's confirmed passengers.
+    dist = {}
+    for sr in SeatRequest.objects.filter(daily_trip__date=date, status=SeatRequest.Status.CONFIRMED).select_related('pickup_point'):
+        key = sr.pickup_point.name if sr.pickup_point else 'غير محدد'
+        dist[key] = dist.get(key, 0) + 1
+    pickup_dist = sorted([{'name': k, 'count': v} for k, v in dist.items()], key=lambda x: -x['count'])
+
+    return Response({
+        'date': date,
+        'kpis': {
+            'trips': trips.count(),
+            'passengers': sum(r['passengers'] for r in trip_rows),
+            'vehicles': assignments.values('vehicle').distinct().count(),
+            'drivers': assignments.values('driver').distinct().count(),
+            'missing_assignments': len(missing),
+            'pending_expenses': TripExpense.objects.filter(status='pending').count(),
+        },
+        'trips': trip_rows,
+        'missing': missing,
+        'pickup_distribution': pickup_dist,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsFleetManager])
 def fleet_dashboard(request):
     """Fleet KPIs for the admin/operations dashboard."""
     today = timezone.localdate()

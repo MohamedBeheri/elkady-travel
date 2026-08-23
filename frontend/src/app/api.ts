@@ -312,6 +312,12 @@ export const api = createApi({
     vehicleExpenseReport: b.query<any, Record<string, any> | void>({
       query: (p) => `fleet/reports/vehicle-expenses/${qs(p as any)}`,
     }),
+    tripCostReport: b.query<any, Record<string, any> | void>({
+      query: (p) => `fleet/reports/trip-cost/${qs(p as any)}`,
+    }),
+    operationsDashboard: b.query<any, { date?: string } | void>({
+      query: (p) => `fleet/operations-dashboard/${qs(p as any)}`, providesTags: ['Assignment', 'FleetDash'],
+    }),
 
     // ---- notifications ----
     unreadNotifications: b.query<any, void>({
@@ -358,4 +364,5 @@ export const {
   useExpensesQuery, useCreateExpenseMutation, useApproveExpenseMutation, useRejectExpenseMutation,
   useMaintenanceQuery, useSaveMaintenanceMutation, useFinesQuery, useSaveFineMutation,
   useAuditLogsQuery, useVehicleExpenseReportQuery,
+  useTripCostReportQuery, useOperationsDashboardQuery,
 } = api
