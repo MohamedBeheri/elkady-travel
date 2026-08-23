@@ -6,9 +6,8 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Explore from './pages/Explore'
 // student
-import BookSubscription from './pages/BookSubscription'
+import Book from './pages/Book'
 import MyBookings from './pages/MyBookings'
-import DailyBooking from './pages/DailyBooking'
 import Tickets from './pages/Tickets'
 import ReturnTrip from './pages/ReturnTrip'
 import TourismRequest from './pages/TourismRequest'
@@ -107,9 +106,9 @@ export default function App() {
     <Routes>
       <Route element={<SiteLayout />}>
         <Route path="/" element={<Explore />} />
-        <Route path="/book" element={<BookSubscription />} />
+        <Route path="/book" element={<Book />} />
         <Route path="/my-bookings" element={<MyBookings />} />
-        <Route path="/daily" element={<DailyBooking />} />
+        <Route path="/daily" element={<Navigate to="/book" replace />} />
         <Route path="/tickets" element={<Tickets />} />
         <Route path="/return" element={<ReturnTrip />} />
         <Route path="/tourism" element={<TourismRequest />} />

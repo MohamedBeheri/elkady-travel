@@ -72,7 +72,7 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
               description={`المشغول ${res.occupied} من ${res.capacity} مقعد.`} />
           )}
           <div style={{ marginTop: 12, textAlign: 'center' }}>
-            <Button type="primary" disabled={res.full} onClick={() => navigate(bookTo)}>
+            <Button type="primary" disabled={res.full} onClick={() => navigate(bookTo === '/book' ? `/book?route=${routeId}` : bookTo)}>
               {res.full ? 'ممتلئة' : 'احجز مقعدك الآن'}
             </Button>
           </div>
@@ -178,7 +178,7 @@ function UniversityRoutes({ data, navigate, bookTo }: { data: any; navigate: any
                   <Tag key={p.sequence} bordered style={{ borderRadius: 20 }}>{p.sequence}. {p.name}</Tag>
                 )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
               </div>
-              <Button type="primary" block onClick={() => navigate(bookTo)}>احجز هذا الخط</Button>
+              <Button type="primary" block onClick={() => navigate(bookTo === '/book' ? `/book?route=${r.id}` : bookTo)}>احجز هذا الخط</Button>
             </Card>
           </Col>
         ))}
@@ -220,7 +220,7 @@ export default function Explore() {
   const [mode, setMode] = useState<'uni' | 'tourism'>('uni')
   const user = useAppSelector((s) => s.auth.user)
   const isStudent = user?.role === 'student'
-  const bookTo = isStudent ? '/daily' : '/login'
+  const bookTo = isStudent ? '/book' : '/login'
 
   return (
     <div>

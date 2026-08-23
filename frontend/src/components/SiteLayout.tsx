@@ -10,8 +10,7 @@ import { logout } from '../app/authSlice'
 
 const STUDENT_NAV = [
   { to: '/', label: 'الرئيسية', icon: <HomeOutlined /> },
-  { to: '/book', label: 'حجز اشتراك', icon: <ScheduleOutlined /> },
-  { to: '/daily', label: 'حجز مقعد', icon: <CarOutlined /> },
+  { to: '/book', label: 'احجز رحلتك', icon: <CarOutlined /> },
   { to: '/my-bookings', label: 'حجوزاتي والدفع', icon: <DollarOutlined /> },
   { to: '/tickets', label: 'تذاكري', icon: <QrcodeOutlined /> },
   { to: '/return', label: 'العودة', icon: <RollbackOutlined /> },
