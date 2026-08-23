@@ -11,7 +11,9 @@ class User(AbstractUser):
         TRANSPORT_MANAGER = 'transport_manager', _('مدير النقل')
         PAYMENT_OFFICER = 'payment_officer', _('مسؤول المدفوعات')
         OPERATIONS = 'operations', _('مشرف التشغيل')
+        BUS_SUPERVISOR = 'bus_supervisor', _('مشرف الأسطول')
         TOURISM_MANAGER = 'tourism_manager', _('مدير السياحة')
+        DRIVER = 'driver', _('سائق')
         STUDENT = 'student', _('طالب')
 
     class Gender(models.TextChoices):

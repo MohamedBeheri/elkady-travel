@@ -34,6 +34,7 @@ urlpatterns = [
         path('operations/', include('apps.operations.urls')),
         path('tourism/', include('apps.tourism.urls')),
         path('notifications/', include('apps.notifications.urls')),
+        path('fleet/', include('apps.fleet.urls')),
     ])),
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
     re_path(r'^(?!api/|admin/|media/|static/|assets/).*$', spa, name='spa'),
