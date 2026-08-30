@@ -27,6 +27,12 @@ class User(AbstractUser):
         Y4 = '4', _('الفرقة الرابعة')
         Y5 = '5', _('الفرقة الخامسة')
 
+    class Center(models.TextChoices):
+        SHEBIN = 'shebin', _('شبين الكوم')
+        QUESNA = 'quesna', _('قويسنا')
+        BAGOUR = 'bagour', _('الباجور')
+        BENHA = 'benha', _('بنها')
+
     role = models.CharField(
         max_length=20, choices=Role.choices,
         default=Role.STUDENT, verbose_name=_('الدور'),
@@ -34,7 +40,10 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=150, blank=True, verbose_name=_('الاسم الكامل'))
     national_id = models.CharField(max_length=20, blank=True, verbose_name=_('الرقم القومي'))
     phone = models.CharField(max_length=20, blank=True, verbose_name=_('رقم الهاتف'))
-    address = models.CharField(max_length=255, blank=True, verbose_name=_('العنوان'))
+    center = models.CharField(
+        max_length=10, choices=Center.choices, blank=True, verbose_name=_('المركز التابع له'),
+    )
+    address = models.CharField(max_length=255, blank=True, verbose_name=_('تفاصيل العنوان'))
     date_of_birth = models.DateField(null=True, blank=True, verbose_name=_('تاريخ الميلاد'))
     gender = models.CharField(
         max_length=6, choices=Gender.choices, blank=True, verbose_name=_('النوع'),

@@ -72,7 +72,8 @@ export default function Profile() {
               <Descriptions.Item label="الجامعة">{user?.university_name || '—'}</Descriptions.Item>
               <Descriptions.Item label="الكلية">{user?.college_name || '—'}</Descriptions.Item>
               <Descriptions.Item label="الفرقة">{user?.year_display || '—'}</Descriptions.Item>
-              <Descriptions.Item label="العنوان">{user?.address || '—'}</Descriptions.Item>
+              <Descriptions.Item label="المركز">{user?.center_display || '—'}</Descriptions.Item>
+              <Descriptions.Item label="تفاصيل العنوان">{user?.address || '—'}</Descriptions.Item>
             </Descriptions>
           </Card>
         </Col>
@@ -120,7 +121,10 @@ export default function Profile() {
           <Form.Item name="college" label="الكلية">
             <Select disabled={!uniId} options={(colleges || []).map((c: any) => ({ value: c.id, label: c.name }))} />
           </Form.Item>
-          <Form.Item name="address" label="العنوان"><Input /></Form.Item>
+          <Form.Item name="center" label="المركز التابع له">
+            <Select options={[{ value: 'shebin', label: 'شبين الكوم' }, { value: 'quesna', label: 'قويسنا' }, { value: 'bagour', label: 'الباجور' }, { value: 'benha', label: 'بنها' }]} />
+          </Form.Item>
+          <Form.Item name="address" label="تفاصيل العنوان"><Input.TextArea rows={2} /></Form.Item>
         </Form>
       </Modal>
     </div>

@@ -8,6 +8,8 @@ export interface User {
   role_display: string
   national_id?: string
   phone?: string
+  center?: string
+  center_display?: string
   address?: string
   date_of_birth?: string
   gender?: string

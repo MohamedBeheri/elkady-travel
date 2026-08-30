@@ -12,6 +12,12 @@ const YEARS = [
   { value: '4', label: 'الفرقة الرابعة' },
   { value: '5', label: 'الفرقة الخامسة' },
 ]
+const CENTERS = [
+  { value: 'shebin', label: 'شبين الكوم' },
+  { value: 'quesna', label: 'قويسنا' },
+  { value: 'bagour', label: 'الباجور' },
+  { value: 'benha', label: 'بنها' },
+]
 
 export default function Register() {
   const [form] = Form.useForm()
@@ -71,8 +77,11 @@ export default function Register() {
             <Form.Item name="academic_year" label="الفرقة الدراسية" rules={[{ required: true }]}>
               <Select placeholder="اختر الفرقة" options={YEARS} />
             </Form.Item>
-            <Form.Item name="address" label="العنوان">
-              <Input />
+            <Form.Item name="center" label="المركز التابع له" rules={[{ required: true }]}>
+              <Select placeholder="اختر المركز" options={CENTERS} />
+            </Form.Item>
+            <Form.Item name="address" label="تفاصيل العنوان">
+              <Input.TextArea rows={2} placeholder="القرية / الشارع / علامة مميزة…" />
             </Form.Item>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Form.Item name="username" label="اسم المستخدم" rules={[{ required: true }]}>
