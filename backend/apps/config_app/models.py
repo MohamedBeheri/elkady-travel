@@ -267,6 +267,8 @@ class PaymentAccount(models.Model):
     holder_name = models.CharField(max_length=120, verbose_name=_('اسم صاحب الحساب'))
     number = models.CharField(max_length=60, verbose_name=_('رقم الحساب / المحفظة'))
     instructions = models.TextField(blank=True, verbose_name=_('تعليمات'))
+    transfer_link = models.URLField(max_length=500, blank=True, verbose_name=_('لينك التحويل'))
+    qr_image = models.ImageField(upload_to='payments/qr/', null=True, blank=True, verbose_name=_('كود QR'))
     active = models.BooleanField(default=True, verbose_name=_('نشط'))
 
     class Meta:

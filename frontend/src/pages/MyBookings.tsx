@@ -1,6 +1,6 @@
 import { Card, Table, Tag, Button, Modal, Select, Input, Upload, App as AntdApp, Descriptions, Alert } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   useSubscriptionsQuery, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
 } from '../app/api'
@@ -24,8 +24,18 @@ export default function MyBookings() {
   const [reference, setReference] = useState('')
   const [file, setFile] = useState<any>(null)
 
-  const openPay = (row: any) => { setCurrent(row); setMethodId(undefined); setReference(''); setFile(null); setOpen(true) }
-  const account = (accounts?.results || accounts || []).find((a: any) => a.method === methodId)
+  const accountList = (accounts?.results || accounts || []).filter((a: any) => a.active !== false)
+  const activeMethodIds = new Set(accountList.map((a: any) => a.method))
+  const availableMethods = (methods?.results || methods || []).filter((m: any) => activeMethodIds.has(m.id))
+  const openPay = (row: any) => {
+    setCurrent(row); setReference(''); setFile(null); setOpen(true)
+    setMethodId(availableMethods.length === 1 ? availableMethods[0].id : undefined)
+  }
+  const account = accountList.find((a: any) => a.method === methodId)
+
+  useEffect(() => {
+    if (open && !methodId && availableMethods.length === 1) setMethodId(availableMethods[0].id)
+  }, [open, availableMethods.length, methodId])
 
   const submit = async () => {
     if (!methodId) { message.error('اختر وسيلة الدفع'); return }
@@ -70,17 +80,37 @@ export default function MyBookings() {
         <Alert type="warning" style={{ marginBottom: 12 }}
           message="حوّل المبلغ إلى الحساب الظاهر ثم ارفع صورة الإيصال. لا يُعتمد الدفع إلا بعد مراجعة الإدارة." />
         <div style={{ marginBottom: 12 }}>وسيلة الدفع:</div>
-        <Select
-          style={{ width: '100%', marginBottom: 12 }}
-          placeholder="اختر وسيلة الدفع" value={methodId} onChange={setMethodId}
-          options={(methods?.results || methods || []).map((m: any) => ({ value: m.id, label: m.name }))}
-        />
+        {availableMethods.length === 0
+          ? <Alert type="error" showIcon style={{ marginBottom: 12 }} message="لم تُهيَّأ حسابات استلام بعد. تواصل مع الإدارة." />
+          : <Select
+              style={{ width: '100%', marginBottom: 12 }}
+              placeholder="اختر وسيلة الدفع" value={methodId} onChange={setMethodId}
+              options={availableMethods.map((m: any) => ({ value: m.id, label: m.name }))}
+            />}
         {account && (
-          <Descriptions size="small" bordered column={1} style={{ marginBottom: 12 }}>
-            <Descriptions.Item label="اسم الحساب">{account.holder_name}</Descriptions.Item>
-            <Descriptions.Item label="الرقم">{account.number}</Descriptions.Item>
-            {account.instructions && <Descriptions.Item label="تعليمات">{account.instructions}</Descriptions.Item>}
-          </Descriptions>
+          <>
+            <Descriptions size="small" bordered column={1} style={{ marginBottom: 12 }}>
+              <Descriptions.Item label="اسم الحساب">{account.holder_name}</Descriptions.Item>
+              <Descriptions.Item label="الرقم">
+                <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>{account.number}</span>
+                {' '}
+                <Button size="small" onClick={() => { navigator.clipboard?.writeText(account.number); message.success('تم النسخ') }}>نسخ</Button>
+              </Descriptions.Item>
+              {account.transfer_link && (
+                <Descriptions.Item label="لينك التحويل">
+                  <a href={account.transfer_link} target="_blank" rel="noreferrer">افتح رابط التحويل</a>
+                </Descriptions.Item>
+              )}
+              {account.instructions && <Descriptions.Item label="تعليمات">{account.instructions}</Descriptions.Item>}
+            </Descriptions>
+            {account.qr_image && (
+              <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>امسح الكود بتطبيق الدفع</div>
+                <img src={account.qr_image} alt="qr"
+                  style={{ maxWidth: 220, width: '100%', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+              </div>
+            )}
+          </>
         )}
         <Input placeholder="مرجع التحويل (اختياري)" value={reference} onChange={(e) => setReference(e.target.value)} style={{ marginBottom: 12 }} />
         <Upload beforeUpload={(f) => { setFile(f); return false }} maxCount={1} fileList={file ? [file] : []} onRemove={() => setFile(null)}>

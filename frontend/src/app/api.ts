@@ -155,7 +155,29 @@ export const api = createApi({
       query: (id) => ({ url: `config/payment-accounts/${id}/`, method: 'DELETE' }), invalidatesTags: ['PayAccount'],
     }),
     savePaymentAccount: b.mutation<any, any>({
-      query: ({ id, ...body }) => ({ url: id ? `config/payment-accounts/${id}/` : 'config/payment-accounts/', method: id ? 'PATCH' : 'POST', body }),
+      query: ({ id, ...body }) => {
+        const hasFile = Object.values(body).some((v: any) => v instanceof File || v instanceof Blob)
+        let payload: any = body
+        if (hasFile) {
+          const fd = new FormData()
+          Object.entries(body).forEach(([k, v]) => {
+            if (v === undefined) return
+            // A URL string in qr_image means "no change" — don't overwrite it.
+            if (k === 'qr_image' && typeof v === 'string') return
+            if (v === null) return  // null in multipart is meaningless
+            if (typeof v === 'boolean') { fd.append(k, v ? 'true' : 'false'); return }
+            fd.append(k, v as any)
+          })
+          payload = fd
+        } else {
+          // Strip URL strings for qr_image (unchanged); keep explicit null (removal).
+          if (typeof payload.qr_image === 'string') {
+            const { qr_image, ...rest } = payload
+            payload = rest
+          }
+        }
+        return { url: id ? `config/payment-accounts/${id}/` : 'config/payment-accounts/', method: id ? 'PATCH' : 'POST', body: payload }
+      },
       invalidatesTags: ['PayAccount'],
     }),
     company: b.query<any, void>({ query: () => 'config/company/', providesTags: ['Company'] }),

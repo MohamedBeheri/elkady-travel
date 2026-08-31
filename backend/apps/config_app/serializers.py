@@ -97,7 +97,8 @@ class PaymentAccountSerializer(serializers.ModelSerializer):
         model = PaymentAccount
         fields = [
             'id', 'method', 'method_name', 'method_code',
-            'holder_name', 'number', 'instructions', 'active',
+            'holder_name', 'number', 'instructions',
+            'transfer_link', 'qr_image', 'active',
         ]
 
 

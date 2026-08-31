@@ -283,8 +283,17 @@ function SubscriptionBooking({ unis }: any) {
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const price = prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === subType)?.price
-  const account = (accounts?.results || accounts || []).find((a: any) => a.method === methodId)
+  // Only expose methods the admin actually configured an active account for.
+  const accountList = (accounts?.results || accounts || []).filter((a: any) => a.active !== false)
+  const activeMethodIds = new Set(accountList.map((a: any) => a.method))
+  const availableMethods = (methods?.results || methods || []).filter((m: any) => activeMethodIds.has(m.id))
+  const account = accountList.find((a: any) => a.method === methodId)
   const canCreate = !!(university && center && pickupId && routeId && price !== undefined)
+
+  // Auto-select the single available method to skip a pointless dropdown.
+  useEffect(() => {
+    if (!methodId && availableMethods.length === 1) setMethodId(availableMethods[0].id)
+  }, [availableMethods.length, methodId])
 
   const create = async () => {
     if (!price) { message.error('لا يوجد سعر متاح لهذا الاختيار'); return }
@@ -318,14 +327,34 @@ function SubscriptionBooking({ unis }: any) {
         <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="حوّل المبلغ إلى الحساب الظاهر ثم ارفع صورة الإيصال. لا يُعتمد الدفع إلا بعد مراجعة الإدارة." />
         <Statistic title="المبلغ المطلوب" value={Number(created.amount)} suffix="ج.م" style={{ marginBottom: 14 }} />
         <div style={{ marginBottom: 8 }}>وسيلة الدفع:</div>
-        <Select style={{ width: '100%', marginBottom: 12 }} placeholder="اختر وسيلة الدفع" value={methodId} onChange={setMethodId}
-          options={(methods?.results || methods || []).map((m: any) => ({ value: m.id, label: m.name }))} />
+        {availableMethods.length === 0
+          ? <Alert type="error" showIcon style={{ marginBottom: 12 }} message="لم تُهيَّأ حسابات استلام بعد. تواصل مع الإدارة." />
+          : <Select style={{ width: '100%', marginBottom: 12 }} placeholder="اختر وسيلة الدفع" value={methodId} onChange={setMethodId}
+              options={availableMethods.map((m: any) => ({ value: m.id, label: m.name }))} />}
         {account && (
-          <Descriptions size="small" bordered column={1} style={{ marginBottom: 12 }}>
-            <Descriptions.Item label="اسم الحساب">{account.holder_name}</Descriptions.Item>
-            <Descriptions.Item label="الرقم">{account.number}</Descriptions.Item>
-            {account.instructions && <Descriptions.Item label="تعليمات">{account.instructions}</Descriptions.Item>}
-          </Descriptions>
+          <>
+            <Descriptions size="small" bordered column={1} style={{ marginBottom: 12 }}>
+              <Descriptions.Item label="اسم الحساب">{account.holder_name}</Descriptions.Item>
+              <Descriptions.Item label="الرقم">
+                <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>{account.number}</span>
+                {' '}
+                <Button size="small" onClick={() => { navigator.clipboard?.writeText(account.number); message.success('تم النسخ') }}>نسخ</Button>
+              </Descriptions.Item>
+              {account.transfer_link && (
+                <Descriptions.Item label="لينك التحويل">
+                  <a href={account.transfer_link} target="_blank" rel="noreferrer">افتح رابط التحويل</a>
+                </Descriptions.Item>
+              )}
+              {account.instructions && <Descriptions.Item label="تعليمات">{account.instructions}</Descriptions.Item>}
+            </Descriptions>
+            {account.qr_image && (
+              <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>امسح الكود بتطبيق الدفع</div>
+                <img src={account.qr_image} alt="qr"
+                  style={{ maxWidth: 220, width: '100%', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+              </div>
+            )}
+          </>
         )}
         <Input placeholder="مرجع التحويل (اختياري)" value={reference} onChange={(e) => setReference(e.target.value)} style={{ marginBottom: 12 }} />
         <Upload beforeUpload={(f) => { setFile(f); return false }} maxCount={1} fileList={file ? [file] : []} onRemove={() => setFile(null)} accept="image/*,application/pdf">

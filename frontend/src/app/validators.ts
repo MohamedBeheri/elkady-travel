@@ -13,11 +13,11 @@ export const phoneRule = {
  * a duplicated list. Dedupe keeps the first occurrence — sufficient for profile
  * & booking, since the surviving `route_id`/`destination_name` still resolves.
  */
-export function dedupePickups<T extends { name: string; center?: string }>(items: T[] = []): T[] {
+export function dedupePickups(items: any[] = []): any[] {
   const seen = new Set<string>()
-  const out: T[] = []
+  const out: any[] = []
   for (const p of items) {
-    const key = `${(p.center || '').trim()}::${p.name.trim()}`
+    const key = `${(p?.center || '').trim()}::${(p?.name || '').trim()}`
     if (seen.has(key)) continue
     seen.add(key); out.push(p)
   }

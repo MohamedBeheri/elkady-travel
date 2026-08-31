@@ -1,6 +1,6 @@
-import { Card, Tabs, Table, Button, Modal, Form, Input, Select, InputNumber, Switch, DatePicker, Tag, Space, Drawer, Segmented, App as AntdApp } from 'antd'
+import { Card, Tabs, Table, Button, Modal, Form, Input, Select, InputNumber, Switch, DatePicker, Tag, Space, Drawer, Segmented, Upload, App as AntdApp } from 'antd'
 import SeatGenderEditor from '../components/SeatGenderEditor'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 import {
@@ -123,6 +123,25 @@ function RoutesTab() {
   )
 }
 
+/* ---------- Form.Item child that swaps between an existing image URL and a picked File ---------- */
+function ImageField({ value, onChange }: any) {
+  const isFile = value instanceof File || value instanceof Blob
+  const previewUrl = isFile ? URL.createObjectURL(value) : (typeof value === 'string' ? value : '')
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      {previewUrl && (
+        <img src={previewUrl} alt="preview"
+          style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+      )}
+      <Upload beforeUpload={(f) => { onChange?.(f); return false }} showUploadList={false}
+        accept="image/*" maxCount={1}>
+        <Button icon={<UploadOutlined />}>{previewUrl ? 'استبدال الصورة' : 'رفع الصورة'}</Button>
+      </Upload>
+      {previewUrl && <Button danger onClick={() => onChange?.(null)}>إزالة</Button>}
+    </div>
+  )
+}
+
 /* ---------- generic simple CRUD tab ---------- */
 function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, extraAction, toolbar }: any) {
   const { message, modal } = AntdApp.useApp()
@@ -178,6 +197,8 @@ function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, e
                 : f.type === 'switch' ? <Switch />
                 : f.type === 'date' ? <DatePicker style={{ width: '100%' }} />
                 : f.type === 'time' ? <Input placeholder="HH:MM:SS مثال 06:00:00" />
+                : f.type === 'textarea' ? <Input.TextArea rows={2} />
+                : f.type === 'image' ? <ImageField />
                 : <Input />}
             </Form.Item>
           ))}
@@ -305,12 +326,23 @@ function PaymentsTab() {
   const [del] = useDeletePaymentAccountMutation()
   return <SimpleTab title="حساب استلام" rows={data?.results || data || []} onSave={save} onDelete={del}
     rowLabel={(r: any) => `${r.method_name} — ${r.holder_name}`}
-    columns={[{ title: 'الوسيلة', dataIndex: 'method_name' }, { title: 'صاحب الحساب', dataIndex: 'holder_name' }, { title: 'الرقم', dataIndex: 'number' }]}
+    columns={[
+      { title: 'الوسيلة', dataIndex: 'method_name' },
+      { title: 'صاحب الحساب', dataIndex: 'holder_name' },
+      { title: 'الرقم', dataIndex: 'number' },
+      { title: 'QR', dataIndex: 'qr_image', render: (v: string) => v
+        ? <img src={v} alt="qr" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 4 }} />
+        : '—' },
+      { title: 'لينك', dataIndex: 'transfer_link', render: (v: string) => v
+        ? <a href={v} target="_blank" rel="noreferrer">فتح</a> : '—' },
+    ]}
     fields={[
       { name: 'method', label: 'الوسيلة', type: 'select', required: true, options: (methods?.results || methods || []).map((m: any) => ({ value: m.id, label: m.name })) },
       { name: 'holder_name', label: 'اسم صاحب الحساب', required: true },
       { name: 'number', label: 'الرقم / المحفظة', required: true },
-      { name: 'instructions', label: 'تعليمات' },
+      { name: 'transfer_link', label: 'لينك التحويل (اختياري)' },
+      { name: 'qr_image', label: 'كود QR (اختياري)', type: 'image' },
+      { name: 'instructions', label: 'تعليمات للطالب', type: 'textarea' },
       { name: 'active', label: 'نشط', type: 'switch', initial: true },
     ]} />
 }
