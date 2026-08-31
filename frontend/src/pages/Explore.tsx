@@ -45,6 +45,7 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
   const pointLabel = isReturn ? 'نقطة النزول' : 'نقطة الالتقاط'
   const times = (isReturn ? (data?.return_slots || []) : (data?.morning_slots || []))
   const noPickups = center && selUni && availPickups.length === 0
+  const centerLabel = CENTERS.find((c) => c.value === center)?.label || ''
 
   const run = () => {
     if (!center || !university || !pickupId) { message.warning('أكمل بيانات البحث'); return }
@@ -62,6 +63,11 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
           <Radio.Button value="go">ذهاب</Radio.Button>
           <Radio.Button value="return">عودة</Radio.Button>
         </Radio.Group>
+        <span style={{ marginInlineStart: 12, color: '#64748b', fontSize: 13 }}>
+          {isReturn
+            ? 'العودة من الجامعة (بدر/الشروق) إلى مركزك — اختر المركز والجامعة ونقطة النزول.'
+            : 'الذهاب من مركزك إلى الجامعة — اختر المركز والجامعة ونقطة الالتقاط.'}
+        </span>
       </div>
       <Row gutter={[12, 12]}>
         <Col xs={24} sm={12} md={6}>
@@ -96,8 +102,8 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
                 <div style={{ fontWeight: 800, fontSize: 16, color: '#0B2E5E' }}>{route.name}</div>
                 <div style={{ color: '#64748b', fontSize: 13 }}>
                   {isReturn
-                    ? `العودة: من ${route.destination} إلى ${selPickup?.name} (نقطة النزول)`
-                    : `الذهاب: من ${selPickup?.name} إلى ${selUni?.name}`}
+                    ? `العودة من ${route.destination} — الوصول إلى ${centerLabel}، نقطة النزول: ${selPickup?.name}`
+                    : `الذهاب من ${selPickup?.name} (${centerLabel}) إلى ${selUni?.name}`}
                 </div>
               </div>
             </div>
