@@ -20,7 +20,7 @@ const TYPE_OPTS = [{ value: 'term', label: 'ترم' }, { value: 'monthly', label
 /* ---------- Routes + pickup points ---------- */
 function RoutesTab() {
   const { message, modal } = AntdApp.useApp()
-  const { data: routes } = useRoutesQuery()
+  const { data: routes } = useRoutesQuery({ page_size: 1000 })
   const { data: dests } = useDestinationsQuery()
   const [saveRoute] = useSaveRouteMutation()
   const [delRoute] = useDeleteRouteMutation()
@@ -155,7 +155,8 @@ function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, e
   return (
     <>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} style={{ marginBottom: 12 }}>إضافة</Button>
-      <Table rowKey="id" dataSource={rows} pagination={false} scroll={{ x: 'max-content' }}
+      <Table rowKey="id" dataSource={rows} scroll={{ x: 'max-content' }}
+        pagination={{ pageSize: 12, showSizeChanger: true, hideOnSinglePage: true, showTotal: (t) => `الإجمالي: ${t}` }}
         columns={[...columns, { title: '', render: (_: any, r: any) => (
           <Space>
             {extraAction && extraAction(r)}
@@ -183,7 +184,7 @@ function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, e
 }
 
 function UniversitiesTab() {
-  const { data } = useUniversitiesQuery()
+  const { data } = useUniversitiesQuery({ page_size: 1000 })
   const { data: dests } = useDestinationsQuery()
   const [save] = useSaveUniversityMutation()
   const [del] = useDeleteUniversityMutation()
@@ -198,8 +199,8 @@ function UniversitiesTab() {
 }
 
 function CollegesTab() {
-  const { data } = useCollegesQuery()
-  const { data: unis } = useUniversitiesQuery({ active: true })
+  const { data } = useCollegesQuery({ page_size: 1000 })
+  const { data: unis } = useUniversitiesQuery({ active: true, page_size: 1000 })
   const [save] = useSaveCollegeMutation()
   const [del] = useDeleteCollegeMutation()
   return <SimpleTab title="كلية" rows={data?.results || []} onSave={save} onDelete={del}
@@ -212,8 +213,8 @@ function CollegesTab() {
 }
 
 function PricesTab() {
-  const { data } = usePricesQuery()
-  const { data: routes } = useRoutesQuery({ active: true })
+  const { data } = usePricesQuery({ page_size: 1000 })
+  const { data: routes } = useRoutesQuery({ active: true, page_size: 1000 })
   const [save] = useSavePriceMutation()
   const [del] = useDeletePriceMutation()
   return <SimpleTab title="سعر" rows={data?.results || []} onSave={save} onDelete={del}
@@ -232,7 +233,7 @@ function SchedulesTab() {
   const { data: mslots } = useMorningSlotsQuery()
   const { data: rslots } = useReturnSlotsQuery()
   const { data: caps } = useCapacitiesQuery()
-  const { data: routes } = useRoutesQuery({ active: true })
+  const { data: routes } = useRoutesQuery({ active: true, page_size: 1000 })
   const { data: layouts } = useLayoutsQuery()
   const [saveM] = useSaveMorningSlotMutation()
   const [saveR] = useSaveReturnSlotMutation()

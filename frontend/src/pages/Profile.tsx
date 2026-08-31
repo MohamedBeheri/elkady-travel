@@ -7,6 +7,7 @@ import {
 } from '../app/api'
 import { useAppDispatch, useAppSelector } from '../app/store'
 import { setUser } from '../app/authSlice'
+import { phoneRule } from '../app/validators'
 
 const STATUS_COLOR: Record<string, string> = {
   payment_pending: 'orange', payment_submitted: 'blue', under_review: 'blue',
@@ -109,7 +110,7 @@ export default function Profile() {
         <Form form={form} layout="vertical" onFinish={onFinish}>
           <Form.Item name="full_name" label="الاسم الكامل"><Input /></Form.Item>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="phone" label="الهاتف"><Input /></Form.Item>
+            <Form.Item name="phone" label="الهاتف" rules={[phoneRule]}><Input inputMode="numeric" maxLength={11} /></Form.Item>
             <Form.Item name="date_of_birth" label="تاريخ الميلاد"><DatePicker style={{ width: '100%' }} /></Form.Item>
             <Form.Item name="gender" label="النوع">
               <Select options={[{ value: 'male', label: 'ذكر' }, { value: 'female', label: 'أنثى' }]} />

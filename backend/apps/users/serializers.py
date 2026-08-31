@@ -1,7 +1,16 @@
+import re
+
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .models import User
+
+
+def validate_phone_11(value):
+    """Phone must be exactly 11 digits (blank allowed for optional fields)."""
+    if value and not re.fullmatch(r'\d{11}', str(value)):
+        raise serializers.ValidationError('رقم الهاتف يجب أن يكون ١١ رقماً.')
+    return value
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -36,6 +45,9 @@ class UserWriteSerializer(serializers.ModelSerializer):
             'university', 'college', 'academic_year', 'is_active',
         ]
 
+    def validate_phone(self, value):
+        return validate_phone_11(value)
+
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         user = User(**validated_data)
@@ -64,6 +76,9 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
             'phone', 'center', 'pickup_point', 'address', 'date_of_birth', 'gender',
             'university', 'college', 'academic_year',
         ]
+
+    def validate_phone(self, value):
+        return validate_phone_11(value)
 
     def create(self, validated_data):
         password = validated_data.pop('password')

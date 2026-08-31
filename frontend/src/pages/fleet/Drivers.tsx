@@ -14,7 +14,7 @@ const COLOR: Record<string, string> = { active: 'green', inactive: 'default', su
 
 export default function Drivers() {
   const [status, setStatus] = useState<string>()
-  const { data, isFetching } = useDriversQuery({ status })
+  const { data, isFetching } = useDriversQuery({ status, page_size: 1000 })
   const { data: alerts } = useDriverAlertsQuery()
   const [save] = useSaveDriverMutation()
   const [del] = useDeleteDriverMutation()

@@ -3,7 +3,7 @@ import { useMaintenanceQuery, useSaveMaintenanceMutation, useVehicles2Query } fr
 import CrudCard from '../../components/CrudCard'
 
 export default function Maintenance() {
-  const { data, isFetching } = useMaintenanceQuery()
+  const { data, isFetching } = useMaintenanceQuery({ page_size: 1000 })
   const { data: vehicles } = useVehicles2Query({ active: true })
   const [save] = useSaveMaintenanceMutation()
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: v.plate_number }))

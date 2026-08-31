@@ -15,7 +15,7 @@ const COLOR: Record<string, string> = { planned: 'blue', started: 'orange', comp
 export default function Assignments() {
   const [date, setDate] = useState(dayjs())
   const ds = date.format('YYYY-MM-DD')
-  const { data, isFetching } = useAssignmentsQuery({ date: ds })
+  const { data, isFetching } = useAssignmentsQuery({ date: ds, page_size: 1000 })
   const { data: drivers } = useDriversQuery({ status: 'active' })
   const { data: vehicles } = useVehicles2Query({ active: true })
   const { data: routes } = useRoutesQuery({ active: true })

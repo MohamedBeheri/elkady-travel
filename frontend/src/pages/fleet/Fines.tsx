@@ -3,7 +3,7 @@ import { useFinesQuery, useSaveFineMutation, useVehicles2Query, useDriversQuery 
 import CrudCard from '../../components/CrudCard'
 
 export default function Fines() {
-  const { data, isFetching } = useFinesQuery()
+  const { data, isFetching } = useFinesQuery({ page_size: 1000 })
   const { data: vehicles } = useVehicles2Query({ active: true })
   const { data: drivers } = useDriversQuery({})
   const [save] = useSaveFineMutation()

@@ -2,6 +2,7 @@ import { Card, Table, Tag, Button, Modal, Form, Input, Select, Space, App as Ant
 import { PlusOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useUsersQuery, useSaveUserMutation, useDeleteUserMutation } from '../app/api'
+import { phoneRule } from '../app/validators'
 
 const ROLE_OPTS = [
   { value: 'admin', label: 'مدير عام' },
@@ -17,7 +18,7 @@ const ROLE_COLOR: Record<string, string> = { admin: 'red', student: 'default' }
 export default function Users() {
   const { message, modal } = AntdApp.useApp()
   const [role, setRole] = useState<string>()
-  const { data, isFetching } = useUsersQuery(role ? { role } : undefined)
+  const { data, isFetching } = useUsersQuery({ page_size: 1000, ...(role ? { role } : {}) })
   const [save] = useSaveUserMutation()
   const [del] = useDeleteUserMutation()
   const [form] = Form.useForm()
@@ -53,6 +54,7 @@ export default function Users() {
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} style={{ marginBottom: 12 }}>موظف جديد</Button>
       <Table
         rowKey="id" loading={isFetching} dataSource={data?.results || []} scroll={{ x: 600 }}
+        pagination={{ pageSize: 15, showSizeChanger: true, showTotal: (t) => `الإجمالي: ${t}` }}
         columns={[
           { title: 'الاسم', dataIndex: 'full_name', render: (v, r: any) => v || r.username },
           { title: 'اسم المستخدم', dataIndex: 'username' },
@@ -72,7 +74,7 @@ export default function Users() {
           <Form.Item name="full_name" label="الاسم الكامل" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="username" label="اسم المستخدم" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="role" label="الدور" rules={[{ required: true }]}><Select options={ROLE_OPTS} /></Form.Item>
-          <Form.Item name="phone" label="الهاتف"><Input /></Form.Item>
+          <Form.Item name="phone" label="الهاتف" rules={[phoneRule]}><Input inputMode="numeric" maxLength={11} /></Form.Item>
           <Form.Item name="password" label={editing ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'} rules={editing ? [] : [{ required: true, min: 6 }]}>
             <Input.Password />
           </Form.Item>

@@ -4,6 +4,7 @@ import {
   useAcceptTourismMutation, useRejectTourismMutation,
 } from '../app/api'
 import { useAppSelector } from '../app/store'
+import { phoneRule } from '../app/validators'
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'orange', quoted: 'blue', accepted: 'green', rejected: 'red', expired: 'default',
@@ -36,7 +37,7 @@ export default function TourismRequest() {
           initialValues={{ full_name: user?.full_name, phone: user?.phone, national_id: user?.national_id, trip_type: 'private', travelers: 1 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
             <Form.Item name="full_name" label="الاسم" rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name="phone" label="الهاتف" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="phone" label="الهاتف" rules={[{ required: true }, phoneRule]}><Input inputMode="numeric" maxLength={11} /></Form.Item>
             <Form.Item name="origin" label="من" rules={[{ required: true }]}><Input /></Form.Item>
             <Form.Item name="destination" label="إلى" rules={[{ required: true }]}><Input /></Form.Item>
             <Form.Item name="travel_date" label="تاريخ الرحلة" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>

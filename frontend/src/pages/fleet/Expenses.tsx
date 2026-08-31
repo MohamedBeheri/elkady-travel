@@ -13,7 +13,7 @@ export default function Expenses() {
   const [vehicle, setVehicle] = useState<number>()
   const params: any = { vehicle }
   if (status !== 'all') params.status = status
-  const { data, isFetching } = useExpensesQuery(params)
+  const { data, isFetching } = useExpensesQuery({ ...params, page_size: 1000 })
   const { data: vehicles } = useVehicles2Query({ active: true })
   const [approve] = useApproveExpenseMutation()
   const [reject] = useRejectExpenseMutation()

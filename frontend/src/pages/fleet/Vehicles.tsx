@@ -12,7 +12,7 @@ const COLOR: Record<string, string> = { available: 'green', in_trip: 'blue', mai
 
 export default function Vehicles() {
   const [status, setStatus] = useState<string>()
-  const { data, isFetching } = useVehicles2Query({ status })
+  const { data, isFetching } = useVehicles2Query({ status, page_size: 1000 })
   const [save] = useSaveVehicleMutation()
   const [del] = useDeleteVehicleMutation()
 

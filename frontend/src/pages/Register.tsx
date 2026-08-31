@@ -2,6 +2,7 @@ import { Button, Form, Input, Select, DatePicker, Typography, App as AntdApp } f
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useRegisterMutation, useLoginMutation, usePublicUniversitiesQuery, usePublicCollegesQuery, usePublicPickupPointsQuery } from '../app/api'
+import { phoneRule } from '../app/validators'
 import { useAppDispatch } from '../app/store'
 import { setCredentials } from '../app/authSlice'
 
@@ -57,8 +58,8 @@ export default function Register() {
               <Input />
             </Form.Item>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Form.Item name="phone" label="رقم الهاتف" rules={[{ required: true }]}>
-                <Input inputMode="tel" />
+              <Form.Item name="phone" label="رقم الهاتف" rules={[{ required: true }, phoneRule]}>
+                <Input inputMode="numeric" maxLength={11} placeholder="١١ رقم" />
               </Form.Item>
               <Form.Item name="date_of_birth" label="تاريخ الميلاد" rules={[{ required: true }]}>
                 <DatePicker style={{ width: '100%' }} placeholder="اختر التاريخ" />
