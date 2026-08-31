@@ -123,7 +123,7 @@ function RoutesTab() {
 }
 
 /* ---------- generic simple CRUD tab ---------- */
-function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, extraAction }: any) {
+function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, extraAction, toolbar }: any) {
   const { message, modal } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
@@ -154,9 +154,12 @@ function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, e
   }
   return (
     <>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} style={{ marginBottom: 12 }}>إضافة</Button>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>إضافة</Button>
+        {toolbar}
+      </div>
       <Table rowKey="id" dataSource={rows} scroll={{ x: 'max-content' }}
-        pagination={{ pageSize: 12, showSizeChanger: true, hideOnSinglePage: true, showTotal: (t) => `الإجمالي: ${t}` }}
+        pagination={{ pageSize: 12, showSizeChanger: true, pageSizeOptions: ['10', '12', '20', '50', '100', '200'], showTotal: (t) => `الإجمالي: ${t}` }}
         columns={[...columns, { title: '', render: (_: any, r: any) => (
           <Space>
             {extraAction && extraAction(r)}
@@ -203,11 +206,19 @@ function CollegesTab() {
   const { data: unis } = useUniversitiesQuery({ active: true, page_size: 1000 })
   const [save] = useSaveCollegeMutation()
   const [del] = useDeleteCollegeMutation()
-  return <SimpleTab title="كلية" rows={data?.results || []} onSave={save} onDelete={del}
+  const [uniFilter, setUniFilter] = useState<number>()
+  const uniOptions = (unis?.results || []).map((u: any) => ({ value: u.id, label: u.name }))
+  const all = data?.results || []
+  const rows = uniFilter ? all.filter((c: any) => c.university === uniFilter) : all
+  const toolbar = (
+    <Select allowClear showSearch optionFilterProp="label" placeholder="فلترة بالجامعة"
+      style={{ width: 240 }} value={uniFilter} onChange={setUniFilter} options={uniOptions} />
+  )
+  return <SimpleTab title="كلية" rows={rows} toolbar={toolbar} onSave={save} onDelete={del}
     columns={[{ title: 'الكلية', dataIndex: 'name' }, { title: 'الجامعة', dataIndex: 'university_name' }, { title: 'نشط', dataIndex: 'active', render: (v: any) => v ? 'نعم' : 'لا' }]}
     fields={[
       { name: 'name', label: 'اسم الكلية', required: true },
-      { name: 'university', label: 'الجامعة', type: 'select', required: true, options: (unis?.results || []).map((u: any) => ({ value: u.id, label: u.name })) },
+      { name: 'university', label: 'الجامعة', type: 'select', required: true, options: uniOptions },
       { name: 'active', label: 'نشط', type: 'switch', initial: true },
     ]} />
 }
