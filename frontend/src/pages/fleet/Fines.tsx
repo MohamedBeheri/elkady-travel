@@ -1,5 +1,5 @@
 import { Tag } from 'antd'
-import { useFinesQuery, useSaveFineMutation, useVehicles2Query, useDriversQuery } from '../../app/api'
+import { useFinesQuery, useSaveFineMutation, useDeleteFineMutation, useVehicles2Query, useDriversQuery } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
 
 export default function Fines() {
@@ -7,6 +7,7 @@ export default function Fines() {
   const { data: vehicles } = useVehicles2Query({ active: true })
   const { data: drivers } = useDriversQuery({})
   const [save] = useSaveFineMutation()
+  const [del] = useDeleteFineMutation()
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: v.plate_number }))
   const driverOpts = (drivers?.results || []).map((d: any) => ({ value: d.id, label: d.full_name }))
 
@@ -16,6 +17,8 @@ export default function Fines() {
       rows={data?.results || []}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}
+      onDelete={(id) => del(id).unwrap()}
+      rowName={(r) => `غرامة ${r.vehicle_plate || ''} — ${Number(r.amount || 0).toLocaleString()} ج.م`}
       columns={[
         { title: 'المركبة', dataIndex: 'vehicle_plate' },
         { title: 'السائق', dataIndex: 'driver_name', render: (v: any) => v || '—' },

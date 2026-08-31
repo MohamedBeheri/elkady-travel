@@ -1,7 +1,7 @@
 import { Card, Table, Tag, Segmented, Button, Space, Modal, Form, InputNumber, Input, DatePicker, App as AntdApp, Descriptions } from 'antd'
 import { useState } from 'react'
 import {
-  useTourismRequestsQuery, useCreateQuotationMutation, useSendQuotationMutation,
+  useTourismRequestsQuery, useCreateQuotationMutation, useSendQuotationMutation, useDeleteTourismRequestMutation,
 } from '../app/api'
 
 const STATUS_COLOR: Record<string, string> = {
@@ -10,13 +10,26 @@ const STATUS_COLOR: Record<string, string> = {
 const TRIP_LABEL: Record<string, string> = { seat: 'فردي', private: 'خاصة' }
 
 export default function TourismAdmin() {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const [status, setStatus] = useState('pending')
-  const params: any = {}
+  const params: any = { page_size: 1000 }
   if (status !== 'all') params.status = status
   const { data, isFetching } = useTourismRequestsQuery(params)
   const [createQ] = useCreateQuotationMutation()
   const [sendQ] = useSendQuotationMutation()
+  const [del] = useDeleteTourismRequestMutation()
+
+  const remove = (r: any) => {
+    modal.confirm({
+      title: `حذف طلب «${r.full_name || ''}»؟`,
+      content: `${r.origin} → ${r.destination} — ${r.travel_date}. لا يمكن التراجع.`,
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => {
+        try { await del(r.id).unwrap(); message.success('تم حذف الطلب') }
+        catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحذف') }
+      },
+    })
+  }
   const [form] = Form.useForm()
   const [quoteFor, setQuoteFor] = useState<any>(null)
   const [detail, setDetail] = useState<any>(null)
@@ -52,9 +65,10 @@ export default function TourismAdmin() {
           { title: 'الحالة', dataIndex: 'status_display', render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
           {
             title: 'إجراء', fixed: 'right', render: (_, r: any) => (
-              <Space>
+              <Space wrap>
                 <Button size="small" onClick={() => setDetail(r)}>تفاصيل</Button>
                 {r.status === 'pending' && <Button size="small" type="primary" onClick={() => { form.resetFields(); setQuoteFor(r) }}>عرض سعر</Button>}
+                <Button size="small" danger onClick={() => remove(r)}>حذف</Button>
               </Space>
             ),
           },

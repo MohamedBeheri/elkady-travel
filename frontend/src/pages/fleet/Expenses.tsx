@@ -1,14 +1,14 @@
 import { Card, Table, Tag, Button, Space, Segmented, Select, Modal, Input, App as AntdApp } from 'antd'
 import { useState } from 'react'
 import {
-  useExpensesQuery, useApproveExpenseMutation, useRejectExpenseMutation, useVehicles2Query,
+  useExpensesQuery, useApproveExpenseMutation, useRejectExpenseMutation, useDeleteExpenseMutation, useVehicles2Query,
 } from '../../app/api'
 
 const KIND_COLOR: Record<string, string> = { fuel: 'blue', tolls: 'gold', other: 'purple' }
 const STATUS_COLOR: Record<string, string> = { pending: 'orange', approved: 'green', rejected: 'red' }
 
 export default function Expenses() {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const [status, setStatus] = useState('pending')
   const [vehicle, setVehicle] = useState<number>()
   const params: any = { vehicle }
@@ -17,8 +17,21 @@ export default function Expenses() {
   const { data: vehicles } = useVehicles2Query({ active: true })
   const [approve] = useApproveExpenseMutation()
   const [reject] = useRejectExpenseMutation()
+  const [del] = useDeleteExpenseMutation()
   const [rejectRow, setRejectRow] = useState<any>(null)
   const [reason, setReason] = useState('')
+
+  const remove = (r: any) => {
+    modal.confirm({
+      title: `حذف المصروف؟`,
+      content: `${r.kind_display || ''} — ${r.vehicle_plate || ''} — ${Number(r.amount).toLocaleString()} ج.م`,
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => {
+        try { await del(r.id).unwrap(); message.success('تم حذف المصروف') }
+        catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحذف') }
+      },
+    })
+  }
 
   const doReject = async () => {
     await reject({ id: rejectRow.id, rejection_reason: reason }).unwrap()
@@ -48,12 +61,16 @@ export default function Expenses() {
           { title: 'الإيصال', dataIndex: 'receipt', render: (v) => v ? <a href={v} target="_blank" rel="noreferrer">عرض</a> : '—' },
           { title: 'الحالة', dataIndex: 'status_display', render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
           {
-            title: 'إجراء', fixed: 'right', render: (_, r: any) => r.status === 'pending' ? (
-              <Space>
-                <Button size="small" type="primary" onClick={async () => { await approve(r.id).unwrap(); message.success('تم القبول') }}>قبول</Button>
-                <Button size="small" danger onClick={() => setRejectRow(r)}>رفض</Button>
+            title: 'إجراء', fixed: 'right', render: (_, r: any) => (
+              <Space wrap>
+                {r.status === 'pending' && <>
+                  <Button size="small" type="primary" onClick={async () => { await approve(r.id).unwrap(); message.success('تم القبول') }}>قبول</Button>
+                  <Button size="small" danger onClick={() => setRejectRow(r)}>رفض</Button>
+                </>}
+                {r.status !== 'pending' && r.rejection_reason && <span style={{ color: '#ef4444', fontSize: 12 }}>{r.rejection_reason}</span>}
+                <Button size="small" danger onClick={() => remove(r)}>حذف</Button>
               </Space>
-            ) : r.rejection_reason ? <span style={{ color: '#ef4444', fontSize: 12 }}>{r.rejection_reason}</span> : '—',
+            ),
           },
         ]} />
       <Modal title="سبب رفض المصروف" open={!!rejectRow} onOk={doReject} onCancel={() => setRejectRow(null)} okText="رفض" okButtonProps={{ danger: true }}>

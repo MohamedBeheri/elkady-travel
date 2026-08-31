@@ -3,12 +3,12 @@ import {
   Form, Input, DatePicker, App as AntdApp, Tooltip,
 } from 'antd'
 import {
-  WhatsAppOutlined, EyeOutlined, FileExcelOutlined, FilePdfOutlined, EditOutlined,
+  WhatsAppOutlined, EyeOutlined, FileExcelOutlined, FilePdfOutlined, EditOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
-  useSubscriptionsQuery, useRoutesQuery, useUniversitiesQuery, useUsersQuery,
+  useSubscriptionsQuery, useDeleteSubscriptionMutation, useRoutesQuery, useUniversitiesQuery, useUsersQuery,
   useSaveUserMutation, useCollegesQuery, usePublicPickupPointsQuery,
 } from '../app/api'
 import { phoneRule } from '../app/validators'
@@ -204,6 +204,20 @@ export default function Subscriptions() {
   if (type !== 'all') params.subscription_type = type
   const { data, isFetching } = useSubscriptionsQuery(params)
   const rows = data?.results || []
+  const { message, modal } = AntdApp.useApp()
+  const [del] = useDeleteSubscriptionMutation()
+
+  const remove = (r: any) => {
+    modal.confirm({
+      title: `حذف اشتراك «${r.student_name || ''}»؟`,
+      content: `${r.type_display || ''} — ${r.route_name || ''} — ${Number(r.amount || 0).toLocaleString()} ج.م. لا يمكن التراجع.`,
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => {
+        try { await del(r.id).unwrap(); message.success('تم حذف الاشتراك') }
+        catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحذف') }
+      },
+    })
+  }
 
   return (
     <Card
@@ -249,13 +263,14 @@ export default function Subscriptions() {
           { title: 'طريقة الدفع', dataIndex: 'method_name', render: (v) => v || '—' },
           { title: 'الحالة', dataIndex: 'status_display', render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
           {
-            title: 'إجراءات', fixed: 'right', width: 130, render: (_, r: any) => (
+            title: 'إجراءات', fixed: 'right', width: 170, render: (_, r: any) => (
               <Space>
                 <Tooltip title="معاينة الملف"><Button size="small" icon={<EyeOutlined />} onClick={() => setProfileId(r.student)} /></Tooltip>
                 <Tooltip title="رسالة واتساب">
                   <Button size="small" icon={<WhatsAppOutlined />} style={{ color: '#25D366' }}
                     href={`https://wa.me/${waPhone(r.student_phone)}?text=${encodeURIComponent(buildWhatsApp(r))}`} target="_blank" />
                 </Tooltip>
+                <Tooltip title="حذف الاشتراك"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(r)} /></Tooltip>
               </Space>
             ),
           },

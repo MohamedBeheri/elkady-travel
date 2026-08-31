@@ -164,6 +164,10 @@ export const api = createApi({
     subscriptions: b.query<any, Record<string, any> | void>({
       query: (p) => `bookings/subscriptions/${qs(p as any)}`, providesTags: ['Subscription'],
     }),
+    deleteSubscription: b.mutation<any, number>({
+      query: (id) => ({ url: `bookings/subscriptions/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Subscription'],
+    }),
     createSubscription: b.mutation<any, any>({
       query: (body) => ({ url: 'bookings/subscriptions/', method: 'POST', body }),
       invalidatesTags: ['Subscription'],
@@ -262,6 +266,10 @@ export const api = createApi({
     tourismRequests: b.query<any, Record<string, any> | void>({
       query: (p) => `tourism/requests/${qs(p as any)}`, providesTags: ['Tourism'],
     }),
+    deleteTourismRequest: b.mutation<any, number>({
+      query: (id) => ({ url: `tourism/requests/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Tourism', 'Dashboard'],
+    }),
     createTourismRequest: b.mutation<any, any>({
       query: (body) => ({ url: 'tourism/requests/', method: 'POST', body }),
       invalidatesTags: ['Tourism', 'Dashboard'],
@@ -315,6 +323,10 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: id ? `fleet/assignments/${id}/` : 'fleet/assignments/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['Assignment', 'FleetDash'],
     }),
+    deleteAssignment: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/assignments/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Assignment', 'FleetDash'],
+    }),
     myToday: b.query<any, void>({ query: () => 'fleet/assignments/my-today/', providesTags: ['Assignment'] }),
     driverManifest: b.query<any, number>({ query: (id) => `fleet/assignments/${id}/manifest/` }),
     startTrip: b.mutation<any, number>({
@@ -329,6 +341,10 @@ export const api = createApi({
     createExpense: b.mutation<any, FormData>({
       query: (body) => ({ url: 'fleet/expenses/', method: 'POST', body }), invalidatesTags: ['Expense', 'FleetDash'],
     }),
+    deleteExpense: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/expenses/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Expense', 'FleetDash'],
+    }),
     approveExpense: b.mutation<any, number>({
       query: (id) => ({ url: `fleet/expenses/${id}/approve/`, method: 'POST' }), invalidatesTags: ['Expense', 'FleetDash'],
     }),
@@ -342,11 +358,19 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: id ? `fleet/maintenance/${id}/` : 'fleet/maintenance/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['Maintenance'],
     }),
+    deleteMaintenance: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/maintenance/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Maintenance'],
+    }),
     fines: b.query<any, Record<string, any> | void>({
       query: (p) => `fleet/fines/${qs(p as any)}`, providesTags: ['Fine'],
     }),
     saveFine: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `fleet/fines/${id}/` : 'fleet/fines/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['Fine'],
+    }),
+    deleteFine: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/fines/${id}/`, method: 'DELETE' }),
       invalidatesTags: ['Fine'],
     }),
     auditLogs: b.query<any, Record<string, any> | void>({
@@ -389,7 +413,7 @@ export const {
   usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
   usePaymentMethodsQuery, usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation,
   useCompanyQuery,
-  useSubscriptionsQuery, useCreateSubscriptionMutation, useSubmitPaymentMutation,
+  useSubscriptionsQuery, useCreateSubscriptionMutation, useDeleteSubscriptionMutation, useSubmitPaymentMutation,
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
   useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useRunAllocationMutation,
   useSeatRequestsQuery, useBookSeatMutation, useCancelSeatMutation,
@@ -398,16 +422,16 @@ export const {
   useAttendanceQuery, useSetAttendanceMutation,
   useReturnAvailabilityQuery, useReturnBookingsQuery, useBookReturnMutation,
   useChangeReturnMutation, useReturnPassengersQuery,
-  useVehicleTypesQuery, useTourismRequestsQuery, useCreateTourismRequestMutation,
+  useVehicleTypesQuery, useTourismRequestsQuery, useCreateTourismRequestMutation, useDeleteTourismRequestMutation,
   useAcceptTourismMutation, useRejectTourismMutation,
   useCreateQuotationMutation, useSendQuotationMutation,
   useUnreadNotificationsQuery, useMarkAllReadMutation,
   // fleet
   useFleetDashboardQuery, useVehicles2Query, useSaveVehicleMutation, useDeleteVehicleMutation, useVehicleHistoryQuery,
   useDriversQuery, useSaveDriverMutation, useDeleteDriverMutation, useDriverAlertsQuery, useDriverReportQuery,
-  useAssignmentsQuery, useSaveAssignmentMutation, useMyTodayQuery, useLazyDriverManifestQuery, useStartTripMutation, useCompleteTripMutation,
-  useExpensesQuery, useCreateExpenseMutation, useApproveExpenseMutation, useRejectExpenseMutation,
-  useMaintenanceQuery, useSaveMaintenanceMutation, useFinesQuery, useSaveFineMutation,
+  useAssignmentsQuery, useSaveAssignmentMutation, useDeleteAssignmentMutation, useMyTodayQuery, useLazyDriverManifestQuery, useStartTripMutation, useCompleteTripMutation,
+  useExpensesQuery, useCreateExpenseMutation, useDeleteExpenseMutation, useApproveExpenseMutation, useRejectExpenseMutation,
+  useMaintenanceQuery, useSaveMaintenanceMutation, useDeleteMaintenanceMutation, useFinesQuery, useSaveFineMutation, useDeleteFineMutation,
   useAuditLogsQuery, useVehicleExpenseReportQuery,
   useTripCostReportQuery, useOperationsDashboardQuery,
 } = api

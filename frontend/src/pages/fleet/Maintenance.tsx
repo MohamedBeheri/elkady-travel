@@ -1,11 +1,12 @@
 import { Tag } from 'antd'
-import { useMaintenanceQuery, useSaveMaintenanceMutation, useVehicles2Query } from '../../app/api'
+import { useMaintenanceQuery, useSaveMaintenanceMutation, useDeleteMaintenanceMutation, useVehicles2Query } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
 
 export default function Maintenance() {
   const { data, isFetching } = useMaintenanceQuery({ page_size: 1000 })
   const { data: vehicles } = useVehicles2Query({ active: true })
   const [save] = useSaveMaintenanceMutation()
+  const [del] = useDeleteMaintenanceMutation()
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: v.plate_number }))
 
   return (
@@ -14,6 +15,8 @@ export default function Maintenance() {
       rows={data?.results || []}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}
+      onDelete={(id) => del(id).unwrap()}
+      rowName={(r) => `${r.vehicle_plate || ''} — ${r.maintenance_type || 'صيانة'}`}
       canEdit
       columns={[
         { title: 'المركبة', dataIndex: 'vehicle_plate' },

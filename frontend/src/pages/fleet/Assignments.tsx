@@ -2,7 +2,7 @@ import { Tag, DatePicker } from 'antd'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
-  useAssignmentsQuery, useSaveAssignmentMutation, useDriversQuery, useVehicles2Query, useRoutesQuery,
+  useAssignmentsQuery, useSaveAssignmentMutation, useDeleteAssignmentMutation, useDriversQuery, useVehicles2Query, useRoutesQuery,
 } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
 
@@ -20,6 +20,7 @@ export default function Assignments() {
   const { data: vehicles } = useVehicles2Query({ active: true })
   const { data: routes } = useRoutesQuery({ active: true })
   const [save] = useSaveAssignmentMutation()
+  const [del] = useDeleteAssignmentMutation()
 
   const driverOpts = (drivers?.results || []).map((d: any) => ({ value: d.id, label: d.full_name }))
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: `${v.plate_number} (${v.brand} ${v.model})` }))
@@ -31,6 +32,8 @@ export default function Assignments() {
       rows={data?.results || []}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}
+      onDelete={(id) => del(id).unwrap()}
+      rowName={(r) => `تعيين ${r.date} — ${r.driver_name || ''} / ${r.vehicle_plate || ''}`}
       toolbar={<DatePicker value={date} onChange={(d) => d && setDate(d)} allowClear={false} />}
       columns={[
         { title: 'التاريخ', dataIndex: 'date' },

@@ -23,6 +23,12 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             return SubscriptionCreateSerializer
         return SubscriptionSerializer
 
+    def destroy(self, request, *args, **kwargs):
+        """Only staff may hard-delete a subscription record."""
+        if request.user.role not in STAFF_ROLES:
+            return Response({'detail': 'غير مصرح بالحذف'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
     def get_queryset(self):
         qs = super().get_queryset()
         if self.request.user.role == 'student':

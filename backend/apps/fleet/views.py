@@ -207,6 +207,14 @@ class TripExpenseViewSet(viewsets.ModelViewSet):
         obj = serializer.save(created_by=self.request.user, driver=serializer.validated_data.get('driver') or driver)
         audit(self.request.user, 'create', 'TripExpense', obj.id, f'تسجيل مصروف {obj.get_kind_display()} {obj.amount}')
 
+    def destroy(self, request, *args, **kwargs):
+        # Only fleet managers may delete an expense record.
+        if request.user.role not in FLEET_ROLES:
+            return Response({'detail': 'غير مصرح بالحذف'}, status=403)
+        obj = self.get_object()
+        audit(request.user, 'delete', 'TripExpense', obj.id, f'حذف مصروف {obj.get_kind_display()} {obj.amount}')
+        return super().destroy(request, *args, **kwargs)
+
     def _review(self, request, pk, approved):
         if request.user.role not in FLEET_ROLES:
             return Response(status=403)

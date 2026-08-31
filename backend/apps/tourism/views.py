@@ -34,6 +34,13 @@ class TourismRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)
 
+    def destroy(self, request, *args, **kwargs):
+        """Only staff may hard-delete a tourism request."""
+        from config.permissions import STAFF_ROLES
+        if request.user.role not in STAFF_ROLES:
+            return Response({'detail': 'غير مصرح بالحذف'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
         """Customer accepts the sent quotation → request CONFIRMED (§22)."""
