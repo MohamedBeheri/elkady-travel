@@ -26,7 +26,7 @@ interface Props {
 }
 
 export default function CrudCard({ title, rows, columns, fields, onSave, onDelete, rowName, loading, toolbar, addLabel = 'إضافة', canEdit = true, rowExtra, dateFields = ['date', 'license_expiry', 'travel_date', 'date_of_birth', 'effective_date', 'end_date'] }: Props) {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
@@ -59,7 +59,7 @@ export default function CrudCard({ title, rows, columns, fields, onSave, onDelet
   }
 
   const remove = (row: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: `حذف «${rowName ? rowName(row) : (row.name || row.full_name || row.plate_number || '')}»؟`,
       content: 'لا يمكن التراجع عن هذا الإجراء.',
       okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',

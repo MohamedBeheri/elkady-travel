@@ -19,7 +19,7 @@ const TYPE_OPTS = [{ value: 'term', label: 'ترم' }, { value: 'monthly', label
 
 /* ---------- Routes + pickup points ---------- */
 function RoutesTab() {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const { data: routes } = useRoutesQuery()
   const { data: dests } = useDestinationsQuery()
   const [saveRoute] = useSaveRouteMutation()
@@ -43,7 +43,7 @@ function RoutesTab() {
     message.success('تم الحفظ'); setOpen(false); setEditing(null); form.resetFields()
   }
   const removeRoute = (r: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: `حذف المسار «${r.name}»؟`,
       content: 'سيتم حذف جميع نقاط الالتقاط المرتبطة به. لا يمكن التراجع.',
       okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
@@ -124,13 +124,13 @@ function RoutesTab() {
 
 /* ---------- generic simple CRUD tab ---------- */
 function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, extraAction }: any) {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
 
   const remove = (row: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: `حذف «${rowLabel ? rowLabel(row) : (row.name || row.holder_name || '')}»؟`,
       content: 'لا يمكن التراجع عن هذا الإجراء.',
       okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',

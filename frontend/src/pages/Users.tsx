@@ -15,7 +15,7 @@ const ROLE_OPTS = [
 const ROLE_COLOR: Record<string, string> = { admin: 'red', student: 'default' }
 
 export default function Users() {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const [role, setRole] = useState<string>()
   const { data, isFetching } = useUsersQuery(role ? { role } : undefined)
   const [save] = useSaveUserMutation()
@@ -26,7 +26,7 @@ export default function Users() {
 
   const openModal = (row?: any) => { setEditing(row || null); form.resetFields(); if (row) form.setFieldsValue(row); setOpen(true) }
   const remove = (row: any) => {
-    Modal.confirm({
+    modal.confirm({
       title: `حذف «${row.full_name || row.username}»؟`,
       content: 'سيتم حذف الحساب وكل بياناته المرتبطة نهائياً. لا يمكن التراجع.',
       okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
