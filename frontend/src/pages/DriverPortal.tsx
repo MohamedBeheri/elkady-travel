@@ -1,8 +1,8 @@
-import { Card, Row, Col, Tag, Button, Empty, Segmented, Form, Select, InputNumber, Input, Upload, App as AntdApp, Table, Statistic } from 'antd'
-import { CarOutlined, PlayCircleOutlined, CheckCircleOutlined, UploadOutlined, DollarOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Tag, Button, Empty, Segmented, Form, Select, InputNumber, Input, Upload, App as AntdApp, Table, Statistic, Modal, Descriptions, Spin } from 'antd'
+import { CarOutlined, PlayCircleOutlined, CheckCircleOutlined, UploadOutlined, DollarOutlined, TeamOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import {
-  useMyTodayQuery, useStartTripMutation, useCompleteTripMutation, useExpensesQuery, useCreateExpenseMutation,
+  useMyTodayQuery, useLazyDriverManifestQuery, useStartTripMutation, useCompleteTripMutation, useExpensesQuery, useCreateExpenseMutation,
 } from '../app/api'
 
 const STATUS_COLOR: Record<string, string> = { planned: 'blue', started: 'orange', completed: 'green', cancelled: 'default' }
@@ -20,9 +20,13 @@ export default function DriverPortal() {
   const [startTrip] = useStartTripMutation()
   const [completeTrip] = useCompleteTripMutation()
   const [createExpense, { isLoading }] = useCreateExpenseMutation()
+  const [fetchManifest, { data: manifest, isFetching: mLoading }] = useLazyDriverManifestQuery()
+  const [manifestFor, setManifestFor] = useState<any>(null)
   const [form] = Form.useForm()
   const [file, setFile] = useState<any>(null)
   const [kind, setKind] = useState('fuel')
+
+  const openManifest = (a: any) => { setManifestFor(a); fetchManifest(a.id) }
 
   const assignments = today || []
   const expenses = myExp?.results || []
@@ -71,7 +75,8 @@ export default function DriverPortal() {
                   </div>
                   <Tag color={STATUS_COLOR[a.status]}>{a.status_display}</Tag>
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <Button icon={<TeamOutlined />} onClick={() => openManifest(a)}>كشف الركاب</Button>
                   {a.status === 'planned' && <Button type="primary" icon={<PlayCircleOutlined />} onClick={async () => { await startTrip(a.id).unwrap(); message.success('بدأت الرحلة') }}>بدء الرحلة</Button>}
                   {a.status === 'started' && <Button icon={<CheckCircleOutlined />} onClick={async () => { await completeTrip(a.id).unwrap(); message.success('اكتملت الرحلة') }}>إنهاء الرحلة</Button>}
                   {a.status === 'completed' && <Button type="primary" ghost icon={<DollarOutlined />} onClick={() => { setTab('expense'); form.setFieldsValue({ vehicle: a.vehicle }) }}>تسجيل مصروف</Button>}
@@ -106,6 +111,44 @@ export default function DriverPortal() {
           </Form>
         </Card>
       )}
+
+      <Modal open={!!manifestFor} onCancel={() => setManifestFor(null)} width={780} footer={null}
+        title={manifestFor ? `كشف الركاب — ${manifestFor.vehicle_plate} · ${manifestFor.route_name || manifestFor.trip_label || ''}` : ''}>
+        {mLoading ? <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div> : manifest?.detail ? (
+          <Empty description={manifest.detail} />
+        ) : (
+          <>
+            <Descriptions size="small" column={2} bordered style={{ marginBottom: 12 }}>
+              <Descriptions.Item label="الاتجاه">{manifest?.trip?.direction === 'return' ? 'عودة' : 'ذهاب'}</Descriptions.Item>
+              <Descriptions.Item label="الرحلة">{manifest?.trip?.slot_name}</Descriptions.Item>
+              <Descriptions.Item label="الوجهة">{manifest?.trip?.destination_name}</Descriptions.Item>
+              <Descriptions.Item label="عدد الركاب">{manifest?.total || 0}</Descriptions.Item>
+            </Descriptions>
+            {(manifest?.groups || []).length === 0 && <Empty description="لا يوجد ركاب مؤكدون بعد" />}
+            {(manifest?.groups || []).map((g: any) => (
+              <Card key={g.pickup_id} size="small" style={{ marginBottom: 10, borderInlineStart: '4px solid #F07E1B' }}
+                title={
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <ClockCircleOutlined style={{ color: '#EC6A16' }} />
+                    <b style={{ color: '#0B2E5E', fontSize: 16 }}>{g.time || '—'}</b>
+                    <span>· {g.pickup}</span>
+                    <Tag color="blue" style={{ marginInlineStart: 'auto' }}>{g.passengers.length} راكب</Tag>
+                  </div>
+                }>
+                <Table rowKey={(r: any) => `${r.student_name}-${r.seat_number}`} size="small" pagination={false}
+                  dataSource={g.passengers}
+                  columns={[
+                    { title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center', render: (v) => <b>{v}</b> },
+                    { title: 'الاسم', dataIndex: 'student_name' },
+                    { title: 'الجامعة', dataIndex: 'university', render: (v) => v || '—' },
+                    { title: 'النوع', dataIndex: 'kind', render: (v) => <Tag>{v}</Tag> },
+                    { title: 'الهاتف', dataIndex: 'student_phone', render: (v) => v || '—' },
+                  ]} />
+              </Card>
+            ))}
+          </>
+        )}
+      </Modal>
 
       {tab === 'mine' && (
         <Card title={<span style={{ fontWeight: 800 }}>مصروفاتي</span>}

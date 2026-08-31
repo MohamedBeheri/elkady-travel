@@ -152,6 +152,24 @@ class VehicleAssignmentViewSet(viewsets.ModelViewSet):
         qs = self.queryset.filter(driver=d, date=timezone.localdate())
         return Response(VehicleAssignmentSerializer(qs, many=True).data)
 
+    @action(detail=True, methods=['get'], url_path='manifest')
+    def manifest(self, request, pk=None):
+        """Passenger list for a driver's assignment, grouped by pickup point ordered by time.
+
+        Available to the assigned driver (or staff). Delegates to the same logic
+        the admin passengers action uses, so the ordering is by the point's time.
+        """
+        a = self.get_object()
+        if not a.daily_trip_id:
+            return Response({'trip': None, 'groups': [], 'detail': 'الرحلة غير مربوطة بجدول تشغيل بعد'})
+        driver = _driver_of(request.user)
+        from config.permissions import STAFF_ROLES
+        if request.user.role not in STAFF_ROLES and (not driver or driver.id != a.driver_id):
+            return Response(status=403)
+        from apps.operations.views import DailyTripViewSet
+        view = DailyTripViewSet(); view.request = request; view.kwargs = {'pk': a.daily_trip_id}
+        return view.passengers(request, pk=a.daily_trip_id)
+
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
         a = self.get_object()

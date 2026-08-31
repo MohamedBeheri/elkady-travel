@@ -60,19 +60,24 @@ function Passengers({ tripId }: { tripId: number }) {
   if (!data) return null
   return (
     <div>
+      {typeof data.total === 'number' && (
+        <div style={{ marginBottom: 12, color: '#64748b' }}>عدد الركاب المؤكدين: <b style={{ color: '#0B2E5E' }}>{data.total}</b></div>
+      )}
       {(data.groups || []).length === 0 && <Empty description="لا يوجد ركاب مؤكدون" />}
       {(data.groups || []).map((g: any) => (
-        <div key={g.pickup} style={{ marginBottom: 16 }}>
+        <div key={g.pickup_id ?? g.pickup} style={{ marginBottom: 16 }}>
           <Divider orientation="right" style={{ margin: '8px 0' }}>
+            {g.time && <Tag color="orange" style={{ fontWeight: 800 }}>⏰ {g.time}</Tag>}
             <Tag color="cyan">{g.pickup}</Tag> {g.passengers.length} راكب
           </Divider>
           <Table
-            size="small" rowKey="id" pagination={false} dataSource={g.passengers}
+            size="small" rowKey={(r: any) => `${r.student_name}-${r.seat_number}`} pagination={false} dataSource={g.passengers}
             columns={[
+              { title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center', render: (v) => <b>{v}</b> },
               { title: 'الطالب', dataIndex: 'student_name' },
-              { title: 'الجامعة', dataIndex: 'university_name' },
+              { title: 'الجامعة', dataIndex: 'university' },
               { title: 'الهاتف', dataIndex: 'student_phone' },
-              { title: 'الأولوية', dataIndex: 'priority_display', render: (v) => <Tag>{v}</Tag> },
+              { title: 'النوع', dataIndex: 'kind', render: (v) => <Tag>{v}</Tag> },
             ]}
           />
         </div>

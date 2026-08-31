@@ -114,6 +114,17 @@ def _get_or_create_trip(date, route, *, morning_slot=None, return_slot=None, dir
         layout=layout, total_seats=total)
 
 
+def _pickup_time_of(pickup_point_id, direction, slot_id):
+    """Time (HH:MM) the bus passes this point under this slot/direction, or ''."""
+    if not (pickup_point_id and slot_id):
+        return ''
+    from apps.config_app.models import PickupTime
+    key = {'pickup_point_id': pickup_point_id, 'direction': direction}
+    key['return_slot_id' if direction == 'return' else 'morning_slot_id'] = slot_id
+    t = PickupTime.objects.filter(**key).first()
+    return t.time.strftime('%H:%M') if t else ''
+
+
 def _active_priority(student, route):
     """Best confirmed subscription tier for this student on this route (term>monthly>daily)."""
     subs = Subscription.objects.filter(
@@ -149,20 +160,60 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='passengers')
     def passengers(self, request, pk=None):
-        """Passenger list for one trip, grouped by pickup point then university (§17/18)."""
+        """Passenger list for one trip, grouped by pickup point ordered by pickup time.
+
+        Includes subscriber (term/monthly) fixed-seat holders + one-off bookings,
+        with each point's time under this trip's slot so the driver knows the order.
+        """
         trip = self.get_object()
-        reqs = trip.seat_requests.filter(
-            status=SeatRequest.Status.CONFIRMED,
-        ).select_related('student', 'university', 'pickup_point').order_by(
-            'pickup_point__sequence', 'university__name', 'student__full_name',
-        )
-        by_pickup = defaultdict(list)
+        slot_id = trip.return_slot_id if trip.direction == 'return' else trip.morning_slot_id
+        # Absences on this date free the term seats.
+        absent_lock_ids = set(SeatAbsence.objects.filter(
+            date=trip.date, term_lock__route=trip.route).values_list('term_lock_id', flat=True))
+        # Subscriber fixed seats on this route/slot/direction (excluding today's absences).
+        locks = TermSeatLock.objects.filter(
+            route=trip.route, direction=trip.direction, active=True,
+            **({'return_slot_id': slot_id} if trip.direction == 'return' else {'morning_slot_id': slot_id}),
+        ).exclude(pk__in=absent_lock_ids).select_related(
+            'student', 'subscription', 'subscription__university', 'subscription__pickup_point',
+            'student__pickup_point')
+        # One-off (daily) confirmed seat bookings for this trip.
+        reqs = trip.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).select_related(
+            'student', 'university', 'pickup_point')
+
+        # Bucket passengers by pickup point (id/name), each with the point's time.
+        buckets: dict = {}  # pp_id -> {name, time, sequence, passengers[]}
+        def add(pp, student, university_name, seat_number, kind_label):
+            pp_id = pp.id if pp else 0
+            b = buckets.get(pp_id)
+            if not b:
+                t = _pickup_time_of(pp_id, trip.direction, slot_id) if pp else ''
+                b = buckets[pp_id] = {
+                    'pickup_id': pp_id, 'pickup': pp.name if pp else 'غير محدد',
+                    'sequence': pp.sequence if pp else 9999, 'time': t, 'passengers': [],
+                }
+            b['passengers'].append({
+                'student_name': student.full_name or student.username,
+                'student_phone': student.phone or '',
+                'university': university_name or '',
+                'seat_number': seat_number, 'kind': kind_label,
+            })
+        for lock in locks:
+            pp = lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id) else lock.student.pickup_point
+            uni_name = lock.subscription.university.name if (lock.subscription_id and lock.subscription.university_id) else ''
+            sub_label = lock.subscription.get_subscription_type_display() if lock.subscription_id else 'اشتراك'
+            add(pp, lock.student, uni_name, lock.seat_number, sub_label)
         for r in reqs:
-            key = r.pickup_point.name if r.pickup_point else 'غير محدد'
-            by_pickup[key].append(SeatRequestSerializer(r).data)
-        groups = [{'pickup': k, 'passengers': v} for k, v in by_pickup.items()]
+            add(r.pickup_point, r.student, r.university.name if r.university_id else '', r.seat_number, 'يومي')
+
+        # Sort: first by the point's time (empty last), then by sequence.
+        def key(g): return (g['time'] or '99:99', g['sequence'])
+        groups = sorted(buckets.values(), key=key)
+        for g in groups:
+            g['passengers'].sort(key=lambda p: (p['university'], p['student_name']))
         return Response({
             'trip': DailyTripSerializer(trip).data,
+            'total': sum(len(g['passengers']) for g in groups),
             'groups': groups,
         })
 
@@ -348,6 +399,9 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             confirmed = r.status == SeatRequest.Status.CONFIRMED
             trip = r.daily_trip
             dir_label = 'عودة' if trip.direction == 'return' else 'ذهاب'
+            slot_id = trip.return_slot_id if trip.direction == 'return' else trip.morning_slot_id
+            pickup_time = _pickup_time_of(r.pickup_point_id or (user.pickup_point_id), trip.direction, slot_id)
+            pickup_name = r.pickup_point.name if r.pickup_point_id else (user.pickup_point.name if user.pickup_point_id else '')
             payload = f'ELKADY|{r.qr_token or "-"}|مقعد {r.seat_number}|{trip.date}|{trip.route.name}|{dir_label}|{user.full_name}'
             out.append({
                 'kind': 'daily', 'id': r.id, 'seat_number': r.seat_number,
@@ -355,12 +409,17 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
                 'direction': trip.direction, 'direction_display': dir_label,
                 'slot': trip.slot_label, 'status': r.status,
                 'status_display': r.get_status_display(),
+                'pickup_name': pickup_name, 'pickup_time': pickup_time,
                 'qr': make_qr(payload) if confirmed else '', 'token': r.qr_token,
             })
         for lock in TermSeatLock.objects.filter(student=user, active=True).select_related(
-                'route', 'morning_slot', 'return_slot', 'subscription'):
+                'route', 'morning_slot', 'return_slot', 'subscription',
+                'subscription__pickup_point'):
             dir_label = 'عودة' if lock.direction == 'return' else 'ذهاب'
             sub_label = lock.subscription.get_subscription_type_display() if lock.subscription_id else 'اشتراك'
+            pp = lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id) else user.pickup_point
+            slot_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
+            pickup_time = _pickup_time_of(pp.id if pp else None, lock.direction, slot_id)
             payload = f'ELKADY|SUB|مقعد {lock.seat_number}|{lock.route.name}|{dir_label}|{lock.slot_label}|{user.full_name}'
             out.append({
                 'kind': 'term', 'id': lock.id, 'seat_number': lock.seat_number,
@@ -368,6 +427,7 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
                 'direction': lock.direction, 'direction_display': dir_label,
                 'slot': lock.slot_label,
                 'status': 'confirmed', 'status_display': f'مؤكد ({sub_label} - {dir_label})',
+                'pickup_name': pp.name if pp else '', 'pickup_time': pickup_time,
                 'qr': make_qr(payload), 'token': f'SUB-{lock.id}',
             })
         return Response(out)

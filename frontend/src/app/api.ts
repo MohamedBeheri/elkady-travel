@@ -316,6 +316,7 @@ export const api = createApi({
       invalidatesTags: ['Assignment', 'FleetDash'],
     }),
     myToday: b.query<any, void>({ query: () => 'fleet/assignments/my-today/', providesTags: ['Assignment'] }),
+    driverManifest: b.query<any, number>({ query: (id) => `fleet/assignments/${id}/manifest/` }),
     startTrip: b.mutation<any, number>({
       query: (id) => ({ url: `fleet/assignments/${id}/start/`, method: 'POST' }), invalidatesTags: ['Assignment', 'FVehicle'],
     }),
@@ -404,7 +405,7 @@ export const {
   // fleet
   useFleetDashboardQuery, useVehicles2Query, useSaveVehicleMutation, useDeleteVehicleMutation, useVehicleHistoryQuery,
   useDriversQuery, useSaveDriverMutation, useDeleteDriverMutation, useDriverAlertsQuery, useDriverReportQuery,
-  useAssignmentsQuery, useSaveAssignmentMutation, useMyTodayQuery, useStartTripMutation, useCompleteTripMutation,
+  useAssignmentsQuery, useSaveAssignmentMutation, useMyTodayQuery, useLazyDriverManifestQuery, useStartTripMutation, useCompleteTripMutation,
   useExpensesQuery, useCreateExpenseMutation, useApproveExpenseMutation, useRejectExpenseMutation,
   useMaintenanceQuery, useSaveMaintenanceMutation, useFinesQuery, useSaveFineMutation,
   useAuditLogsQuery, useVehicleExpenseReportQuery,

@@ -37,6 +37,10 @@ export default function Tickets() {
                   <Descriptions.Item label="المسار">{t.route}</Descriptions.Item>
                   <Descriptions.Item label="الموعد">{t.slot}</Descriptions.Item>
                   <Descriptions.Item label="التاريخ">{t.date}</Descriptions.Item>
+                  {t.pickup_name && <Descriptions.Item label={t.direction === 'return' ? 'نقطة النزول' : 'نقطة الالتقاط'}>{t.pickup_name}</Descriptions.Item>}
+                  {t.pickup_time && <Descriptions.Item label={t.direction === 'return' ? 'موعد النزول' : 'موعد الالتقاط'}>
+                    <b style={{ color: '#0B2E5E', fontSize: 15 }}>⏰ {t.pickup_time}</b>
+                  </Descriptions.Item>}
                   <Descriptions.Item label="الحالة"><Tag color={STATUS_COLOR[t.status] || 'default'}>{t.status_display}</Tag></Descriptions.Item>
                   <Descriptions.Item label="الرقم المرجعي">{t.token}</Descriptions.Item>
                 </Descriptions>
