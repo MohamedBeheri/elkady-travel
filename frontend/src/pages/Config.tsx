@@ -4,7 +4,7 @@ import { PlusOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
-  useRoutesQuery, useSaveRouteMutation, useDestinationsQuery,
+  useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, useDestinationsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
   useUniversitiesQuery, useSaveUniversityMutation,
   useCollegesQuery, useSaveCollegeMutation, useLayoutsQuery,
@@ -23,16 +23,32 @@ function RoutesTab() {
   const { data: routes } = useRoutesQuery()
   const { data: dests } = useDestinationsQuery()
   const [saveRoute] = useSaveRouteMutation()
+  const [delRoute] = useDeleteRouteMutation()
   const [savePickup] = useSavePickupMutation()
   const [delPickup] = useDeletePickupMutation()
   const [form] = Form.useForm()
   const [pForm] = Form.useForm()
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<any>(null)
   const [pickupFor, setPickupFor] = useState<any>(null)
 
+  const openRoute = (row?: any) => {
+    setEditing(row || null); form.resetFields()
+    if (row) form.setFieldsValue(row)
+    setOpen(true)
+  }
   const submit = async () => {
     const v = await form.validateFields()
-    await saveRoute(v).unwrap(); message.success('تم الحفظ'); setOpen(false); form.resetFields()
+    await saveRoute(editing ? { id: editing.id, ...v } : v).unwrap()
+    message.success('تم الحفظ'); setOpen(false); setEditing(null); form.resetFields()
+  }
+  const removeRoute = (r: any) => {
+    Modal.confirm({
+      title: `حذف المسار «${r.name}»؟`,
+      content: 'سيتم حذف جميع نقاط الالتقاط المرتبطة به. لا يمكن التراجع.',
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => { await delRoute(r.id).unwrap(); message.success('تم حذف المسار') },
+    })
   }
   const addPickup = async () => {
     const v = await pForm.validateFields()
@@ -41,7 +57,7 @@ function RoutesTab() {
 
   return (
     <>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); setOpen(true) }} style={{ marginBottom: 12 }}>مسار جديد</Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => openRoute()} style={{ marginBottom: 12 }}>مسار جديد</Button>
       <Table
         rowKey="id" dataSource={routes?.results || []} pagination={false}
         expandable={{
@@ -49,7 +65,9 @@ function RoutesTab() {
             <div>
               <Space wrap style={{ marginBottom: 8 }}>
                 {(r.pickup_points || []).map((p: any) => (
-                  <Tag key={p.id} closable onClose={async () => { await delPickup(p.id); message.success('تم الحذف') }}>{p.sequence}. {p.name}</Tag>
+                  <Tag key={p.id} closable onClose={async () => { await delPickup(p.id); message.success('تم الحذف') }}>
+                    {p.sequence}. {p.name}{p.center_display ? ` — ${p.center_display}` : ''}
+                  </Tag>
                 ))}
               </Space>
               <div><Button size="small" onClick={() => { pForm.resetFields(); setPickupFor(r) }}>+ نقطة التقاط</Button></div>
@@ -62,11 +80,17 @@ function RoutesTab() {
           { title: 'الوجهة', dataIndex: 'destination_name' },
           { title: 'نقاط', render: (_, r: any) => r.pickup_points?.length || 0 },
           { title: 'نشط', dataIndex: 'active', render: (v) => v ? <Tag color="green">نعم</Tag> : <Tag>لا</Tag> },
+          { title: '', render: (_, r: any) => (
+            <Space>
+              <Button size="small" onClick={() => openRoute(r)}>تعديل</Button>
+              <Button size="small" danger onClick={() => removeRoute(r)}>حذف</Button>
+            </Space>
+          ) },
         ]}
       />
-      <Modal title="مسار" open={open} onOk={submit} onCancel={() => setOpen(false)}>
+      <Modal title={editing ? 'تعديل المسار' : 'مسار جديد'} open={open} onOk={submit} onCancel={() => { setOpen(false); setEditing(null) }} destroyOnClose>
         <Form form={form} layout="vertical">
-          <Form.Item name="code" label="الكود" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="code" label="الكود" rules={[{ required: true }]}><Input disabled={!!editing} /></Form.Item>
           <Form.Item name="origin_label" label="خط الانطلاق" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="name" label="اسم المسار" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="destination" label="الوجهة" rules={[{ required: true }]}>
@@ -78,6 +102,14 @@ function RoutesTab() {
       <Modal title={`نقطة التقاط — ${pickupFor?.name || ''}`} open={!!pickupFor} onOk={addPickup} onCancel={() => setPickupFor(null)}>
         <Form form={pForm} layout="vertical">
           <Form.Item name="name" label="الاسم" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="center" label="المركز">
+            <Select allowClear placeholder="اختر المركز" options={[
+              { value: 'shebin', label: 'شبين الكوم' },
+              { value: 'quesna', label: 'قويسنا' },
+              { value: 'bagour', label: 'الباجور' },
+              { value: 'benha', label: 'بنها' },
+            ]} />
+          </Form.Item>
           <Form.Item name="sequence" label="الترتيب" initialValue={1}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
         </Form>
       </Modal>

@@ -8,7 +8,8 @@ from rest_framework.response import Response
 
 from apps.bookings.models import Subscription
 from apps.config_app.models import (
-    College, CompanySettings, MorningSlot, PricingRule, ReturnSlot, Route, SeatCapacity, University,
+    College, CompanySettings, MorningSlot, PickupPoint, PricingRule, ReturnSlot,
+    Route, SeatCapacity, University,
 )
 from apps.operations.models import DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
 from apps.operations.layouts import layout_capacity
@@ -97,6 +98,21 @@ def public_colleges(request):
         qs = qs.filter(university_id=uni)
     return Response([
         {'id': c.id, 'name': c.name, 'university': c.university_id} for c in qs.order_by('name')
+    ])
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def public_pickup_points(request):
+    """Public pickup points, filtered by center (for the sign-up address)."""
+    qs = PickupPoint.objects.filter(active=True).select_related('route')
+    center = request.query_params.get('center')
+    if center:
+        qs = qs.filter(center=center)
+    return Response([
+        {'id': p.id, 'name': p.name, 'center': p.center,
+         'route': p.route.name, 'sequence': p.sequence}
+        for p in qs.order_by('name')
     ])
 
 

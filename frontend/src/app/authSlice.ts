@@ -10,6 +10,8 @@ export interface User {
   phone?: string
   center?: string
   center_display?: string
+  pickup_point?: number
+  pickup_name?: string
   address?: string
   date_of_birth?: string
   gender?: string

@@ -6,7 +6,7 @@ from django.views.static import serve
 
 from .views import (
     dashboard_stats, dashboard_charts, public_explore, public_universities,
-    public_availability, public_tourism_request, public_colleges,
+    public_availability, public_tourism_request, public_colleges, public_pickup_points,
 )
 
 
@@ -26,6 +26,7 @@ urlpatterns = [
         path('public/explore/', public_explore, name='public_explore'),
         path('public/universities/', public_universities, name='public_universities'),
         path('public/colleges/', public_colleges, name='public_colleges'),
+        path('public/pickup-points/', public_pickup_points, name='public_pickup_points'),
         path('public/availability/', public_availability, name='public_availability'),
         path('public/tourism-request/', public_tourism_request, name='public_tourism_request'),
         path('auth/', include('apps.users.urls')),

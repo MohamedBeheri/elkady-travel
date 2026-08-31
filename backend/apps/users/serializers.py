@@ -11,12 +11,14 @@ class UserSerializer(serializers.ModelSerializer):
     gender_display = serializers.CharField(source='get_gender_display', read_only=True)
     year_display = serializers.CharField(source='get_academic_year_display', read_only=True)
     center_display = serializers.CharField(source='get_center_display', read_only=True)
+    pickup_name = serializers.CharField(source='pickup_point.name', read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'full_name', 'role', 'role_display',
-            'national_id', 'phone', 'center', 'center_display', 'address',
+            'national_id', 'phone', 'center', 'center_display',
+            'pickup_point', 'pickup_name', 'address',
             'date_of_birth', 'gender', 'gender_display',
             'university', 'university_name', 'college', 'college_name',
             'academic_year', 'year_display', 'is_active',
@@ -30,7 +32,7 @@ class UserWriteSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'password', 'full_name', 'role',
-            'national_id', 'phone', 'center', 'address', 'date_of_birth', 'gender',
+            'national_id', 'phone', 'center', 'pickup_point', 'address', 'date_of_birth', 'gender',
             'university', 'college', 'academic_year', 'is_active',
         ]
 
@@ -59,7 +61,7 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'password', 'full_name',
-            'phone', 'center', 'address', 'date_of_birth', 'gender',
+            'phone', 'center', 'pickup_point', 'address', 'date_of_birth', 'gender',
             'university', 'college', 'academic_year',
         ]
 

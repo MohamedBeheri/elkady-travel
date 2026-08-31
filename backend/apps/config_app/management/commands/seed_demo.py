@@ -47,13 +47,16 @@ class Command(BaseCommand):
             ('BAGOUR_BADR', 'الباجور', 'الباجور ← بدر', badr, ['الباجور', 'منوف']),
             ('BAGOUR_SHOROUK', 'الباجور', 'الباجور ← الشروق', shorouk, ['الباجور', 'منوف']),
         ]
+        name_center = {'شبين الكوم': 'shebin', 'قويسنا': 'quesna', 'بنها': 'benha',
+                       'الباجور': 'bagour', 'منوف': 'bagour'}
         routes = {}
         for code, origin, name, dest, points in routes_def:
             r, _ = Route.objects.get_or_create(
                 code=code, defaults={'origin_label': origin, 'name': name, 'destination': dest})
             routes[code] = r
             for i, p in enumerate(points, start=1):
-                PickupPoint.objects.get_or_create(route=r, name=p, defaults={'sequence': i})
+                PickupPoint.objects.get_or_create(
+                    route=r, name=p, defaults={'sequence': i, 'center': name_center.get(p, '')})
 
         # ---- Morning slots ----
         m6, _ = MorningSlot.objects.get_or_create(code='M06', defaults={'departure_time': time(6, 0), 'name': '٦:٠٠ ص'})

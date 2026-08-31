@@ -43,7 +43,11 @@ class User(AbstractUser):
     center = models.CharField(
         max_length=10, choices=Center.choices, blank=True, verbose_name=_('المركز التابع له'),
     )
-    address = models.CharField(max_length=255, blank=True, verbose_name=_('تفاصيل العنوان'))
+    pickup_point = models.ForeignKey(
+        'config_app.PickupPoint', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='home_students', verbose_name=_('نقطة الالتقاط'),
+    )
+    address = models.CharField(max_length=255, blank=True, verbose_name=_('تفاصيل إضافية'))
     date_of_birth = models.DateField(null=True, blank=True, verbose_name=_('تاريخ الميلاد'))
     gender = models.CharField(
         max_length=6, choices=Gender.choices, blank=True, verbose_name=_('النوع'),

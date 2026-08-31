@@ -42,7 +42,13 @@ class Command(BaseCommand):
             return r
 
         r1 = make_route('SHEBIN_REGIONAL', 'شبين/قويسنا/بنها', 'شبين ← قويسنا ← بنها ← الإقليمي', ROUTE1)
-        make_route('BAGOUR_REGIONAL', 'الباجور', 'الباجور ← الطريق الإقليمي', ROUTE2)
+        r2 = make_route('BAGOUR_REGIONAL', 'الباجور', 'الباجور ← الطريق الإقليمي', ROUTE2)
+
+        # ---- Assign each pickup point to its center ----
+        r1.pickup_points.filter(sequence__lte=29).update(center='shebin')
+        r1.pickup_points.filter(sequence__gte=30, sequence__lte=40).update(center='quesna')
+        r1.pickup_points.filter(sequence__gte=41).update(center='benha')
+        r2.pickup_points.update(center='bagour')
 
         # ---- Fleet demo ----
         vehicles = []

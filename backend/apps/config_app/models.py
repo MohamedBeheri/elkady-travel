@@ -81,9 +81,18 @@ class Route(models.Model):
 
 
 class PickupPoint(models.Model):
+    CENTER_CHOICES = [
+        ('shebin', _('شبين الكوم')),
+        ('quesna', _('قويسنا')),
+        ('bagour', _('الباجور')),
+        ('benha', _('بنها')),
+    ]
     route = models.ForeignKey(
         Route, on_delete=models.CASCADE, related_name='pickup_points',
         verbose_name=_('المسار'),
+    )
+    center = models.CharField(
+        max_length=10, choices=CENTER_CHOICES, blank=True, verbose_name=_('المركز'),
     )
     name = models.CharField(max_length=150, verbose_name=_('اسم نقطة الالتقاط'))
     location = models.CharField(max_length=255, blank=True, verbose_name=_('الموقع'))

@@ -30,10 +30,11 @@ class CollegeSerializer(serializers.ModelSerializer):
 
 class PickupPointSerializer(serializers.ModelSerializer):
     route_label = serializers.CharField(source='route.origin_label', read_only=True)
+    center_display = serializers.CharField(source='get_center_display', read_only=True)
 
     class Meta:
         model = PickupPoint
-        fields = ['id', 'route', 'route_label', 'name', 'location', 'sequence', 'active']
+        fields = ['id', 'route', 'route_label', 'center', 'center_display', 'name', 'location', 'sequence', 'active']
 
 
 class RouteSerializer(serializers.ModelSerializer):

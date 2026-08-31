@@ -1,7 +1,7 @@
 import { Button, Form, Input, Select, DatePicker, Typography, App as AntdApp } from 'antd'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { useRegisterMutation, useLoginMutation, usePublicUniversitiesQuery, usePublicCollegesQuery } from '../app/api'
+import { useRegisterMutation, useLoginMutation, usePublicUniversitiesQuery, usePublicCollegesQuery, usePublicPickupPointsQuery } from '../app/api'
 import { useAppDispatch } from '../app/store'
 import { setCredentials } from '../app/authSlice'
 
@@ -24,8 +24,10 @@ export default function Register() {
   const [register, { isLoading }] = useRegisterMutation()
   const [login] = useLoginMutation()
   const [uniId, setUniId] = useState<number>()
+  const [center, setCenter] = useState<string>()
   const { data: unis } = usePublicUniversitiesQuery()
   const { data: colleges } = usePublicCollegesQuery(uniId, { skip: !uniId })
+  const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const { message } = AntdApp.useApp()
@@ -78,10 +80,17 @@ export default function Register() {
               <Select placeholder="اختر الفرقة" options={YEARS} />
             </Form.Item>
             <Form.Item name="center" label="المركز التابع له" rules={[{ required: true }]}>
-              <Select placeholder="اختر المركز" options={CENTERS} />
+              <Select placeholder="اختر المركز"
+                onChange={(v) => { setCenter(v); form.setFieldsValue({ pickup_point: undefined }) }}
+                options={CENTERS} />
             </Form.Item>
-            <Form.Item name="address" label="تفاصيل العنوان">
-              <Input.TextArea rows={2} placeholder="القرية / الشارع / علامة مميزة…" />
+            <Form.Item name="pickup_point" label="نقطة الالتقاط" rules={[{ required: true }]}>
+              <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
+                showSearch optionFilterProp="label"
+                options={(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
+            </Form.Item>
+            <Form.Item name="address" label="تفاصيل إضافية (اختياري)">
+              <Input.TextArea rows={2} placeholder="أقرب علامة مميزة…" />
             </Form.Item>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Form.Item name="username" label="اسم المستخدم" rules={[{ required: true }]}>

@@ -3,7 +3,7 @@ import { UserOutlined, EditOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
-  useUpdateProfileMutation, usePublicUniversitiesQuery, usePublicCollegesQuery, useSubscriptionsQuery,
+  useUpdateProfileMutation, usePublicUniversitiesQuery, usePublicCollegesQuery, usePublicPickupPointsQuery, useSubscriptionsQuery,
 } from '../app/api'
 import { useAppDispatch, useAppSelector } from '../app/store'
 import { setUser } from '../app/authSlice'
@@ -21,13 +21,16 @@ export default function Profile() {
   const dispatch = useAppDispatch()
   const [open, setOpen] = useState(false)
   const [uniId, setUniId] = useState<number | undefined>(user?.university || undefined)
+  const [center, setCenter] = useState<string | undefined>(user?.center || undefined)
   const { data: unis } = usePublicUniversitiesQuery()
   const { data: colleges } = usePublicCollegesQuery(uniId, { skip: !uniId })
+  const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
   const { data: subs } = useSubscriptionsQuery()
   const [update, { isLoading }] = useUpdateProfileMutation()
 
   const openEdit = () => {
     setUniId(user?.university || undefined)
+    setCenter(user?.center || undefined)
     form.setFieldsValue({
       ...user,
       date_of_birth: user?.date_of_birth ? dayjs(user.date_of_birth) : undefined,
@@ -73,7 +76,8 @@ export default function Profile() {
               <Descriptions.Item label="الكلية">{user?.college_name || '—'}</Descriptions.Item>
               <Descriptions.Item label="الفرقة">{user?.year_display || '—'}</Descriptions.Item>
               <Descriptions.Item label="المركز">{user?.center_display || '—'}</Descriptions.Item>
-              <Descriptions.Item label="تفاصيل العنوان">{user?.address || '—'}</Descriptions.Item>
+              <Descriptions.Item label="نقطة الالتقاط">{user?.pickup_name || '—'}</Descriptions.Item>
+              <Descriptions.Item label="تفاصيل إضافية">{user?.address || '—'}</Descriptions.Item>
             </Descriptions>
           </Card>
         </Col>
@@ -122,9 +126,15 @@ export default function Profile() {
             <Select disabled={!uniId} options={(colleges || []).map((c: any) => ({ value: c.id, label: c.name }))} />
           </Form.Item>
           <Form.Item name="center" label="المركز التابع له">
-            <Select options={[{ value: 'shebin', label: 'شبين الكوم' }, { value: 'quesna', label: 'قويسنا' }, { value: 'bagour', label: 'الباجور' }, { value: 'benha', label: 'بنها' }]} />
+            <Select onChange={(v) => { setCenter(v); form.setFieldsValue({ pickup_point: undefined }) }}
+              options={[{ value: 'shebin', label: 'شبين الكوم' }, { value: 'quesna', label: 'قويسنا' }, { value: 'bagour', label: 'الباجور' }, { value: 'benha', label: 'بنها' }]} />
           </Form.Item>
-          <Form.Item name="address" label="تفاصيل العنوان"><Input.TextArea rows={2} /></Form.Item>
+          <Form.Item name="pickup_point" label="نقطة الالتقاط">
+            <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
+              showSearch optionFilterProp="label"
+              options={(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
+          </Form.Item>
+          <Form.Item name="address" label="تفاصيل إضافية"><Input.TextArea rows={2} /></Form.Item>
         </Form>
       </Modal>
     </div>

@@ -56,6 +56,9 @@ export const api = createApi({
     publicColleges: b.query<any, number | void>({
       query: (universityId) => `public/colleges/${universityId ? `?university=${universityId}` : ''}`,
     }),
+    publicPickupPoints: b.query<any, string | void>({
+      query: (center) => `public/pickup-points/${center ? `?center=${center}` : ''}`,
+    }),
     colleges: b.query<any, Record<string, any> | void>({
       query: (p) => `config/colleges/${qs(p as any)}`, providesTags: ['College'],
     }),
@@ -88,6 +91,10 @@ export const api = createApi({
     }),
     saveRoute: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `config/routes/${id}/` : 'config/routes/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['Route'],
+    }),
+    deleteRoute: b.mutation<any, number>({
+      query: (id) => ({ url: `config/routes/${id}/`, method: 'DELETE' }),
       invalidatesTags: ['Route'],
     }),
     pickupPoints: b.query<any, Record<string, any> | void>({
@@ -337,7 +344,7 @@ export const {
   usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation,
   useDestinationsQuery, useSaveDestinationMutation,
   useUniversitiesQuery, useSaveUniversityMutation,
-  useRoutesQuery, useSaveRouteMutation,
+  useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, usePublicPickupPointsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
