@@ -239,9 +239,9 @@ export const api = createApi({
     attendance: b.query<any, { date?: string } | void>({
       query: (p) => `operations/attendance/${qs(p as any)}`, providesTags: ['Attendance'],
     }),
-    setAttendance: b.mutation<any, { lock_id: number; date: string; attending: boolean }>({
+    setAttendance: b.mutation<any, { lock_id: number; date: string; attending: boolean; slot_id?: number }>({
       query: (body) => ({ url: 'operations/attendance/set/', method: 'POST', body }),
-      invalidatesTags: ['Attendance', 'SeatMap'],
+      invalidatesTags: ['Attendance', 'SeatMap', 'Ticket'],
     }),
     returnAvailability: b.query<any, { date?: string } | void>({
       query: (p) => `operations/return-bookings/availability/${qs(p as any)}`, providesTags: ['ReturnBooking'],

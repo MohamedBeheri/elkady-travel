@@ -38,12 +38,16 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionCreateSerializer(serializers.ModelSerializer):
+    """Term/monthly is created without a slot — the student picks the slot per-day
+    from the attendance screen. The optional morning_slot/return_slot on the model
+    are kept for the initial fixed-seat lock's default when the admin approves."""
     class Meta:
         model = Subscription
         fields = [
             'id', 'subscription_type', 'route', 'university', 'pickup_point',
             'morning_slot', 'return_slot', 'amount',
         ]
+        extra_kwargs = {'morning_slot': {'required': False}, 'return_slot': {'required': False}}
 
     def create(self, validated_data):
         request = self.context['request']

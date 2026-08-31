@@ -2,7 +2,7 @@ import { Card, Row, Col, Tag, Empty, Descriptions } from 'antd'
 import { useMyTicketsQuery } from '../app/api'
 import KaffoCredit from '../components/KaffoCredit'
 
-const STATUS_COLOR: Record<string, string> = { confirmed: 'green', held: 'orange' }
+const STATUS_COLOR: Record<string, string> = { confirmed: 'green', held: 'orange', absent: 'red' }
 
 export default function Tickets() {
   const { data } = useMyTicketsQuery()

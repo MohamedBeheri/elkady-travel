@@ -1,5 +1,5 @@
-import { Card, DatePicker, Row, Col, Tag, Button, Empty, Alert, App as AntdApp, Spin } from 'antd'
-import { CarOutlined, RollbackOutlined, CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
+import { Card, DatePicker, Row, Col, Tag, Button, Empty, Alert, App as AntdApp, Spin, Select } from 'antd'
+import { CarOutlined, RollbackOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import { useAttendanceQuery, useSetAttendanceMutation } from '../app/api'
@@ -13,10 +13,16 @@ export default function Attendance() {
 
   const seats = data?.seats || []
 
-  const toggle = async (lock_id: number, attending: boolean) => {
+  const confirm = async (lock_id: number, slot_id: number) => {
     try {
-      await setAttendance({ lock_id, date: dateStr, attending }).unwrap()
-      message.success(attending ? 'تم تأكيد حضورك لهذه الرحلة' : 'تم إخلاء مقعدك لهذا اليوم')
+      await setAttendance({ lock_id, date: dateStr, attending: true, slot_id }).unwrap()
+      message.success('تم تأكيد حضورك للرحلة المختارة')
+    } catch { message.error('تعذر تحديث الحالة') }
+  }
+  const decline = async (lock_id: number) => {
+    try {
+      await setAttendance({ lock_id, date: dateStr, attending: false }).unwrap()
+      message.success('تم إخلاء مقعدك لهذا اليوم')
     } catch { message.error('تعذر تحديث الحالة') }
   }
 
@@ -25,7 +31,10 @@ export default function Attendance() {
       <Card style={{ marginBottom: 16, background: 'linear-gradient(120deg,#0B2E5E,#123a73 60%,#EC6A16)', border: 'none' }}>
         <div style={{ color: '#fff' }}>
           <div style={{ fontSize: 20, fontWeight: 800 }}>تأكيد رحلة الغد</div>
-          <div style={{ opacity: 0.9, marginTop: 4 }}>مقعدك الثابت محجوز لك كل يوم. لو لن تحضر يوماً، أخلِ مقعدك ليستفيد به غيرك — ويبقى محجوزاً لك في باقي الأيام.</div>
+          <div style={{ opacity: 0.9, marginTop: 4 }}>
+            اختر الميعاد اللي ترغب في الركوب فيه بكرا (ذهاب وعودة)، وتذكرتك تتحدَّث تلقائياً بموعد التقاطك.
+            لو مش هتحضر يوم، أخلِ مقعدك يستفيد منه غيرك — ويبقى محجوزاً لك في باقي الأيام.
+          </div>
         </div>
       </Card>
 
@@ -39,34 +48,57 @@ export default function Attendance() {
         <Empty description="لا يوجد لديك اشتراك ترم/شهري بمقعد ثابت. احجز اشتراكاً أولاً." />
       ) : (
         <Row gutter={[16, 16]}>
-          {seats.map((s: any) => (
-            <Col xs={24} md={12} key={s.lock_id}>
-              <Card style={{ borderInlineStart: `5px solid ${s.attending ? '#16a34a' : '#ef4444'}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                  {s.direction === 'return' ? <RollbackOutlined style={{ fontSize: 20, color: '#EC6A16' }} /> : <CarOutlined style={{ fontSize: 20, color: '#0B2E5E' }} />}
-                  <b style={{ fontSize: 16 }}>{s.direction_display}</b>
-                  {s.attending
-                    ? <Tag icon={<CheckCircleFilled />} color="green">محجوز — سأحضر</Tag>
-                    : <Tag icon={<CloseCircleFilled />} color="red">مُخلى لهذا اليوم</Tag>}
-                </div>
-                <div style={{ color: '#475569', marginBottom: 4 }}>الخط: {s.route}</div>
-                <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
-                  <span>الموعد: <b>{s.slot}</b></span>
-                  <span>المقعد: <b style={{ color: '#0B2E5E' }}>{s.seat_number}</b></span>
-                </div>
-                {s.attending ? (
-                  <Button danger loading={isLoading} onClick={() => toggle(s.lock_id, false)}>لن أحضر هذا اليوم</Button>
-                ) : (
-                  <Button type="primary" loading={isLoading} onClick={() => toggle(s.lock_id, true)}>سأحضر — احجز مقعدي</Button>
-                )}
-              </Card>
-            </Col>
-          ))}
+          {seats.map((s: any) => <SeatCard key={s.lock_id} s={s} isLoading={isLoading} confirm={confirm} decline={decline} />)}
         </Row>
       )}
 
       <Alert type="info" showIcon style={{ marginTop: 16 }}
         message="مقعدك يبقى محجوزاً لك طوال مدة الاشتراك ما لم تعتذر عن يوم بعينه، أو تُلغِ الإدارة الحجز." />
     </div>
+  )
+}
+
+function SeatCard({ s, isLoading, confirm, decline }: any) {
+  // Local editable slot before hitting Confirm — defaults to the current pick.
+  const [pending, setPending] = useState<number>(s.chosen_slot_id)
+  const chosen = s.available_slots.find((x: any) => x.id === pending) || s.available_slots.find((x: any) => x.id === s.chosen_slot_id)
+  const differsFromDefault = chosen && chosen.id !== s.default_slot_id
+  return (
+    <Col xs={24} md={12}>
+      <Card style={{ borderInlineStart: `5px solid ${s.attending ? '#16a34a' : '#ef4444'}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          {s.direction === 'return' ? <RollbackOutlined style={{ fontSize: 20, color: '#EC6A16' }} /> : <CarOutlined style={{ fontSize: 20, color: '#0B2E5E' }} />}
+          <b style={{ fontSize: 16 }}>{s.direction_display}</b>
+          {s.attending
+            ? <Tag icon={<CheckCircleFilled />} color="green">محجوز — سأحضر</Tag>
+            : <Tag icon={<CloseCircleFilled />} color="red">مُخلى لهذا اليوم</Tag>}
+        </div>
+        <div style={{ color: '#475569', marginBottom: 4 }}>الخط: {s.route}</div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+          <span>نقطتك: <b>{s.pickup_name || '—'}</b></span>
+          <span>المقعد: <b style={{ color: '#0B2E5E' }}>{s.seat_number}</b></span>
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 6, color: '#475569' }}>الميعاد لهذا اليوم:</div>
+          <Select style={{ width: '100%' }} value={pending} onChange={setPending}
+            options={(s.available_slots || []).map((o: any) => ({
+              value: o.id,
+              label: `${o.name}${o.time ? ` — ⏰ ${o.time}` : ''}${o.is_default ? ' (افتراضي)' : ''}`,
+            }))} />
+          {chosen?.time && s.attending && (
+            <Tag icon={<ClockCircleOutlined />} color="blue" style={{ marginTop: 8 }}>
+              موعد {s.direction === 'return' ? 'نزولك' : 'التقاطك'}: {chosen.time}
+            </Tag>
+          )}
+          {differsFromDefault && <Tag color="orange" style={{ marginTop: 8 }}>ميعاد مختلف عن الافتراضي</Tag>}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Button type="primary" loading={isLoading} onClick={() => confirm(s.lock_id, pending)}>
+            {s.attending && pending === s.chosen_slot_id ? 'تحديث الاختيار' : 'سأحضر على هذا الميعاد'}
+          </Button>
+          {s.attending && <Button danger loading={isLoading} onClick={() => decline(s.lock_id)}>لن أحضر هذا اليوم</Button>}
+        </div>
+      </Card>
+    </Col>
   )
 }

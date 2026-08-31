@@ -147,17 +147,40 @@ def build_seatmap(trip, viewer=None, is_staff=False):
     layout = LAYOUTS[layout_id]
     genders = _seat_gender_map(trip)
 
-    # Subscriber seat locks on this route/slot/direction, minus students not attending on this date.
+    # Subscriber seat locks on this route/slot/direction — with day-of overrides:
+    #   • SeatAbsence on this date → student is out today, seat freed.
+    #   • DailySlotChoice on this date → student is riding on a DIFFERENT slot today
+    #     (a) locks bound to this slot but overridden away are excluded.
+    #     (b) locks bound to another slot but overridden HERE are included.
+    from .models import DailySlotChoice as _Choice
     locks = {}
-    lock_filter = {'route': trip.route, 'active': True, 'direction': trip.direction}
-    if trip.direction == 'return':
-        lock_filter['return_slot'] = trip.return_slot
-    else:
-        lock_filter['morning_slot'] = trip.morning_slot
-    for lock in TermSeatLock.objects.filter(**lock_filter).select_related('student'):
-        absent = SeatAbsence.objects.filter(term_lock=lock, date=trip.date).exists()
-        if not absent:
-            locks[lock.seat_number] = lock
+    default_locks = TermSeatLock.objects.filter(
+        route=trip.route, active=True, direction=trip.direction,
+        **({'return_slot': trip.return_slot} if trip.direction == 'return' else {'morning_slot': trip.morning_slot}),
+    ).select_related('student')
+    # (a) default locks minus absent/overridden-away for this date
+    for lock in default_locks:
+        if SeatAbsence.objects.filter(term_lock=lock, date=trip.date).exists():
+            continue
+        ch = _Choice.objects.filter(term_lock=lock, date=trip.date).first()
+        if ch:
+            ch_slot = ch.return_slot_id if trip.direction == 'return' else ch.morning_slot_id
+            this_slot = trip.return_slot_id if trip.direction == 'return' else trip.morning_slot_id
+            if ch_slot and ch_slot != this_slot:
+                continue  # student chose a different slot today
+        locks[lock.seat_number] = lock
+    # (b) locks bound to another slot but overridden INTO this slot today
+    slot_key = 'return_slot_id' if trip.direction == 'return' else 'morning_slot_id'
+    slot_val = trip.return_slot_id if trip.direction == 'return' else trip.morning_slot_id
+    if slot_val:
+        for ch in _Choice.objects.filter(
+            date=trip.date, term_lock__route=trip.route, term_lock__direction=trip.direction,
+            term_lock__active=True, **{slot_key: slot_val},
+        ).select_related('term_lock', 'term_lock__student'):
+            lk = ch.term_lock
+            # Don't overwrite a seat if the default holder is here (would collide).
+            if lk.seat_number not in locks:
+                locks[lk.seat_number] = lk
 
     # Per-trip bookings that hold a seat.
     reqs = {}

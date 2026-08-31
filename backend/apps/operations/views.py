@@ -12,7 +12,7 @@ from apps.bookings.models import Subscription
 from apps.config_app.models import MorningSlot, Route, ReturnSlot, SeatCapacity
 from apps.notifications.models import notify
 from .layouts import LAYOUTS, layout_capacity
-from .models import DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
+from .models import DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
 from .serializers import (
     DailyTripSerializer, ReturnBookingSerializer, SeatRequestSerializer,
 )
@@ -29,31 +29,88 @@ def layouts(request):
     return Response(LAYOUTS)
 
 
+def _slot_options_for_lock(lock):
+    """Slots that actually serve this lock's pickup point (have a saved time).
+
+    Reads from either the subscription's pickup_point (preferred) or the student's
+    profile pickup_point. Returns [{id, name, time, is_default}] for the lock's
+    direction. If no per-point times are configured yet, falls back to the lock's
+    default slot only.
+    """
+    from apps.config_app.models import MorningSlot, ReturnSlot, PickupTime
+    pp = (lock.subscription.pickup_point if lock.subscription_id and lock.subscription.pickup_point_id
+          else lock.student.pickup_point)
+    default_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
+    if not pp:
+        # No point → offer the default slot only.
+        slot = lock.return_slot if lock.direction == 'return' else lock.morning_slot
+        if not slot:
+            return [], default_id
+        return [{'id': slot.id, 'name': slot.name, 'time': '', 'is_default': True}], default_id
+    times = PickupTime.objects.filter(pickup_point=pp, direction=lock.direction).select_related(
+        'morning_slot', 'return_slot')
+    opts = []
+    for t in times:
+        s = t.return_slot if lock.direction == 'return' else t.morning_slot
+        if s:
+            opts.append({'id': s.id, 'name': s.name, 'time': t.time.strftime('%H:%M'),
+                         'is_default': s.id == default_id})
+    # Ensure the default slot is always present even if it has no time yet.
+    if default_id and not any(o['id'] == default_id for o in opts):
+        s = lock.return_slot if lock.direction == 'return' else lock.morning_slot
+        if s:
+            opts.insert(0, {'id': s.id, 'name': s.name, 'time': '', 'is_default': True})
+    opts.sort(key=lambda o: o['time'] or '99:99')
+    return opts, default_id
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def attendance(request):
-    """A subscriber's fixed going/return seats for a date + attendance state.
+    """A subscriber's fixed seats for a date + per-lock slot choice + attendance.
 
-    Used by the student's «تأكيد رحلة الغد» screen: each fixed seat can be kept
-    (attending) or declined for that single date (frees the seat that day).
+    Response shape per lock: `available_slots` (with per-point pickup times),
+    `chosen_slot_id` (the pick for this date — default if none), and `attending`.
     """
     user = request.user
     date = request.query_params.get('date') or (
         timezone.localdate() + timezone.timedelta(days=1)).isoformat()
     locks = TermSeatLock.objects.filter(student=user, active=True).select_related(
-        'route', 'morning_slot', 'return_slot', 'subscription')
+        'route', 'morning_slot', 'return_slot', 'subscription', 'subscription__pickup_point',
+        'student__pickup_point')
+    absences = set(SeatAbsence.objects.filter(term_lock__in=locks, date=date)
+                   .values_list('term_lock_id', flat=True))
+    choices = {c.term_lock_id: c for c in DailySlotChoice.objects.filter(term_lock__in=locks, date=date)
+               .select_related('morning_slot', 'return_slot')}
     out = []
     for lock in locks:
-        absent = SeatAbsence.objects.filter(term_lock=lock, date=date).exists()
+        avail, default_id = _slot_options_for_lock(lock)
+        choice = choices.get(lock.id)
+        chosen_id = default_id
+        chosen_time = ''
+        if choice:
+            s = choice.return_slot_id if lock.direction == 'return' else choice.morning_slot_id
+            if s:
+                chosen_id = s
+        # Find the time for the chosen slot from the options.
+        for o in avail:
+            if o['id'] == chosen_id:
+                chosen_time = o['time']; break
+        pp = (lock.subscription.pickup_point if lock.subscription_id and lock.subscription.pickup_point_id
+              else lock.student.pickup_point)
         out.append({
             'lock_id': lock.id,
             'direction': lock.direction,
             'direction_display': 'عودة' if lock.direction == 'return' else 'ذهاب',
             'seat_number': lock.seat_number,
             'route': lock.route.name,
-            'slot': lock.slot_label,
+            'pickup_name': pp.name if pp else '',
+            'default_slot_id': default_id,
+            'chosen_slot_id': chosen_id,
+            'chosen_time': chosen_time,
+            'available_slots': avail,
             'subscription_type': lock.subscription.subscription_type if lock.subscription_id else '',
-            'attending': not absent,
+            'attending': lock.id not in absences,
         })
     return Response({'date': date, 'seats': out})
 
@@ -61,15 +118,18 @@ def attendance(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_attendance(request):
-    """Student keeps (attending) or declines a fixed seat for one date.
+    """Save the student's per-day decision for a fixed seat.
 
-    Declining creates a SeatAbsence → the seat is freed for that date only, while
-    the permanent lock stays for every other day. Re-attending removes the absence.
+    Body: {lock_id, date, attending (bool), slot_id? (int)}
+      - attending=false → create SeatAbsence, clear any DailySlotChoice
+      - attending=true, slot_id == default → clear absence + clear choice (use default)
+      - attending=true, slot_id != default → clear absence, upsert DailySlotChoice
     """
     user = request.user
     lock_id = request.data.get('lock_id')
     date = request.data.get('date')
     attending = request.data.get('attending')
+    slot_id = request.data.get('slot_id')
     if lock_id is None or not date:
         return Response({'detail': 'البيانات ناقصة'}, status=400)
     try:
@@ -79,9 +139,18 @@ def set_attendance(request):
     declining = attending in (False, 'false', 'False', 0, '0', 'no')
     if declining:
         SeatAbsence.objects.get_or_create(term_lock=lock, date=date, defaults={'created_by': user})
+        DailySlotChoice.objects.filter(term_lock=lock, date=date).delete()
         return Response({'attending': False})
+
     SeatAbsence.objects.filter(term_lock=lock, date=date).delete()
-    return Response({'attending': True})
+    default_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
+    if slot_id and int(slot_id) != default_id:
+        # Save the per-day slot pick.
+        kwargs = {'return_slot_id': int(slot_id)} if lock.direction == 'return' else {'morning_slot_id': int(slot_id)}
+        DailySlotChoice.objects.update_or_create(term_lock=lock, date=date, defaults=kwargs)
+    else:
+        DailySlotChoice.objects.filter(term_lock=lock, date=date).delete()
+    return Response({'attending': True, 'chosen_slot_id': int(slot_id) if slot_id else default_id})
 
 
 def _get_or_create_trip(date, route, *, morning_slot=None, return_slot=None, direction='go'):
@@ -170,13 +239,27 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         # Absences on this date free the term seats.
         absent_lock_ids = set(SeatAbsence.objects.filter(
             date=trip.date, term_lock__route=trip.route).values_list('term_lock_id', flat=True))
-        # Subscriber fixed seats on this route/slot/direction (excluding today's absences).
-        locks = TermSeatLock.objects.filter(
+        # Day-of slot overrides: which locks moved AWAY from this slot, and which moved INTO it.
+        slot_key = 'return_slot_id' if trip.direction == 'return' else 'morning_slot_id'
+        moved_away_ids, moved_here_ids = set(), []
+        for ch in DailySlotChoice.objects.filter(
+            date=trip.date, term_lock__route=trip.route, term_lock__direction=trip.direction,
+        ).select_related('term_lock'):
+            picked = ch.return_slot_id if trip.direction == 'return' else ch.morning_slot_id
+            lock_default = getattr(ch.term_lock, slot_key)
+            if lock_default == slot_id and picked and picked != slot_id:
+                moved_away_ids.add(ch.term_lock_id)
+            if lock_default != slot_id and picked == slot_id:
+                moved_here_ids.append(ch.term_lock_id)
+        # Base locks on this slot minus absent/moved-away, plus locks moved into this slot today.
+        base_qs = TermSeatLock.objects.filter(
             route=trip.route, direction=trip.direction, active=True,
             **({'return_slot_id': slot_id} if trip.direction == 'return' else {'morning_slot_id': slot_id}),
-        ).exclude(pk__in=absent_lock_ids).select_related(
+        ).exclude(pk__in=absent_lock_ids | moved_away_ids)
+        override_qs = TermSeatLock.objects.filter(pk__in=moved_here_ids).exclude(pk__in=absent_lock_ids)
+        locks = list((base_qs | override_qs).distinct().select_related(
             'student', 'subscription', 'subscription__university', 'subscription__pickup_point',
-            'student__pickup_point')
+            'student__pickup_point'))
         # One-off (daily) confirmed seat bookings for this trip.
         reqs = trip.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).select_related(
             'student', 'university', 'pickup_point')
@@ -412,21 +495,41 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
                 'pickup_name': pickup_name, 'pickup_time': pickup_time,
                 'qr': make_qr(payload) if confirmed else '', 'token': r.qr_token,
             })
-        for lock in TermSeatLock.objects.filter(student=user, active=True).select_related(
-                'route', 'morning_slot', 'return_slot', 'subscription',
-                'subscription__pickup_point'):
+        # For each subscriber lock, resolve tomorrow's actual slot: the DailySlotChoice
+        # if one is saved, otherwise the lock's default slot. If the student has an
+        # absence for tomorrow, expose it so the ticket UI can show «معتذر لبكرا».
+        tomorrow = (timezone.localdate() + timezone.timedelta(days=1))
+        locks = TermSeatLock.objects.filter(student=user, active=True).select_related(
+            'route', 'morning_slot', 'return_slot', 'subscription', 'subscription__pickup_point')
+        absences = set(SeatAbsence.objects.filter(term_lock__in=locks, date=tomorrow)
+                       .values_list('term_lock_id', flat=True))
+        choices = {c.term_lock_id: c for c in DailySlotChoice.objects.filter(
+            term_lock__in=locks, date=tomorrow).select_related('morning_slot', 'return_slot')}
+        for lock in locks:
             dir_label = 'عودة' if lock.direction == 'return' else 'ذهاب'
             sub_label = lock.subscription.get_subscription_type_display() if lock.subscription_id else 'اشتراك'
             pp = lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id) else user.pickup_point
-            slot_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
-            pickup_time = _pickup_time_of(pp.id if pp else None, lock.direction, slot_id)
-            payload = f'ELKADY|SUB|مقعد {lock.seat_number}|{lock.route.name}|{dir_label}|{lock.slot_label}|{user.full_name}'
+            # Resolve tomorrow's slot & label.
+            choice = choices.get(lock.id)
+            if choice:
+                slot_obj = choice.return_slot if lock.direction == 'return' else choice.morning_slot
+                slot_id = slot_obj.id if slot_obj else None
+                slot_label = slot_obj.name if slot_obj else lock.slot_label
+            else:
+                slot_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
+                slot_label = lock.slot_label
+            absent_tomorrow = lock.id in absences
+            pickup_time = '' if absent_tomorrow else _pickup_time_of(pp.id if pp else None, lock.direction, slot_id)
+            status_note = 'معتذر لغد' if absent_tomorrow else f'مؤكد ({sub_label} - {dir_label})'
+            payload = f'ELKADY|SUB|مقعد {lock.seat_number}|{lock.route.name}|{dir_label}|{slot_label}|{user.full_name}'
             out.append({
                 'kind': 'term', 'id': lock.id, 'seat_number': lock.seat_number,
-                'date': f'طوال المدة ({sub_label})', 'route': lock.route.name,
+                'date': f'الغد ({tomorrow}) — طوال مدة {sub_label}', 'route': lock.route.name,
                 'direction': lock.direction, 'direction_display': dir_label,
-                'slot': lock.slot_label,
-                'status': 'confirmed', 'status_display': f'مؤكد ({sub_label} - {dir_label})',
+                'slot': slot_label,
+                'status': 'absent' if absent_tomorrow else 'confirmed',
+                'status_display': status_note,
+                'attending_tomorrow': not absent_tomorrow,
                 'pickup_name': pp.name if pp else '', 'pickup_time': pickup_time,
                 'qr': make_qr(payload), 'token': f'SUB-{lock.id}',
             })

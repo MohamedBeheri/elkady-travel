@@ -213,6 +213,38 @@ class SeatAbsence(models.Model):
         return f'{self.term_lock} غائب {self.date}'
 
 
+class DailySlotChoice(models.Model):
+    """Per-day slot pick for a subscriber whose lock is on a different (default) slot.
+
+    A term/monthly seat lock is bound to a *default* slot. If on a given day the
+    student prefers a different slot (their point serves 06:00 and 09:00 and they
+    pick 09:00 this once), we store the chosen slot here for that date + direction.
+    The seat map / manifest / ticket read this to move the student between trips
+    for that day only. The original lock's default slot is treated as absent for
+    that day so no one is double-booked.
+    """
+    term_lock = models.ForeignKey(
+        TermSeatLock, on_delete=models.CASCADE, related_name='slot_choices',
+        verbose_name=_('المقعد الثابت'))
+    date = models.DateField(verbose_name=_('التاريخ'))
+    morning_slot = models.ForeignKey(
+        'config_app.MorningSlot', on_delete=models.CASCADE, null=True, blank=True,
+        verbose_name=_('موعد الذهاب'))
+    return_slot = models.ForeignKey(
+        'config_app.ReturnSlot', on_delete=models.CASCADE, null=True, blank=True,
+        verbose_name=_('موعد العودة'))
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('اختيار سلوت يومي')
+        verbose_name_plural = _('اختيارات السلوت اليومية')
+        unique_together = [('term_lock', 'date')]
+
+    def __str__(self):
+        s = self.morning_slot or self.return_slot
+        return f'{self.term_lock} → {s} @ {self.date}'
+
+
 class ReturnBooking(models.Model):
     """A student's return-trip reservation on a return slot (with its own capacity)."""
 
