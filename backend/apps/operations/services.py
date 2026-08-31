@@ -367,11 +367,15 @@ def assign_subscription_seats(subscription, *, by_user=None, morning_slot=None,
     student = subscription.student
     cap = SeatCapacity.objects.filter(route=route).select_related('morning_slot').first()
     layout = cap.layout if cap else DEFAULT_LAYOUT
+    # Respect the student's own choice on the subscription; only fall back to
+    # sensible defaults if they didn't pick one (kept for legacy rows).
     if not morning_slot:
-        morning_slot = (cap.morning_slot if cap and cap.morning_slot_id
-                        else MorningSlot.objects.filter(active=True).order_by('departure_time').first())
+        morning_slot = (subscription.morning_slot
+                        or (cap.morning_slot if cap and cap.morning_slot_id else None)
+                        or MorningSlot.objects.filter(active=True).order_by('departure_time').first())
     if not return_slot:
-        return_slot = ReturnSlot.objects.filter(active=True).order_by('departure_time').first()
+        return_slot = (subscription.return_slot
+                       or ReturnSlot.objects.filter(active=True).order_by('departure_time').first())
 
     TermSeatLock.objects.filter(subscription=subscription, active=True).update(active=False)
     created = {}

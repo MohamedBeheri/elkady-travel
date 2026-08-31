@@ -13,6 +13,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     pickup_name = serializers.CharField(source='pickup_point.name', read_only=True)
     pickup_center = serializers.CharField(source='pickup_point.center', read_only=True)
     pickup_center_display = serializers.CharField(source='pickup_point.get_center_display', read_only=True)
+    morning_slot_name = serializers.CharField(source='morning_slot.name', read_only=True)
+    return_slot_name = serializers.CharField(source='return_slot.name', read_only=True)
     type_display = serializers.CharField(source='get_subscription_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     method_name = serializers.CharField(source='payment_method.name', read_only=True)
@@ -24,6 +26,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'subscription_type', 'type_display', 'route', 'route_name',
             'destination_name', 'university', 'university_name',
             'pickup_point', 'pickup_name', 'pickup_center', 'pickup_center_display',
+            'morning_slot', 'morning_slot_name', 'return_slot', 'return_slot_name',
             'amount', 'status', 'status_display',
             'payment_method', 'method_name', 'payment_reference', 'payment_proof',
             'submitted_at', 'verified_at', 'verified_by', 'rejection_reason',
@@ -38,7 +41,8 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = [
-            'id', 'subscription_type', 'route', 'university', 'pickup_point', 'amount',
+            'id', 'subscription_type', 'route', 'university', 'pickup_point',
+            'morning_slot', 'return_slot', 'amount',
         ]
 
     def create(self, validated_data):

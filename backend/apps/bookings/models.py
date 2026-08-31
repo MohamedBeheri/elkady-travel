@@ -42,6 +42,17 @@ class Subscription(models.Model):
         'config_app.PickupPoint', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='subscriptions', verbose_name=_('نقطة الالتقاط'),
     )
+    # For term/monthly the student picks the exact daily slots (going + return)
+    # they intend to use — carried over into the fixed-seat lock so the QR/ticket
+    # always shows their real pickup/drop-off time.
+    morning_slot = models.ForeignKey(
+        'config_app.MorningSlot', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='subscriptions', verbose_name=_('موعد الذهاب'),
+    )
+    return_slot = models.ForeignKey(
+        'config_app.ReturnSlot', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='subscriptions', verbose_name=_('موعد العودة'),
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name=_('المبلغ'))
     status = models.CharField(
         max_length=20, choices=Status.choices,

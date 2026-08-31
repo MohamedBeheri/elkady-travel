@@ -265,6 +265,8 @@ function SubscriptionBooking({ unis }: any) {
   const [university, setUniversity] = useState<number | undefined>(user?.university ?? undefined)
   const [center, setCenter] = useState<string | undefined>(user?.center || undefined)
   const [pickupId, setPickupId] = useState<number | undefined>(user?.pickup_point || undefined)
+  const [goSlotId, setGoSlotId] = useState<number>()
+  const [retSlotId, setRetSlotId] = useState<number>()
   const [created, setCreated] = useState<any>(null)
   const [methodId, setMethodId] = useState<number>()
   const [reference, setReference] = useState('')
@@ -272,6 +274,8 @@ function SubscriptionBooking({ unis }: any) {
 
   const { data: prices } = usePricesQuery({ active: true })
   const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
+  const { data: mSlots } = useMorningSlotsQuery()
+  const { data: rSlots } = useReturnSlotsQuery()
   const { data: methods } = usePaymentMethodsQuery()
   const { data: accounts } = usePaymentAccountsQuery()
   const [createSub, { isLoading }] = useCreateSubscriptionMutation()
@@ -283,12 +287,18 @@ function SubscriptionBooking({ unis }: any) {
   const routeId: number | undefined = selPickup?.route_id
   const price = prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === subType)?.price
   const account = (accounts?.results || accounts || []).find((a: any) => a.method === methodId)
-  const canCreate = !!(university && center && pickupId && routeId && price !== undefined)
+  // Only show morning slots that actually serve this point (have a saved pickup time).
+  const goSlots = (mSlots?.results || mSlots || []).filter((s: any) => selPickup?.go_times?.[s.id])
+  const retSlots = (rSlots?.results || rSlots || []).filter((s: any) => selPickup?.return_times?.[s.id])
+  const canCreate = !!(university && center && pickupId && routeId && goSlotId && retSlotId && price !== undefined)
 
   const create = async () => {
     if (!price) { message.error('لا يوجد سعر متاح لهذا الاختيار'); return }
     try {
-      const sub = await createSub({ subscription_type: subType, route: routeId, university, pickup_point: pickupId, amount: price }).unwrap()
+      const sub = await createSub({
+        subscription_type: subType, route: routeId, university, pickup_point: pickupId,
+        morning_slot: goSlotId, return_slot: retSlotId, amount: price,
+      }).unwrap()
       setCreated(sub)
     } catch { message.error('تعذر إنشاء الاشتراك') }
   }
@@ -341,7 +351,7 @@ function SubscriptionBooking({ unis }: any) {
   return (
     <div>
       <Alert type="info" showIcon style={{ marginBottom: 16 }}
-        message="اختر نوع الاشتراك والجامعة والمركز ونقطة الالتقاط، ثم أكمل الدفع. بعد تأكيد الإدارة يُخصَّص لك مقعد ثابت للذهاب وآخر للعودة طوال المدة، وتؤكد حضورك لرحلة الغد يومياً." />
+        message="اختر نوع الاشتراك والجامعة ونقطة الالتقاط وميعادَي الذهاب والعودة اليوميَّين، ثم أكمل الدفع. بعد تأكيد الإدارة يُخصَّص لك مقعد ثابت في المواعيد التي اخترتها ويظهر وقت التقاطك على التذكرة." />
       <Radio.Group value={subType} onChange={(e) => setSubType(e.target.value)} optionType="button" buttonStyle="solid" style={{ marginBottom: 16 }}>
         {SUB_TYPES.map((t) => <Radio.Button key={t.value} value={t.value}>{t.label}</Radio.Button>)}
       </Radio.Group>
@@ -358,12 +368,29 @@ function SubscriptionBooking({ unis }: any) {
           </Form.Item>
           <Form.Item label="نقطة الالتقاط" required>
             <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
-              value={pickupId} onChange={setPickupId} showSearch optionFilterProp="label"
+              value={pickupId} onChange={(v) => { setPickupId(v); setGoSlotId(undefined); setRetSlotId(undefined) }}
+              showSearch optionFilterProp="label"
               options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
           </Form.Item>
         </div>
         {noPickups && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
         {selPickup && <Tag color="blue" style={{ marginBottom: 12 }}>الخط: {selPickup.route}</Tag>}
+        {selPickup && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Form.Item label="ميعاد الذهاب اليومي" required
+              extra="سيُطبَّق يومياً على مقعدك الثابت. الأوقات تظهر بموعد التقاطك من نقطتك.">
+              <Select placeholder={goSlots.length ? 'اختر ميعاد الذهاب' : 'لا يخدم هذه النقطة أي ميعاد ذهاب'}
+                disabled={!goSlots.length} value={goSlotId} onChange={setGoSlotId}
+                options={goSlots.map((s: any) => ({ value: s.id, label: `${s.name} — التقاطك ${selPickup.go_times[s.id]}` }))} />
+            </Form.Item>
+            <Form.Item label="ميعاد العودة اليومي" required
+              extra="الأوقات تظهر بموعد نزولك في نقطتك.">
+              <Select placeholder={retSlots.length ? 'اختر ميعاد العودة' : 'لا يخدم هذه النقطة أي ميعاد عودة'}
+                disabled={!retSlots.length} value={retSlotId} onChange={setRetSlotId}
+                options={retSlots.map((s: any) => ({ value: s.id, label: `${s.name} — نزولك ${selPickup.return_times[s.id]}` }))} />
+            </Form.Item>
+          </div>
+        )}
         {price !== undefined
           ? <Statistic title="المبلغ المطلوب" value={Number(price)} suffix="ج.م" style={{ marginBottom: 16 }} />
           : (routeId && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="لا يوجد سعر مُسجَّل لهذا الاشتراك على هذا الخط." />)}
