@@ -87,3 +87,24 @@ body {
 .pickup-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; background: #fff; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+
+/* ===== go-bus style hero (Explore search) ===== */
+.gb-hero {
+  position: relative; border-radius: 22px; overflow: hidden;
+  background: radial-gradient(circle at 82% 18%, #F7A24A 0%, #EC6A16 52%, #d15c10 100%);
+  padding: 26px; margin-bottom: 22px;
+  display: grid; grid-template-columns: 1.05fr minmax(320px, 470px); gap: 22px; align-items: center;
+  box-shadow: 0 14px 34px rgba(214,95,18,0.28);
+}
+.gb-hero-visual { color: #fff; display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; }
+.gb-hero-title { font-size: 34px; font-weight: 900; line-height: 1.15; text-shadow: 0 2px 10px rgba(0,0,0,0.18); }
+.gb-hero-sub { font-size: 18px; font-weight: 700; opacity: 0.95; }
+.gb-hero-bus { width: 100%; max-width: 540px; align-self: center; margin-top: 6px;
+  filter: drop-shadow(0 16px 22px rgba(0,0,0,0.28)); }
+.gb-hero-search .ant-card { margin: 0 !important; box-shadow: 0 12px 30px rgba(11,46,94,0.18); border: none; }
+@media (max-width: 900px) {
+  .gb-hero { grid-template-columns: 1fr; padding: 18px; }
+  .gb-hero-title { font-size: 24px; }
+  .gb-hero-sub { font-size: 15px; }
+  .gb-hero-bus { max-width: 360px; }
+}

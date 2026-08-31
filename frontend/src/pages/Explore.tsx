@@ -98,8 +98,11 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
             value={pickupId} onChange={(v) => reset(() => setPickupId(v))} showSearch optionFilterProp="label"
             options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
         </Col>
-        <Col xs={24} md={4}>
-          <Button type="primary" block icon={<SearchOutlined />} onClick={run}>بحث</Button>
+        <Col xs={24}>
+          <Button type="primary" block size="large" icon={<SearchOutlined />} onClick={run}
+            style={{ background: '#16a34a', borderColor: '#16a34a', fontWeight: 800, height: 46 }}>
+            أعرض الرحلات المتاحة
+          </Button>
         </Col>
       </Row>
       {noPickups && <Alert style={{ marginTop: 12 }} type="warning" showIcon message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
@@ -205,8 +208,6 @@ function UniversityRoutes({ data, navigate, bookTo }: { data: any; navigate: any
 
   return (
     <>
-      <AvailabilityChecker data={data} bookTo={bookTo} />
-
       <Row gutter={[16, 16]} style={{ marginBottom: 22 }}>
         <Col xs={24} md={12}>
           <Card title={<span style={{ fontWeight: 800 }}><ClockCircleOutlined style={{ color: '#F07E1B' }} /> مواعيد الذهاب</span>}>
@@ -289,17 +290,8 @@ export default function Explore() {
 
   return (
     <div>
-      <div className="page-hero">
-        <img src="/hero-b1.png" alt="ELKADY TRAVEL" />
-        <div className="hero-bar">
-          {isStudent
-            ? <><span>أهلاً <b>{user?.full_name}</b> 👋</span><span className="tag">— اختر رحلتك واحجز مقعدك</span></>
-            : <><span><b>خطوط السير والمواعيد والأسعار</b></span><span className="tag">— تصفّح بحرية، وسجّل الدخول عند الحجز</span></>}
-        </div>
-      </div>
-
       {/* main category switch */}
-      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+      <div style={{ textAlign: 'center', marginBottom: 18 }}>
         <Segmented
           size="large" value={mode} onChange={(v) => setMode(v as any)}
           options={[
@@ -309,9 +301,25 @@ export default function Explore() {
         />
       </div>
 
-      {mode === 'uni'
-        ? <UniversityRoutes data={data} navigate={navigate} bookTo={bookTo} />
-        : <TourismForm data={data} />}
+      {/* go-bus style hero: bus + tagline on the right, search card on the left */}
+      <section className="gb-hero">
+        <div className="gb-hero-visual">
+          <div className="gb-hero-title">
+            {isStudent ? <>أهلاً {user?.full_name} 👋</> : <>أسرع وأريح وسيلة لرحلتك الجامعية</>}
+          </div>
+          <div className="gb-hero-sub">
+            {isStudent ? 'اختر رحلتك واحجز مقعدك في دقيقة' : 'تصفّح المواعيد والأسعار بحرية — والتسجيل عند الحجز فقط'}
+          </div>
+          <img className="gb-hero-bus" src="/card-bus.png" alt="ELKADY TRAVEL" />
+        </div>
+        <div className="gb-hero-search">
+          {mode === 'uni'
+            ? <AvailabilityChecker data={data} bookTo={bookTo} />
+            : <TourismForm data={data} />}
+        </div>
+      </section>
+
+      {mode === 'uni' && <UniversityRoutes data={data} navigate={navigate} bookTo={bookTo} />}
 
       {!user && (
         <Card style={{ marginTop: 22, textAlign: 'center', background: 'linear-gradient(120deg,#0B2E5E,#123a73 55%,#EC6A16)', border: 'none' }}>
