@@ -45,7 +45,7 @@ class RouteSerializer(serializers.ModelSerializer):
         model = Route
         fields = [
             'id', 'code', 'origin_label', 'name', 'name_en',
-            'destination', 'destination_name', 'active', 'pickup_points',
+            'destination', 'destination_name', 'active', 'seat_selection_enabled', 'pickup_points',
         ]
 
 

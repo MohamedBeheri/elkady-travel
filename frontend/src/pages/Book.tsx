@@ -33,12 +33,14 @@ const SUB_TYPES = [
 function DailyFlow({ unis }: any) {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
-  const gender = useAppSelector((s) => s.auth.user?.gender)
+  const user = useAppSelector((s) => s.auth.user)
+  const gender = user?.gender
 
-  const [university, setUniversity] = useState<number>()
+  // Pre-fill from the student's saved profile (§2). They can still change any field.
+  const [university, setUniversity] = useState<number | undefined>(user?.university ?? undefined)
   const [tripType, setTripType] = useState<'go' | 'return' | 'round'>('go')
-  const [center, setCenter] = useState<string>()
-  const [pickupId, setPickupId] = useState<number>()
+  const [center, setCenter] = useState<string | undefined>(user?.center || undefined)
+  const [pickupId, setPickupId] = useState<number | undefined>(user?.pickup_point || undefined)
   const [date, setDate] = useState<any>(dayjs().add(1, 'day'))
   const [goSlot, setGoSlot] = useState<number>()
   const [goSeat, setGoSeat] = useState<number | null>(null)
@@ -56,6 +58,7 @@ function DailyFlow({ unis }: any) {
   const availPickups = (pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination)
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
+  const seatSelection = selPickup ? selPickup.seat_selection !== false : true
 
   const wantGo = tripType === 'go' || tripType === 'round'
   const wantRet = tripType === 'return' || tripType === 'round'
@@ -83,18 +86,21 @@ function DailyFlow({ unis }: any) {
   const total = dailyPrice * legs
 
   const canConfirm = !!(university && center && pickupId && dateStr && routeId
-    && (!wantGo || (goSlot && goSeat))
-    && (!wantRet || (retSlot && retSeat)))
+    && (!wantGo || (goSlot && (goSeat || !seatSelection)))
+    && (!wantRet || (retSlot && (retSeat || !seatSelection))))
 
   const confirm = async () => {
     try {
+      let g = goSeat, r = retSeat
       if (wantGo) {
-        await bookSeat({ date: dateStr, route: routeId, direction: 'go', morning_slot: goSlot, seat_number: goSeat, university, pickup_point: pickupId }).unwrap()
+        const res = await bookSeat({ date: dateStr, route: routeId, direction: 'go', morning_slot: goSlot, seat_number: seatSelection ? goSeat : undefined, university, pickup_point: pickupId }).unwrap()
+        g = res?.seat_number ?? goSeat
       }
       if (wantRet) {
-        await bookSeat({ date: dateStr, route: routeId, direction: 'return', return_slot: retSlot, seat_number: retSeat, university, pickup_point: pickupId }).unwrap()
+        const res = await bookSeat({ date: dateStr, route: routeId, direction: 'return', return_slot: retSlot, seat_number: seatSelection ? retSeat : undefined, university, pickup_point: pickupId }).unwrap()
+        r = res?.seat_number ?? retSeat
       }
-      setDone({ total, goSeat, retSeat })
+      setDone({ total, goSeat: g, retSeat: r })
     } catch (e: any) { message.error(e?.data?.detail || 'تعذر إتمام الحجز') }
   }
 
@@ -150,7 +156,7 @@ function DailyFlow({ unis }: any) {
             <Form.Item label={pointFieldLabel} required style={{ marginBottom: 8 }}>
               <Select placeholder={center ? `اختر ${pointFieldLabel}` : 'اختر المركز أولاً'} disabled={!center}
                 value={pickupId} onChange={setPickupId} showSearch optionFilterProp="label"
-                options={availPickups.map((p: any) => ({ value: p.id, label: `${p.name} — ${p.route}` }))} />
+                options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
             </Form.Item>
             <Form.Item label="تاريخ الرحلة" required style={{ marginBottom: 8 }}>
               <DatePicker style={{ width: '100%' }} value={date} onChange={setDate}
@@ -177,13 +183,15 @@ function DailyFlow({ unis }: any) {
                 options={(mSlots?.results || mSlots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
             </Form.Item>
           </Form>
-          {goQuery && (goFetch ? <Spin /> : goMap && (
-            <div style={{ textAlign: 'center' }}>
-              <SeatMap layout={goMap.layout} seats={goMap.seats} selected={goSeat} onSelect={setGoSeat} viewerGender={gender} />
-              <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
-              {goSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد الذهاب المختار: {goSeat}</Tag>}
-            </div>
-          ))}
+          {!seatSelection
+            ? goSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعدك تلقائياً لهذه الرحلة (اختيار المقاعد غير مفعّل لهذا الخط)." />
+            : goQuery && (goFetch ? <Spin /> : goMap && (
+              <div style={{ textAlign: 'center' }}>
+                <SeatMap layout={goMap.layout} seats={goMap.seats} selected={goSeat} onSelect={setGoSeat} viewerGender={gender} />
+                <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
+                {goSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد الذهاب المختار: {goSeat}</Tag>}
+              </div>
+            ))}
         </Card>
       )}
 
@@ -201,13 +209,15 @@ function DailyFlow({ unis }: any) {
                 options={(rSlots?.results || rSlots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
             </Form.Item>
           </Form>
-          {retQuery && (retFetch ? <Spin /> : retMap && (
-            <div style={{ textAlign: 'center' }}>
-              <SeatMap layout={retMap.layout} seats={retMap.seats} selected={retSeat} onSelect={setRetSeat} viewerGender={gender} />
-              <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
-              {retSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد العودة المختار: {retSeat}</Tag>}
-            </div>
-          ))}
+          {!seatSelection
+            ? retSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعد العودة تلقائياً (اختيار المقاعد غير مفعّل لهذا الخط)." />
+            : retQuery && (retFetch ? <Spin /> : retMap && (
+              <div style={{ textAlign: 'center' }}>
+                <SeatMap layout={retMap.layout} seats={retMap.seats} selected={retSeat} onSelect={setRetSeat} viewerGender={gender} />
+                <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
+                {retSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد العودة المختار: {retSeat}</Tag>}
+              </div>
+            ))}
         </Card>
       )}
 
@@ -234,10 +244,11 @@ function DailyFlow({ unis }: any) {
 function SubscriptionBooking({ unis }: any) {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
+  const user = useAppSelector((s) => s.auth.user)
   const [subType, setSubType] = useState('term')
-  const [university, setUniversity] = useState<number>()
-  const [center, setCenter] = useState<string>()
-  const [pickupId, setPickupId] = useState<number>()
+  const [university, setUniversity] = useState<number | undefined>(user?.university ?? undefined)
+  const [center, setCenter] = useState<string | undefined>(user?.center || undefined)
+  const [pickupId, setPickupId] = useState<number | undefined>(user?.pickup_point || undefined)
   const [created, setCreated] = useState<any>(null)
   const [methodId, setMethodId] = useState<number>()
   const [reference, setReference] = useState('')
@@ -332,7 +343,7 @@ function SubscriptionBooking({ unis }: any) {
           <Form.Item label="نقطة الالتقاط" required>
             <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
               value={pickupId} onChange={setPickupId} showSearch optionFilterProp="label"
-              options={availPickups.map((p: any) => ({ value: p.id, label: `${p.name} — ${p.route}` }))} />
+              options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
           </Form.Item>
         </div>
         {noPickups && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}

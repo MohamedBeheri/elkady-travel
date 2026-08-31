@@ -11,6 +11,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     destination_name = serializers.CharField(source='route.destination.name', read_only=True)
     university_name = serializers.CharField(source='university.name', read_only=True)
     pickup_name = serializers.CharField(source='pickup_point.name', read_only=True)
+    pickup_center = serializers.CharField(source='pickup_point.center', read_only=True)
+    pickup_center_display = serializers.CharField(source='pickup_point.get_center_display', read_only=True)
     type_display = serializers.CharField(source='get_subscription_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     method_name = serializers.CharField(source='payment_method.name', read_only=True)
@@ -21,7 +23,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'id', 'student', 'student_name', 'student_national_id', 'student_phone',
             'subscription_type', 'type_display', 'route', 'route_name',
             'destination_name', 'university', 'university_name',
-            'pickup_point', 'pickup_name', 'amount', 'status', 'status_display',
+            'pickup_point', 'pickup_name', 'pickup_center', 'pickup_center_display',
+            'amount', 'status', 'status_display',
             'payment_method', 'method_name', 'payment_reference', 'payment_proof',
             'submitted_at', 'verified_at', 'verified_by', 'rejection_reason',
             'created_at',

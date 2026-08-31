@@ -217,6 +217,19 @@ def _seat_occupied(trip, seat_number, exclude_student=None):
     return q.exists()
 
 
+def _first_free_seat_on_trip(trip, student):
+    """Lowest bookable seat free on this trip and gender-compatible with the student."""
+    genders = _seat_gender_map(trip)
+    for n in sorted(seat_set(trip.layout if trip.layout in LAYOUTS else DEFAULT_LAYOUT)):
+        if _seat_occupied(trip, n, exclude_student=student):
+            continue
+        g = genders.get(n, '')
+        if g and student.gender and g != student.gender:
+            continue
+        return n
+    return None
+
+
 @transaction.atomic
 def book_specific_seat(*, trip, student, seat_number, university_id, priority_type, subscription, pickup_point_id=None):
     """Reserve a physical seat. Returns (kind, obj, message).
@@ -224,8 +237,15 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
     kind is 'term' | 'seat'. Term subscribers lock the seat for the whole term
     and get it confirmed immediately; monthly subscribers get an immediate
     confirmation; daily/none go to HELD pending admin payment confirmation.
+    When ``seat_number`` is None (route with the seat map disabled) the system
+    auto-assigns the lowest free gender-compatible seat.
     """
     trip = DailyTrip.objects.select_for_update().get(pk=trip.pk)
+    if seat_number in (None, '', 0, '0'):
+        seat_number = _first_free_seat_on_trip(trip, student)
+        if not seat_number:
+            raise ValueError('لا توجد مقاعد متاحة في هذه الرحلة.')
+    seat_number = int(seat_number)
     if seat_number not in seat_set(trip.layout):
         raise ValueError('رقم المقعد غير صحيح لهذه المركبة.')
     if _seat_occupied(trip, seat_number, exclude_student=student):

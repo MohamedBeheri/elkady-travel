@@ -284,10 +284,10 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         date = request.data.get('date')
         route_id = request.data.get('route')
         direction = request.data.get('direction', 'go')
-        seat_number = request.data.get('seat_number')
+        seat_number = request.data.get('seat_number')  # optional: None → auto-assign
         pickup_id = request.data.get('pickup_point')
         university_id = request.data.get('university') or user.university_id
-        if not (date and route_id and seat_number and university_id):
+        if not (date and route_id and university_id):
             return Response({'detail': 'البيانات ناقصة'}, status=400)
 
         route = Route.objects.get(pk=route_id)
@@ -306,13 +306,14 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             priority_type, sub = _active_priority(user, route)
         try:
             kind, obj, msg = book_specific_seat(
-                trip=trip, student=user, seat_number=int(seat_number),
+                trip=trip, student=user, seat_number=seat_number,
                 university_id=university_id, priority_type=priority_type, subscription=sub,
                 pickup_point_id=pickup_id,
             )
         except ValueError as e:
             return Response({'detail': str(e)}, status=409)
-        return Response({'kind': kind, 'message': msg, 'seat_number': int(seat_number)}, status=201)
+        assigned = getattr(obj, 'seat_number', None)
+        return Response({'kind': kind, 'message': msg, 'seat_number': assigned}, status=201)
 
     @action(detail=True, methods=['post'])
     def confirm(self, request, pk=None):

@@ -112,6 +112,7 @@ def public_pickup_points(request):
     return Response([
         {'id': p.id, 'name': p.name, 'center': p.center,
          'route': p.route.name, 'route_id': p.route_id,
+         'seat_selection': p.route.seat_selection_enabled,
          'destination': p.route.destination_id,
          'destination_name': p.route.destination.name if p.route.destination_id else '',
          'sequence': p.sequence}

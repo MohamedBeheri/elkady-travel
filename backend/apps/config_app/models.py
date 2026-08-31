@@ -70,6 +70,10 @@ class Route(models.Model):
         verbose_name=_('الوجهة'),
     )
     active = models.BooleanField(default=True, verbose_name=_('نشط'))
+    seat_selection_enabled = models.BooleanField(
+        default=True, verbose_name=_('إظهار خريطة اختيار المقاعد للطالب'),
+        help_text=_('عند التفعيل يختار الطالب مقعده من الرسم؛ وإلا يُخصَّص له مقعد تلقائياً.'),
+    )
 
     class Meta:
         verbose_name = _('مسار')

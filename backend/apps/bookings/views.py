@@ -14,8 +14,9 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         'student', 'route', 'route__destination', 'university', 'pickup_point', 'payment_method',
     ).all()
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['status', 'subscription_type', 'route', 'university', 'student']
+    filterset_fields = ['status', 'subscription_type', 'route', 'university', 'student', 'pickup_point']
     search_fields = ['student__full_name', 'student__national_id', 'student__phone']
+    ordering_fields = ['student__full_name', 'created_at', 'amount']
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -26,6 +27,12 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         qs = super().get_queryset()
         if self.request.user.role == 'student':
             return qs.filter(student=self.request.user)
+        center = self.request.query_params.get('center')
+        if center:
+            qs = qs.filter(pickup_point__center=center)
+        ordering = self.request.query_params.get('ordering')
+        if ordering in ('student__full_name', '-student__full_name', 'amount', '-amount', 'created_at', '-created_at'):
+            qs = qs.order_by(ordering)
         return qs
 
     @action(detail=True, methods=['post'], url_path='submit-payment')

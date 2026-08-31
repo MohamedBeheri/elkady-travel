@@ -79,6 +79,7 @@ function RoutesTab() {
           { title: 'الاسم', dataIndex: 'name' },
           { title: 'الوجهة', dataIndex: 'destination_name' },
           { title: 'نقاط', render: (_, r: any) => r.pickup_points?.length || 0 },
+          { title: 'خريطة المقاعد', dataIndex: 'seat_selection_enabled', render: (v) => v ? <Tag color="blue">تظهر</Tag> : <Tag color="orange">تلقائي</Tag> },
           { title: 'نشط', dataIndex: 'active', render: (v) => v ? <Tag color="green">نعم</Tag> : <Tag>لا</Tag> },
           { title: '', render: (_, r: any) => (
             <Space>
@@ -95,6 +96,10 @@ function RoutesTab() {
           <Form.Item name="name" label="اسم المسار" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="destination" label="الوجهة" rules={[{ required: true }]}>
             <Select options={(dests?.results || dests || []).map((d: any) => ({ value: d.id, label: d.name }))} />
+          </Form.Item>
+          <Form.Item name="seat_selection_enabled" label="إظهار خريطة اختيار المقاعد للطالب" valuePropName="checked" initialValue={true}
+            tooltip="عند التفعيل يختار الطالب مقعده من الرسم؛ وإلا يُخصَّص له مقعد تلقائياً." extra="لو أُطفئت، لن تظهر خريطة المقاعد في الحجز ويُخصَّص المقعد تلقائياً.">
+            <Switch />
           </Form.Item>
           <Form.Item name="active" label="نشط" valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         </Form>
