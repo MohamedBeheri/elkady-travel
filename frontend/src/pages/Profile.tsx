@@ -7,7 +7,7 @@ import {
 } from '../app/api'
 import { useAppDispatch, useAppSelector } from '../app/store'
 import { setUser } from '../app/authSlice'
-import { phoneRule } from '../app/validators'
+import { phoneRule, dedupePickups } from '../app/validators'
 
 const STATUS_COLOR: Record<string, string> = {
   payment_pending: 'orange', payment_submitted: 'blue', under_review: 'blue',
@@ -133,7 +133,7 @@ export default function Profile() {
           <Form.Item name="pickup_point" label="نقطة الالتقاط">
             <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
               showSearch optionFilterProp="label"
-              options={(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
+              options={dedupePickups(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
           </Form.Item>
           <Form.Item name="address" label="تفاصيل إضافية"><Input.TextArea rows={2} /></Form.Item>
         </Form>

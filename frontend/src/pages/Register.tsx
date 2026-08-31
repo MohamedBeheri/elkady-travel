@@ -2,7 +2,7 @@ import { Button, Form, Input, Select, DatePicker, Typography, App as AntdApp } f
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useRegisterMutation, useLoginMutation, usePublicUniversitiesQuery, usePublicCollegesQuery, usePublicPickupPointsQuery } from '../app/api'
-import { phoneRule } from '../app/validators'
+import { phoneRule, dedupePickups } from '../app/validators'
 import { useAppDispatch } from '../app/store'
 import { setCredentials } from '../app/authSlice'
 
@@ -88,7 +88,7 @@ export default function Register() {
             <Form.Item name="pickup_point" label="نقطة الالتقاط" rules={[{ required: true }]}>
               <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
                 showSearch optionFilterProp="label"
-                options={(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
+                options={dedupePickups(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
             </Form.Item>
             <Form.Item name="address" label="تفاصيل إضافية (اختياري)">
               <Input.TextArea rows={2} placeholder="أقرب علامة مميزة…" />

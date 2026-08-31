@@ -17,6 +17,7 @@ import {
 import SeatMap, { SeatLegend } from '../components/SeatMap'
 import TourismRequest from './TourismRequest'
 import { useAppSelector } from '../app/store'
+import { dedupePickups } from '../app/validators'
 
 const CENTERS = [
   { value: 'shebin', label: 'شبين الكوم' },
@@ -57,7 +58,7 @@ function DailyFlow({ unis }: any) {
   const [bookSeat, { isLoading }] = useBookSpecificSeatMutation()
 
   const selUni = unis.find((u: any) => u.id === university)
-  const availPickups = (pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination)
+  const availPickups = dedupePickups((pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination))
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const seatSelection = selPickup ? selPickup.seat_selection !== false : true
@@ -278,7 +279,7 @@ function SubscriptionBooking({ unis }: any) {
   const [submitPayment, { isLoading: paying }] = useSubmitPaymentMutation()
 
   const selUni = unis.find((u: any) => u.id === university)
-  const availPickups = (pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination)
+  const availPickups = dedupePickups((pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination))
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const price = prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === subType)?.price

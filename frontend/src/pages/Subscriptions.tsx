@@ -11,7 +11,7 @@ import {
   useSubscriptionsQuery, useDeleteSubscriptionMutation, useRoutesQuery, useUniversitiesQuery, useUsersQuery,
   useSaveUserMutation, useCollegesQuery, usePublicPickupPointsQuery,
 } from '../app/api'
-import { phoneRule } from '../app/validators'
+import { phoneRule, dedupePickups } from '../app/validators'
 
 const STATUS_COLOR: Record<string, string> = {
   payment_pending: 'orange', payment_submitted: 'blue', under_review: 'blue',
@@ -162,7 +162,7 @@ function ProfileModal({ studentId, onClose }: { studentId: number | null; onClos
             </Form.Item>
             <Form.Item name="pickup_point" label="نقطة الالتقاط">
               <Select disabled={!editCenter} showSearch optionFilterProp="label"
-                options={(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
+                options={dedupePickups(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
             </Form.Item>
           </div>
           <Form.Item name="address" label="تفاصيل إضافية"><Input.TextArea rows={2} /></Form.Item>
@@ -239,7 +239,7 @@ export default function Subscriptions() {
           onChange={(v) => { setCenter(v); setPickup(undefined) }} options={CENTERS} />
         <Select placeholder="نقطة الالتقاط" allowClear style={{ width: 170 }} value={pickup} onChange={setPickup}
           disabled={!center} showSearch optionFilterProp="label"
-          options={(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
+          options={dedupePickups(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
         <Select placeholder="المسار" allowClear style={{ width: 160 }} value={route} onChange={setRoute}
           options={(routes?.results || []).map((r: any) => ({ value: r.id, label: r.name }))} />
         <Select placeholder="الجامعة" allowClear style={{ width: 150 }} value={university} onChange={setUniversity}
