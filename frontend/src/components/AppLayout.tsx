@@ -144,10 +144,15 @@ export default function AppLayout() {
           onCollapse={setCollapsed}
           collapsedWidth={80}
           width={240}
-          style={{ position: 'sticky', top: 0, height: '100vh' }}
+          style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}
         >
-          {brand()}
-          {menu()}
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {brand()}
+            {/* scrollable menu area — prevents a long menu from spilling out of the sidebar */}
+            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 48 }}>
+              {menu()}
+            </div>
+          </div>
         </Sider>
       )}
 
@@ -183,10 +188,12 @@ export default function AppLayout() {
           onClose={() => setDrawerOpen(false)}
           width={260}
           closable={false}
-          styles={{ body: { padding: 0, background: '#001529' }, header: { display: 'none' } }}
+          styles={{ body: { padding: 0, background: '#001529', display: 'flex', flexDirection: 'column' }, header: { display: 'none' } }}
         >
           {brand(true)}
-          {menu(() => setDrawerOpen(false))}
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+            {menu(() => setDrawerOpen(false))}
+          </div>
         </Drawer>
       )}
     </Layout>
