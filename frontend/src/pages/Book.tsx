@@ -64,6 +64,17 @@ function DailyFlow({ unis }: any) {
   const routeId: number | undefined = selPickup?.route_id
   const seatSelection = selPickup ? selPickup.seat_selection !== false : true
 
+  // Re-align the saved pickup ID to the row for the CURRENT university's
+  // destination — the saved ID may live on the other-destination copy.
+  useEffect(() => {
+    if (!availPickups.length) return
+    if (pickupId && availPickups.some((p: any) => p.id === pickupId)) return
+    const savedName = (user?.pickup_name || '').trim()
+    if (!savedName) return
+    const match = availPickups.find((p: any) => (p.name || '').trim() === savedName)
+    if (match) setPickupId(match.id)
+  }, [availPickups, pickupId, user?.pickup_name])
+
   const wantGo = tripType === 'go' || tripType === 'round'
   const wantRet = tripType === 'return' || tripType === 'round'
   const dateStr = date ? date.format('YYYY-MM-DD') : undefined
@@ -297,6 +308,15 @@ function SubscriptionBooking({ unis, termOpen = true, monthlyOpen = true }: any)
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const price = prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === subType)?.price
+
+  useEffect(() => {
+    if (!availPickups.length) return
+    if (pickupId && availPickups.some((p: any) => p.id === pickupId)) return
+    const savedName = (user?.pickup_name || '').trim()
+    if (!savedName) return
+    const match = availPickups.find((p: any) => (p.name || '').trim() === savedName)
+    if (match) setPickupId(match.id)
+  }, [availPickups, pickupId, user?.pickup_name])
   // Only expose methods the admin actually configured an active account for.
   const accountList = (accounts?.results || accounts || []).filter((a: any) => a.active !== false)
   const activeMethodIds = new Set(accountList.map((a: any) => a.method))
