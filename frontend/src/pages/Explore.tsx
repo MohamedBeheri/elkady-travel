@@ -321,7 +321,8 @@ export default function Explore() {
           <div className="gb-hero-sub">
             {isStudent ? 'اختر رحلتك واحجز مقعدك في دقيقة' : 'تصفّح المواعيد والأسعار بحرية — والتسجيل عند الحجز فقط'}
           </div>
-          <img className="gb-hero-bus" src="/card-bus.png" alt="ELKADY TRAVEL" />
+          <img className="gb-hero-bus" src="/hero-bus.png" alt="ELKADY TRAVEL"
+            onError={(e) => { const t = e.currentTarget; if (!t.dataset.fb) { t.dataset.fb = '1'; t.src = '/card-bus.png' } }} />
         </div>
         <div className="gb-hero-search">
           {mode === 'uni'
