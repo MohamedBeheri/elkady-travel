@@ -32,6 +32,16 @@
 
 ---
 
+## 0) DNS (من لوحة الدومين elkady-travel.com)
+أضِف سجلَّي A يشيران إلى السيرفر:
+```
+@     A   31.97.118.178
+www   A   31.97.118.178
+```
+انتظر انتشار DNS (دقائق–ساعة) قبل خطوة TLS.
+
+---
+
 ## 1) قاعدة بيانات PostgreSQL منفصلة
 
 ```bash
@@ -111,7 +121,7 @@ sudo systemctl status elkady --no-pager      # يجب أن تكون active (runn
 
 ```bash
 sudo cp /opt/elkady/deploy/vps/elkady-nginx.conf /etc/nginx/sites-available/elkady
-sudo nano /etc/nginx/sites-available/elkady        # غيّر server_name للدومين
+sudo nano /etc/nginx/sites-available/elkady        # server_name مضبوط مسبقاً على elkady-travel.com
 sudo ln -s /etc/nginx/sites-available/elkady /etc/nginx/sites-enabled/elkady
 sudo nginx -t          # اختبار — يجب أن ينجح دون لمس بلوك MPFC
 sudo systemctl reload nginx
@@ -120,10 +130,10 @@ sudo systemctl reload nginx
 ## 9) شهادة TLS (اختياري لكن موصى به — يحتاج دومين)
 
 ```bash
-sudo certbot --nginx -d elkady.example.com
+sudo certbot --nginx -d elkady-travel.com -d www.elkady-travel.com
 # بعد نجاحها، في .env اضبط:
 #   SECURE_SSL_REDIRECT=True
-#   CSRF_TRUSTED_ORIGINS=https://elkady.example.com
+# (ALLOWED_HOSTS و CSRF_TRUSTED_ORIGINS مضبوطة مسبقاً على elkady-travel.com)
 # ثم:
 sudo systemctl restart elkady
 ```
