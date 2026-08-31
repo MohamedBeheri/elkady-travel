@@ -85,10 +85,13 @@ DATABASES = {
     }
 }
 
-# Postgres on Render (DATABASE_URL) — falls back to SQLite locally.
+# Postgres via DATABASE_URL — falls back to SQLite locally.
+# DB_SSL defaults to True (managed cloud Postgres); set DB_SSL=False for a local
+# Postgres on the same host (e.g. self-hosted VPS) where SSL isn't configured.
 if os.getenv('DATABASE_URL'):
     import dj_database_url
-    DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
+    DATABASES['default'] = dj_database_url.config(
+        conn_max_age=600, ssl_require=os.getenv('DB_SSL', 'True') == 'True')
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -112,14 +115,19 @@ CSRF_TRUSTED_ORIGINS = [o for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split('
 if RENDER_EXTERNAL_HOSTNAME:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
 
-# ---- Production hardening (behind Render's HTTPS proxy) ----
+# ---- Production hardening (behind an HTTPS proxy) ----
+# SECURE_SSL_REDIRECT defaults on in production; set it to False when serving over
+# plain HTTP (e.g. VPS reached by IP:port before a TLS certificate is in place),
+# otherwise Django will force-redirect every request to https and break access.
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+    _ssl = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SECURE_SSL_REDIRECT = _ssl
+    SESSION_COOKIE_SECURE = _ssl
+    CSRF_COOKIE_SECURE = _ssl
+    if _ssl:
+        SECURE_HSTS_SECONDS = 31536000
+        SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+        SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

@@ -1,0 +1,26 @@
+# /etc/systemd/system/elkady.service
+# Isolated Gunicorn service for ELKADY TRAVEL. Runs under its own user and a
+# private Unix socket — it never touches the MPFC app (which uses PM2/Node).
+[Unit]
+Description=ELKADY TRAVEL (Gunicorn) — student transport & tourism
+After=network.target postgresql.service
+
+[Service]
+Type=notify
+User=elkady
+Group=www-data
+WorkingDirectory=/opt/elkady/backend
+EnvironmentFile=/opt/elkady/backend/.env
+# Creates /run/elkady owned by elkady:www-data so Nginx can reach the socket.
+RuntimeDirectory=elkady
+RuntimeDirectoryMode=0750
+ExecStart=/opt/elkady/venv/bin/gunicorn config.wsgi:application \
+    --workers 3 \
+    --umask 007 \
+    --bind unix:/run/elkady/gunicorn.sock \
+    --access-logfile - --error-logfile -
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
