@@ -108,8 +108,9 @@ def public_pickup_points(request):
 
     A physical stop (e.g. "النساجون") may exist as multiple PickupPoint rows —
     one per route that serves it. For the public dropdown we collapse them by
-    (center, normalized-name) so the student sees each place once. Times from
-    every duplicate row are merged, so the chosen row still has all slot times.
+    (center, normalized-name, destination) so each physical stop shows up once
+    PER destination — otherwise the frontend's destination filter (بدر/الشروق)
+    would drop stops that only survive the dedupe under the wrong destination.
     """
     import unicodedata, re
     from apps.config_app.models import PickupTime  # noqa: F401  (kept for compat)
@@ -128,7 +129,7 @@ def public_pickup_points(request):
 
     grouped: dict = {}
     for p in qs.order_by('sequence', 'name', 'id'):
-        key = (p.center or '', norm(p.name))
+        key = (p.center or '', norm(p.name), p.route.destination_id)
         row = grouped.get(key)
         if row is None:
             row = {
