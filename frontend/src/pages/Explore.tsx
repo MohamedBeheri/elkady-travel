@@ -70,15 +70,29 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
         </span>
       </div>
       <Row gutter={[12, 12]}>
-        <Col xs={24} sm={12} md={6}>
-          <Select style={{ width: '100%' }} placeholder="المركز" value={center}
-            onChange={(v) => reset(() => { setCenter(v); setPickupId(undefined) })} options={CENTERS} />
-        </Col>
-        <Col xs={24} sm={12} md={7}>
-          <Select style={{ width: '100%' }} placeholder="الجامعة" value={university}
-            onChange={(v) => reset(() => { setUniversity(v); setPickupId(undefined) })}
-            options={unis.map((u: any) => ({ value: u.id, label: u.name }))} />
-        </Col>
+        {(isReturn
+          ? [
+            <Col key="uni" xs={24} sm={12} md={7}>
+              <Select style={{ width: '100%' }} placeholder="الجامعة (العودة منها)" value={university}
+                onChange={(v) => reset(() => { setUniversity(v); setPickupId(undefined) })}
+                options={unis.map((u: any) => ({ value: u.id, label: u.name }))} />
+            </Col>,
+            <Col key="center" xs={24} sm={12} md={6}>
+              <Select style={{ width: '100%' }} placeholder="المركز (الوصول إليه)" value={center}
+                onChange={(v) => reset(() => { setCenter(v); setPickupId(undefined) })} options={CENTERS} />
+            </Col>,
+          ]
+          : [
+            <Col key="center" xs={24} sm={12} md={6}>
+              <Select style={{ width: '100%' }} placeholder="المركز" value={center}
+                onChange={(v) => reset(() => { setCenter(v); setPickupId(undefined) })} options={CENTERS} />
+            </Col>,
+            <Col key="uni" xs={24} sm={12} md={7}>
+              <Select style={{ width: '100%' }} placeholder="الجامعة" value={university}
+                onChange={(v) => reset(() => { setUniversity(v); setPickupId(undefined) })}
+                options={unis.map((u: any) => ({ value: u.id, label: u.name }))} />
+            </Col>,
+          ])}
         <Col xs={24} sm={12} md={7}>
           <Select style={{ width: '100%' }} placeholder={center ? pointLabel : 'اختر المركز أولاً'} disabled={!center}
             value={pickupId} onChange={(v) => reset(() => setPickupId(v))} showSearch optionFilterProp="label"
