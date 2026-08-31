@@ -3,7 +3,7 @@ import {
   Statistic, Input, Upload, Descriptions, Radio, Divider, Tag,
 } from 'antd'
 import {
-  UploadOutlined, EnvironmentOutlined, CarOutlined, RollbackOutlined,
+  UploadOutlined, CarOutlined, RollbackOutlined,
 } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -60,6 +60,14 @@ function DailyFlow({ unis }: any) {
   const wantGo = tripType === 'go' || tripType === 'round'
   const wantRet = tripType === 'return' || tripType === 'round'
   const dateStr = date ? date.format('YYYY-MM-DD') : undefined
+
+  // Direction-aware wording: on the return leg the student's center point is the
+  // DROP-OFF, and the trip runs from the university back to their center.
+  const uniName = selUni?.name || ''
+  const destName = selPickup?.destination_name || ''
+  const pointName = selPickup?.name || ''
+  const pointFieldLabel = tripType === 'return' ? 'نقطة النزول' : tripType === 'round' ? 'نقطة الالتقاط / النزول' : 'نقطة الالتقاط'
+  const step2Title = tripType === 'return' ? '٢) المركز ونقطة النزول والتاريخ' : '٢) المركز ونقطة الالتقاط والتاريخ'
 
   const goQuery = wantGo && routeId && goSlot && dateStr ? { date: dateStr, route: routeId, direction: 'go', morning_slot: goSlot } : undefined
   const retQuery = wantRet && routeId && retSlot && dateStr ? { date: dateStr, route: routeId, direction: 'return', return_slot: retSlot } : undefined
@@ -131,16 +139,16 @@ function DailyFlow({ unis }: any) {
         </Form>
       </Card>
 
-      {/* Step 2 — Center + pickup + date */}
-      <Card size="small" style={{ marginBottom: 14 }} title={<span><b>٢) المركز ونقطة الالتقاط والتاريخ</b></span>}>
+      {/* Step 2 — Center + pickup/drop-off + date */}
+      <Card size="small" style={{ marginBottom: 14 }} title={<span><b>{step2Title}</b></span>}>
         <Form layout="vertical">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
             <Form.Item label="المركز" required style={{ marginBottom: 8 }}>
               <Select placeholder="اختر المركز" value={center}
                 onChange={(v) => { setCenter(v); setPickupId(undefined) }} options={CENTERS} />
             </Form.Item>
-            <Form.Item label="نقطة الالتقاط" required style={{ marginBottom: 8 }}>
-              <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
+            <Form.Item label={pointFieldLabel} required style={{ marginBottom: 8 }}>
+              <Select placeholder={center ? `اختر ${pointFieldLabel}` : 'اختر المركز أولاً'} disabled={!center}
                 value={pickupId} onChange={setPickupId} showSearch optionFilterProp="label"
                 options={availPickups.map((p: any) => ({ value: p.id, label: `${p.name} — ${p.route}` }))} />
             </Form.Item>
@@ -149,15 +157,20 @@ function DailyFlow({ unis }: any) {
                 disabledDate={(d) => d && d < dayjs().startOf('day')} />
             </Form.Item>
           </div>
-          {noPickups && <Alert type="warning" showIcon message="لا توجد نقاط التقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
-          {selPickup && <Tag icon={<EnvironmentOutlined />} color="blue">الخط: {selPickup.route}</Tag>}
+          {noPickups && <Alert type="warning" showIcon message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
+          {selPickup && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {wantGo && <Tag icon={<CarOutlined />} color="blue">الذهاب: من {pointName} إلى {uniName}</Tag>}
+              {wantRet && <Tag icon={<RollbackOutlined />} color="gold">العودة: من {uniName || destName} إلى {pointName} (نقطة النزول)</Tag>}
+            </div>
+          )}
         </Form>
       </Card>
 
       {/* Step 3 — Going leg */}
       {wantGo && (
         <Card size="small" style={{ marginBottom: 14 }}
-          title={<span><CarOutlined /> <b>٣) الذهاب — الموعد واختيار المقعد</b></span>}>
+          title={<span><CarOutlined /> <b>٣) الذهاب — من مركزك إلى الجامعة</b></span>}>
           <Form layout="vertical">
             <Form.Item label="موعد الذهاب" required style={{ maxWidth: 260 }}>
               <Select placeholder="اختر الموعد" value={goSlot} onChange={setGoSlot} disabled={!routeId}
@@ -177,7 +190,11 @@ function DailyFlow({ unis }: any) {
       {/* Step 4 — Return leg */}
       {wantRet && (
         <Card size="small" style={{ marginBottom: 14 }}
-          title={<span><RollbackOutlined /> <b>{wantGo ? '٤' : '٣'}) العودة — الموعد واختيار المقعد</b></span>}>
+          title={<span><RollbackOutlined /> <b>{wantGo ? '٤' : '٣'}) العودة — من الجامعة إلى مركزك</b></span>}>
+          {selPickup && (
+            <Alert type="info" showIcon style={{ marginBottom: 12 }}
+              message={`رحلة العودة من ${uniName || destName} إلى ${pointName} (نقطة النزول) — عكس اتجاه الذهاب.`} />
+          )}
           <Form layout="vertical">
             <Form.Item label="موعد العودة" required style={{ maxWidth: 260 }}>
               <Select placeholder="اختر موعد العودة" value={retSlot} onChange={setRetSlot} disabled={!routeId}
