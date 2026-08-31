@@ -9,8 +9,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
-  useRoutesQuery, useMorningSlotsQuery, useReturnSlotsQuery, useUniversitiesQuery,
-  usePublicPickupPointsQuery, usePricesQuery, usePickupPointsQuery,
+  useMorningSlotsQuery, useReturnSlotsQuery, useUniversitiesQuery,
+  usePublicPickupPointsQuery, usePricesQuery,
   useSeatmapForQuery, useBookSpecificSeatMutation,
   useCreateSubscriptionMutation, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
 } from '../app/api'
@@ -231,33 +231,37 @@ function DailyFlow({ unis }: any) {
 }
 
 /* ================= Subscription (term / monthly) + inline payment ================= */
-function SubscriptionBooking({ routes, unis }: any) {
-  const [form] = Form.useForm()
+function SubscriptionBooking({ unis }: any) {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const [subType, setSubType] = useState('term')
-  const [routeId, setRouteId] = useState<number>()
+  const [university, setUniversity] = useState<number>()
+  const [center, setCenter] = useState<string>()
+  const [pickupId, setPickupId] = useState<number>()
   const [created, setCreated] = useState<any>(null)
   const [methodId, setMethodId] = useState<number>()
   const [reference, setReference] = useState('')
   const [file, setFile] = useState<any>(null)
 
   const { data: prices } = usePricesQuery({ active: true })
-  const { data: pickups } = usePickupPointsQuery(routeId ? { route: routeId, active: true } : undefined, { skip: !routeId })
+  const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
   const { data: methods } = usePaymentMethodsQuery()
   const { data: accounts } = usePaymentAccountsQuery()
   const [createSub, { isLoading }] = useCreateSubscriptionMutation()
   const [submitPayment, { isLoading: paying }] = useSubmitPaymentMutation()
 
+  const selUni = unis.find((u: any) => u.id === university)
+  const availPickups = (pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination)
+  const selPickup = availPickups.find((p: any) => p.id === pickupId)
+  const routeId: number | undefined = selPickup?.route_id
   const price = prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === subType)?.price
-  const selectedRoute = routes.find((r: any) => r.id === routeId)
-  const destUnis = unis.filter((u: any) => !selectedRoute || u.destination === selectedRoute.destination)
   const account = (accounts?.results || accounts || []).find((a: any) => a.method === methodId)
+  const canCreate = !!(university && center && pickupId && routeId && price !== undefined)
 
-  const create = async (v: any) => {
+  const create = async () => {
     if (!price) { message.error('لا يوجد سعر متاح لهذا الاختيار'); return }
     try {
-      const sub = await createSub({ subscription_type: subType, route: v.route, university: v.university, pickup_point: v.pickup_point, amount: price }).unwrap()
+      const sub = await createSub({ subscription_type: subType, route: routeId, university, pickup_point: pickupId, amount: price }).unwrap()
       setCreated(sub)
     } catch { message.error('تعذر إنشاء الاشتراك') }
   }
@@ -271,8 +275,11 @@ function SubscriptionBooking({ routes, unis }: any) {
 
   if (created?._paid) {
     return <Result status="success" title="تم إرسال إثبات الدفع للمراجعة"
-      subTitle="سيتم تأكيد اشتراكك بعد مراجعة الإدارة. أصحاب الترم يختارون مقعدهم الثابت بعد التأكيد، والشهري يحجز مقعده اليومي بأولوية."
-      extra={[<Button type="primary" key="m" onClick={() => navigate('/my-bookings')}>حجوزاتي والدفع</Button>]} />
+      subTitle="بعد تأكيد الإدارة للدفع سيُخصَّص لك مقعد ثابت للذهاب وآخر للعودة طوال المدة، ويظهر لك «تذكرة الاشتراك». تؤكد حضورك (أو تعتذر) لرحلة الغد يومياً من صفحة «رحلة الغد»."
+      extra={[
+        <Button type="primary" key="t" onClick={() => navigate('/tickets')}>تذكرتي</Button>,
+        <Button key="m" onClick={() => navigate('/my-bookings')}>حجوزاتي والدفع</Button>,
+      ]} />
   }
 
   if (created) {
@@ -302,26 +309,38 @@ function SubscriptionBooking({ routes, unis }: any) {
     )
   }
 
+  const noPickups = center && selUni && availPickups.length === 0
+
   return (
     <div>
       <Alert type="info" showIcon style={{ marginBottom: 16 }}
-        message="اختر نوع الاشتراك والمسار، ثم أكمل الدفع. بعد تأكيد الإدارة: مشترك الترم يختار مقعده الثابت، والشهري يحجز مقعده اليومي بأولوية." />
+        message="اختر نوع الاشتراك والجامعة والمركز ونقطة الالتقاط، ثم أكمل الدفع. بعد تأكيد الإدارة يُخصَّص لك مقعد ثابت للذهاب وآخر للعودة طوال المدة، وتؤكد حضورك لرحلة الغد يومياً." />
       <Radio.Group value={subType} onChange={(e) => setSubType(e.target.value)} optionType="button" buttonStyle="solid" style={{ marginBottom: 16 }}>
         {SUB_TYPES.map((t) => <Radio.Button key={t.value} value={t.value}>{t.label}</Radio.Button>)}
       </Radio.Group>
-      <Form form={form} layout="vertical" onFinish={create} style={{ maxWidth: 520 }}>
-        <Form.Item name="route" label="المسار" rules={[{ required: true }]}>
-          <Select placeholder="اختر المسار" onChange={(v) => { setRouteId(v); form.setFieldsValue({ university: undefined, pickup_point: undefined }) }}
-            options={routes.map((r: any) => ({ value: r.id, label: r.name }))} />
+      <Form layout="vertical" style={{ maxWidth: 560 }}>
+        <Form.Item label="الجامعة" required>
+          <Select placeholder="اختر الجامعة" value={university}
+            onChange={(v) => { setUniversity(v); setPickupId(undefined) }}
+            options={unis.map((u: any) => ({ value: u.id, label: u.name }))} />
         </Form.Item>
-        <Form.Item name="university" label="الجامعة" rules={[{ required: true }]}>
-          <Select placeholder="اختر الجامعة" options={destUnis.map((u: any) => ({ value: u.id, label: u.name }))} />
-        </Form.Item>
-        <Form.Item name="pickup_point" label="نقطة الالتقاط">
-          <Select placeholder="اختر نقطة الالتقاط" allowClear options={(pickups?.results || []).map((p: any) => ({ value: p.id, label: `${p.sequence}. ${p.name}` }))} />
-        </Form.Item>
-        {price !== undefined && <Statistic title="المبلغ المطلوب" value={Number(price)} suffix="ج.م" style={{ marginBottom: 16 }} />}
-        <Button type="primary" htmlType="submit" loading={isLoading}>متابعة الدفع</Button>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Form.Item label="المركز" required>
+            <Select placeholder="اختر المركز" value={center}
+              onChange={(v) => { setCenter(v); setPickupId(undefined) }} options={CENTERS} />
+          </Form.Item>
+          <Form.Item label="نقطة الالتقاط" required>
+            <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
+              value={pickupId} onChange={setPickupId} showSearch optionFilterProp="label"
+              options={availPickups.map((p: any) => ({ value: p.id, label: `${p.name} — ${p.route}` }))} />
+          </Form.Item>
+        </div>
+        {noPickups && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
+        {selPickup && <Tag color="blue" style={{ marginBottom: 12 }}>الخط: {selPickup.route}</Tag>}
+        {price !== undefined
+          ? <Statistic title="المبلغ المطلوب" value={Number(price)} suffix="ج.م" style={{ marginBottom: 16 }} />
+          : (routeId && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="لا يوجد سعر مُسجَّل لهذا الاشتراك على هذا الخط." />)}
+        <Button type="primary" onClick={create} loading={isLoading} disabled={!canCreate}>متابعة الدفع</Button>
       </Form>
     </div>
   )
@@ -330,9 +349,7 @@ function SubscriptionBooking({ routes, unis }: any) {
 /* ================= Unified booking home ================= */
 export default function Book() {
   const [tab, setTab] = useState('daily')
-  const { data: routesQ } = useRoutesQuery({ active: true })
   const { data: unisQ } = useUniversitiesQuery({ active: true })
-  const routes = routesQ?.results || []
   const unis = unisQ?.results || []
 
   return (
@@ -340,7 +357,7 @@ export default function Book() {
       <Tabs activeKey={tab} onChange={setTab} size="large"
         items={[
           { key: 'daily', label: '🚌 حجز يومي', children: <DailyFlow unis={unis} /> },
-          { key: 'sub', label: '🎫 حجز ترم / شهري', children: <SubscriptionBooking routes={routes} unis={unis} /> },
+          { key: 'sub', label: '🎫 حجز ترم / شهري', children: <SubscriptionBooking unis={unis} /> },
           { key: 'tourism', label: '🏖️ رحلات سياحية', children: <TourismRequest /> },
         ]} />
     </Card>

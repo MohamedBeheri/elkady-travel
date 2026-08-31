@@ -147,11 +147,14 @@ def build_seatmap(trip, viewer=None, is_staff=False):
     layout = LAYOUTS[layout_id]
     genders = _seat_gender_map(trip)
 
-    # Term locks on this route/slot, minus students absent on this date.
+    # Subscriber seat locks on this route/slot/direction, minus students not attending on this date.
     locks = {}
-    for lock in TermSeatLock.objects.filter(
-        route=trip.route, morning_slot=trip.morning_slot, active=True,
-    ).select_related('student'):
+    lock_filter = {'route': trip.route, 'active': True, 'direction': trip.direction}
+    if trip.direction == 'return':
+        lock_filter['return_slot'] = trip.return_slot
+    else:
+        lock_filter['morning_slot'] = trip.morning_slot
+    for lock in TermSeatLock.objects.filter(**lock_filter).select_related('student'):
         absent = SeatAbsence.objects.filter(term_lock=lock, date=trip.date).exists()
         if not absent:
             locks[lock.seat_number] = lock
@@ -187,15 +190,22 @@ def build_seatmap(trip, viewer=None, is_staff=False):
     return {'layout': layout, 'seats': seats}
 
 
+def _lock_filter_for(trip):
+    """TermSeatLock filter kwargs matching this trip's route/slot/direction."""
+    f = {'route': trip.route, 'active': True, 'direction': trip.direction}
+    if trip.direction == 'return':
+        f['return_slot'] = trip.return_slot
+    else:
+        f['morning_slot'] = trip.morning_slot
+    return f
+
+
 def _seat_occupied(trip, seat_number, exclude_student=None):
-    """True if the seat is taken (term lock w/o absence, or an active booking)."""
-    lock = TermSeatLock.objects.filter(
-        route=trip.route, morning_slot=trip.morning_slot,
-        seat_number=seat_number, active=True,
-    ).exclude(student=exclude_student).first() if exclude_student else \
-        TermSeatLock.objects.filter(
-            route=trip.route, morning_slot=trip.morning_slot,
-            seat_number=seat_number, active=True).first()
+    """True if the seat is taken (subscriber lock w/o absence, or an active booking)."""
+    lock_q = TermSeatLock.objects.filter(seat_number=seat_number, **_lock_filter_for(trip))
+    if exclude_student:
+        lock_q = lock_q.exclude(student=exclude_student)
+    lock = lock_q.first()
     if lock and not SeatAbsence.objects.filter(term_lock=lock, date=trip.date).exists():
         return True
     q = trip.seat_requests.filter(
@@ -228,13 +238,14 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
 
     if priority_type == 'term':
         existing = TermSeatLock.objects.filter(
-            student=student, route=trip.route, morning_slot=trip.morning_slot, active=True,
+            student=student, **_lock_filter_for(trip),
         ).first()
         if existing:
-            raise ValueError(f'لديك مقعد ترم محجوز بالفعل رقم {existing.seat_number}.')
+            raise ValueError(f'لديك مقعد محجوز بالفعل رقم {existing.seat_number}.')
         lock = TermSeatLock.objects.create(
             student=student, subscription=subscription, route=trip.route,
-            morning_slot=trip.morning_slot, seat_number=seat_number,
+            direction=trip.direction, morning_slot=trip.morning_slot,
+            return_slot=trip.return_slot, seat_number=seat_number,
         )
         return 'term', lock, 'تم حجز مقعدك طوال الترم.'
 
@@ -282,16 +293,81 @@ def release_seat(*, trip, seat_number, by_user=None):
         req.status = SeatRequest.Status.CANCELLED
         req.save(update_fields=['status'])
         return 'freed booking'
-    # Otherwise a term lock → mark student absent for this date only.
-    lock = TermSeatLock.objects.filter(
-        route=trip.route, morning_slot=trip.morning_slot,
-        seat_number=seat_number, active=True,
-    ).first()
+    # Otherwise a subscriber lock → mark student not-attending for this date only.
+    lock = TermSeatLock.objects.filter(seat_number=seat_number, **_lock_filter_for(trip)).first()
     if lock:
         SeatAbsence.objects.get_or_create(term_lock=lock, date=trip.date,
                                           defaults={'created_by': by_user})
         return 'term seat released for the day'
     return 'nothing to release'
+
+
+# ---------------------------------------------------------------------------
+# Subscription fixed-seat assignment (term/monthly) — auto-assigned by admin/system.
+# ---------------------------------------------------------------------------
+
+def _first_free_seat(route, slot, direction, layout, student):
+    """Lowest bookable seat free of other active locks and gender-compatible."""
+    from apps.config_app.models import SeatCapacity
+    taken = set(TermSeatLock.objects.filter(
+        route=route, direction=direction, active=True,
+        **({'return_slot': slot} if direction == 'return' else {'morning_slot': slot}),
+    ).values_list('seat_number', flat=True))
+    genders = {}
+    if direction == 'go':
+        cap = SeatCapacity.objects.filter(route=route, morning_slot=slot).first()
+        if cap:
+            def parse(s):
+                return [int(x) for x in str(s).replace('،', ',').split(',') if x.strip().isdigit()]
+            for n in parse(cap.female_seats):
+                genders[n] = 'female'
+            for n in parse(cap.male_seats):
+                genders[n] = 'male'
+    for n in sorted(seat_set(layout if layout in LAYOUTS else DEFAULT_LAYOUT)):
+        if n in taken:
+            continue
+        g = genders.get(n, '')
+        if g and student.gender and g != student.gender:
+            continue
+        return n
+    return None
+
+
+@transaction.atomic
+def assign_subscription_seats(subscription, *, by_user=None, morning_slot=None,
+                              return_slot=None, go_seat=None, return_seat=None):
+    """Auto-assign the subscriber's fixed going + return seats for the whole period.
+
+    Called when an admin confirms a term/monthly subscription. Slots default to the
+    route's configured morning slot and the first return slot; seats to the lowest
+    free gender-compatible seat. Any prior locks for this subscription are replaced.
+    """
+    from apps.config_app.models import MorningSlot, ReturnSlot, SeatCapacity
+    route = subscription.route
+    student = subscription.student
+    cap = SeatCapacity.objects.filter(route=route).select_related('morning_slot').first()
+    layout = cap.layout if cap else DEFAULT_LAYOUT
+    if not morning_slot:
+        morning_slot = (cap.morning_slot if cap and cap.morning_slot_id
+                        else MorningSlot.objects.filter(active=True).order_by('departure_time').first())
+    if not return_slot:
+        return_slot = ReturnSlot.objects.filter(active=True).order_by('departure_time').first()
+
+    TermSeatLock.objects.filter(subscription=subscription, active=True).update(active=False)
+    created = {}
+    if morning_slot:
+        seat = go_seat or _first_free_seat(route, morning_slot, 'go', layout, student)
+        if seat:
+            created['go'] = TermSeatLock.objects.create(
+                student=student, subscription=subscription, route=route,
+                direction='go', morning_slot=morning_slot, seat_number=seat)
+    if return_slot:
+        seat = return_seat or _first_free_seat(route, return_slot, 'return', layout, student)
+        if seat:
+            created['return'] = TermSeatLock.objects.create(
+                student=student, subscription=subscription, route=route,
+                direction='return', return_slot=return_slot, seat_number=seat)
+    return created
 
 
 def run_daily_allocation(date):

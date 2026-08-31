@@ -136,10 +136,12 @@ class SeatRequest(models.Model):
 
 
 class TermSeatLock(models.Model):
-    """A term subscriber's permanent seat on a route + morning slot.
+    """A term/monthly subscriber's permanent seat on a route + slot.
 
-    The seat stays locked on every daily trip for that route/slot until an admin
-    revokes it. Per-day release (student absent) is handled by SeatAbsence.
+    Applies to both directions: ``direction='go'`` locks a seat on ``morning_slot``,
+    ``direction='return'`` on ``return_slot``. The seat stays locked on every daily
+    trip for that route/slot/direction until an admin revokes it (``active=False``).
+    Per-day release (student not attending) is handled by SeatAbsence.
     """
     student = models.ForeignKey(
         'users.User', on_delete=models.CASCADE, related_name='term_seats',
@@ -150,24 +152,44 @@ class TermSeatLock(models.Model):
         verbose_name=_('الاشتراك'),
     )
     route = models.ForeignKey('config_app.Route', on_delete=models.CASCADE, verbose_name=_('المسار'))
-    morning_slot = models.ForeignKey('config_app.MorningSlot', on_delete=models.CASCADE, verbose_name=_('الموعد'))
+    direction = models.CharField(
+        max_length=6, choices=DailyTrip.Direction.choices, default=DailyTrip.Direction.GO,
+        verbose_name=_('الاتجاه'),
+    )
+    morning_slot = models.ForeignKey(
+        'config_app.MorningSlot', on_delete=models.CASCADE, null=True, blank=True,
+        verbose_name=_('موعد الذهاب'))
+    return_slot = models.ForeignKey(
+        'config_app.ReturnSlot', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='term_seats', verbose_name=_('موعد العودة'))
     seat_number = models.PositiveIntegerField(verbose_name=_('رقم المقعد'))
     active = models.BooleanField(default=True, verbose_name=_('نشط'))
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = _('مقعد ترم مقفول')
-        verbose_name_plural = _('مقاعد الترم المقفولة')
+        verbose_name = _('مقعد مشترك مقفول')
+        verbose_name_plural = _('مقاعد المشتركين المقفولة')
         constraints = [
             models.UniqueConstraint(
                 fields=['route', 'morning_slot', 'seat_number'],
-                condition=models.Q(active=True),
+                condition=models.Q(active=True, direction='go'),
                 name='uniq_active_term_seat',
+            ),
+            models.UniqueConstraint(
+                fields=['route', 'return_slot', 'seat_number'],
+                condition=models.Q(active=True, direction='return'),
+                name='uniq_active_return_term_seat',
             ),
         ]
 
+    @property
+    def slot_label(self):
+        if self.direction == 'return' and self.return_slot_id:
+            return self.return_slot.name
+        return self.morning_slot.name if self.morning_slot_id else '—'
+
     def __str__(self):
-        return f'{self.student} - مقعد {self.seat_number} ({self.route})'
+        return f'{self.student} - مقعد {self.seat_number} ({self.route} {self.get_direction_display()})'
 
 
 class SeatAbsence(models.Model):

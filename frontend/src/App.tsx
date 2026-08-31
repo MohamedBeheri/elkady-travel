@@ -9,6 +9,7 @@ import Explore from './pages/Explore'
 import Book from './pages/Book'
 import MyBookings from './pages/MyBookings'
 import Tickets from './pages/Tickets'
+import Attendance from './pages/Attendance'
 import Profile from './pages/Profile'
 // admin
 import Dashboard from './pages/Dashboard'
@@ -109,7 +110,8 @@ export default function App() {
         <Route path="/my-bookings" element={<MyBookings />} />
         <Route path="/daily" element={<Navigate to="/" replace />} />
         <Route path="/tickets" element={<Tickets />} />
-        <Route path="/return" element={<Navigate to="/" replace />} />
+        <Route path="/attendance" element={<Attendance />} />
+        <Route path="/return" element={<Navigate to="/attendance" replace />} />
         <Route path="/tourism" element={<Navigate to="/" replace />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<Navigate to="/" replace />} />

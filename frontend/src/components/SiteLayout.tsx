@@ -1,7 +1,7 @@
 import { Button, Dropdown, Grid } from 'antd'
 import {
   LoginOutlined, UserAddOutlined, UserOutlined, LogoutOutlined, MenuOutlined,
-  HomeOutlined, CarOutlined, QrcodeOutlined,
+  HomeOutlined, CarOutlined, QrcodeOutlined, ScheduleOutlined,
   DollarOutlined, IdcardOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -10,6 +10,7 @@ import { logout } from '../app/authSlice'
 
 const STUDENT_NAV = [
   { to: '/', label: 'احجز رحلتك', icon: <CarOutlined /> },
+  { to: '/attendance', label: 'رحلة الغد', icon: <ScheduleOutlined /> },
   { to: '/explore', label: 'استكشف الخطوط', icon: <HomeOutlined /> },
   { to: '/my-bookings', label: 'حجوزاتي والدفع', icon: <DollarOutlined /> },
   { to: '/tickets', label: 'تذاكري', icon: <QrcodeOutlined /> },

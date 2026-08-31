@@ -42,14 +42,35 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
-        """Admin verifies payment → booking CONFIRMED (RULE 13)."""
+        """Admin verifies payment → booking CONFIRMED (RULE 13).
+
+        For term/monthly, the system auto-assigns the student's fixed going +
+        return seats for the whole period (admin may override slots/seats).
+        """
         if request.user.role not in STAFF_ROLES:
             return Response(status=403)
         sub = self.get_object()
         sub.approve(request.user)
+
+        seat_msg = ''
+        if sub.subscription_type in ('term', 'monthly'):
+            from apps.operations.services import assign_subscription_seats
+            d = request.data
+            created = assign_subscription_seats(
+                sub, by_user=request.user,
+                go_seat=d.get('go_seat') or None,
+                return_seat=d.get('return_seat') or None,
+            )
+            parts = []
+            if created.get('go'):
+                parts.append(f"ذهاب مقعد {created['go'].seat_number}")
+            if created.get('return'):
+                parts.append(f"عودة مقعد {created['return'].seat_number}")
+            seat_msg = (' — ' + '، '.join(parts)) if parts else ''
+
         notify(sub.student, 'تم تأكيد اشتراكك',
-               f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}',
-               link='/bookings', severity='success')
+               f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}{seat_msg}',
+               link='/tickets', severity='success')
         return Response(SubscriptionSerializer(sub).data)
 
     @action(detail=True, methods=['post'])

@@ -12,7 +12,7 @@ from apps.bookings.models import Subscription
 from apps.config_app.models import MorningSlot, Route, ReturnSlot, SeatCapacity
 from apps.notifications.models import notify
 from .layouts import LAYOUTS, layout_capacity
-from .models import DailyTrip, ReturnBooking, SeatRequest, TermSeatLock
+from .models import DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
 from .serializers import (
     DailyTripSerializer, ReturnBookingSerializer, SeatRequestSerializer,
 )
@@ -27,6 +27,61 @@ from .services import (
 def layouts(request):
     """Vehicle seat layouts (bus50 / hiace15) for the interactive seat map."""
     return Response(LAYOUTS)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def attendance(request):
+    """A subscriber's fixed going/return seats for a date + attendance state.
+
+    Used by the student's «تأكيد رحلة الغد» screen: each fixed seat can be kept
+    (attending) or declined for that single date (frees the seat that day).
+    """
+    user = request.user
+    date = request.query_params.get('date') or (
+        timezone.localdate() + timezone.timedelta(days=1)).isoformat()
+    locks = TermSeatLock.objects.filter(student=user, active=True).select_related(
+        'route', 'morning_slot', 'return_slot', 'subscription')
+    out = []
+    for lock in locks:
+        absent = SeatAbsence.objects.filter(term_lock=lock, date=date).exists()
+        out.append({
+            'lock_id': lock.id,
+            'direction': lock.direction,
+            'direction_display': 'عودة' if lock.direction == 'return' else 'ذهاب',
+            'seat_number': lock.seat_number,
+            'route': lock.route.name,
+            'slot': lock.slot_label,
+            'subscription_type': lock.subscription.subscription_type if lock.subscription_id else '',
+            'attending': not absent,
+        })
+    return Response({'date': date, 'seats': out})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def set_attendance(request):
+    """Student keeps (attending) or declines a fixed seat for one date.
+
+    Declining creates a SeatAbsence → the seat is freed for that date only, while
+    the permanent lock stays for every other day. Re-attending removes the absence.
+    """
+    user = request.user
+    lock_id = request.data.get('lock_id')
+    date = request.data.get('date')
+    attending = request.data.get('attending')
+    if lock_id is None or not date:
+        return Response({'detail': 'البيانات ناقصة'}, status=400)
+    try:
+        lock = TermSeatLock.objects.get(pk=lock_id, student=user, active=True)
+    except TermSeatLock.DoesNotExist:
+        return Response({'detail': 'غير موجود'}, status=404)
+    declining = attending in (False, 'false', 'False', 0, '0', 'no')
+    if declining:
+        SeatAbsence.objects.get_or_create(term_lock=lock, date=date, defaults={'created_by': user})
+        return Response({'attending': False})
+    SeatAbsence.objects.filter(term_lock=lock, date=date).delete()
+    return Response({'attending': True})
 
 
 def _get_or_create_trip(date, route, *, morning_slot=None, return_slot=None, direction='go'):
@@ -301,13 +356,18 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
                 'status_display': r.get_status_display(),
                 'qr': make_qr(payload) if confirmed else '', 'token': r.qr_token,
             })
-        for lock in TermSeatLock.objects.filter(student=user, active=True).select_related('route', 'morning_slot'):
-            payload = f'ELKADY|TERM|مقعد {lock.seat_number}|{lock.route.name}|{lock.morning_slot.name}|{user.full_name}'
+        for lock in TermSeatLock.objects.filter(student=user, active=True).select_related(
+                'route', 'morning_slot', 'return_slot', 'subscription'):
+            dir_label = 'عودة' if lock.direction == 'return' else 'ذهاب'
+            sub_label = lock.subscription.get_subscription_type_display() if lock.subscription_id else 'اشتراك'
+            payload = f'ELKADY|SUB|مقعد {lock.seat_number}|{lock.route.name}|{dir_label}|{lock.slot_label}|{user.full_name}'
             out.append({
                 'kind': 'term', 'id': lock.id, 'seat_number': lock.seat_number,
-                'date': 'طوال الترم', 'route': lock.route.name, 'slot': lock.morning_slot.name,
-                'status': 'confirmed', 'status_display': 'مؤكد (ترم)',
-                'qr': make_qr(payload), 'token': f'TERM-{lock.id}',
+                'date': f'طوال المدة ({sub_label})', 'route': lock.route.name,
+                'direction': lock.direction, 'direction_display': dir_label,
+                'slot': lock.slot_label,
+                'status': 'confirmed', 'status_display': f'مؤكد ({sub_label} - {dir_label})',
+                'qr': make_qr(payload), 'token': f'SUB-{lock.id}',
             })
         return Response(out)
 

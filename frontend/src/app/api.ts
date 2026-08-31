@@ -23,7 +23,7 @@ export const api = createApi({
   tagTypes: [
     'User', 'Route', 'University', 'College', 'Destination', 'Pickup', 'Slot', 'ReturnSlot',
     'Capacity', 'Price', 'PayMethod', 'PayAccount', 'Company',
-    'Subscription', 'DailyTrip', 'SeatRequest', 'ReturnBooking', 'SeatMap', 'Ticket',
+    'Subscription', 'DailyTrip', 'SeatRequest', 'ReturnBooking', 'SeatMap', 'Ticket', 'Attendance',
     'Tourism', 'Quotation', 'Vehicle', 'Notification', 'Dashboard',
     'FVehicle', 'FDriver', 'Assignment', 'Expense', 'Maintenance', 'Fine', 'Audit', 'FleetDash',
   ],
@@ -210,6 +210,13 @@ export const api = createApi({
     myTickets: b.query<any, void>({
       query: () => 'operations/seat-requests/tickets/', providesTags: ['Ticket'],
     }),
+    attendance: b.query<any, { date?: string } | void>({
+      query: (p) => `operations/attendance/${qs(p as any)}`, providesTags: ['Attendance'],
+    }),
+    setAttendance: b.mutation<any, { lock_id: number; date: string; attending: boolean }>({
+      query: (body) => ({ url: 'operations/attendance/set/', method: 'POST', body }),
+      invalidatesTags: ['Attendance', 'SeatMap'],
+    }),
     returnAvailability: b.query<any, { date?: string } | void>({
       query: (p) => `operations/return-bookings/availability/${qs(p as any)}`, providesTags: ['ReturnBooking'],
     }),
@@ -358,6 +365,7 @@ export const {
   useSeatRequestsQuery, useBookSeatMutation, useCancelSeatMutation,
   useLayoutsQuery, useSeatmapForQuery, useSeatmapQuery, useBookSpecificSeatMutation,
   useConfirmSeatMutation, useReleaseSeatMutation, useMyTicketsQuery,
+  useAttendanceQuery, useSetAttendanceMutation,
   useReturnAvailabilityQuery, useReturnBookingsQuery, useBookReturnMutation,
   useChangeReturnMutation, useReturnPassengersQuery,
   useVehicleTypesQuery, useTourismRequestsQuery, useCreateTourismRequestMutation,
