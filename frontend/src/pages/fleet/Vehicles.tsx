@@ -1,6 +1,6 @@
 import { Tag, Select } from 'antd'
 import { useState } from 'react'
-import { useVehicles2Query, useSaveVehicleMutation } from '../../app/api'
+import { useVehicles2Query, useSaveVehicleMutation, useDeleteVehicleMutation } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
 
 const STATUS = [
@@ -14,6 +14,7 @@ export default function Vehicles() {
   const [status, setStatus] = useState<string>()
   const { data, isFetching } = useVehicles2Query({ status })
   const [save] = useSaveVehicleMutation()
+  const [del] = useDeleteVehicleMutation()
 
   return (
     <CrudCard
@@ -21,6 +22,8 @@ export default function Vehicles() {
       rows={data?.results || []}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}
+      onDelete={(id) => del(id).unwrap()}
+      rowName={(r) => r.plate_number}
       toolbar={<Select placeholder="كل الحالات" allowClear style={{ width: 180 }} value={status} onChange={setStatus} options={STATUS} />}
       columns={[
         { title: 'رقم اللوحة', dataIndex: 'plate_number' },

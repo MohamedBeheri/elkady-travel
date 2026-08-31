@@ -15,6 +15,8 @@ interface Props {
   columns: any[]
   fields: Field[]
   onSave: (v: any) => Promise<any>
+  onDelete?: (id: number) => Promise<any>
+  rowName?: (row: any) => string
   loading?: boolean
   toolbar?: React.ReactNode
   addLabel?: string
@@ -23,7 +25,7 @@ interface Props {
   dateFields?: string[]
 }
 
-export default function CrudCard({ title, rows, columns, fields, onSave, loading, toolbar, addLabel = 'إضافة', canEdit = true, rowExtra, dateFields = ['date', 'license_expiry', 'travel_date', 'date_of_birth', 'effective_date', 'end_date'] }: Props) {
+export default function CrudCard({ title, rows, columns, fields, onSave, onDelete, rowName, loading, toolbar, addLabel = 'إضافة', canEdit = true, rowExtra, dateFields = ['date', 'license_expiry', 'travel_date', 'date_of_birth', 'effective_date', 'end_date'] }: Props) {
   const { message } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
@@ -56,6 +58,18 @@ export default function CrudCard({ title, rows, columns, fields, onSave, loading
     } finally { setSaving(false) }
   }
 
+  const remove = (row: any) => {
+    Modal.confirm({
+      title: `حذف «${rowName ? rowName(row) : (row.name || row.full_name || row.plate_number || '')}»؟`,
+      content: 'لا يمكن التراجع عن هذا الإجراء.',
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => {
+        try { await onDelete!(row.id); message.success('تم الحذف') }
+        catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحذف — قد يكون مرتبطاً بسجلات أخرى.') }
+      },
+    })
+  }
+
   const cols = [
     ...columns,
     {
@@ -63,6 +77,7 @@ export default function CrudCard({ title, rows, columns, fields, onSave, loading
         <Space>
           {rowExtra && rowExtra(r)}
           {canEdit && <Button size="small" onClick={() => openModal(r)}>تعديل</Button>}
+          {onDelete && <Button size="small" danger onClick={() => remove(r)}>حذف</Button>}
         </Space>
       ),
     },

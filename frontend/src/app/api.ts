@@ -47,6 +47,9 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: id ? `auth/users/${id}/` : 'auth/users/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['User'],
     }),
+    deleteUser: b.mutation<any, number>({
+      query: (id) => ({ url: `auth/users/${id}/`, method: 'DELETE' }), invalidatesTags: ['User'],
+    }),
 
     // ---- dashboard ----
     dashboard: b.query<any, void>({ query: () => 'dashboard/stats/', providesTags: ['Dashboard'] }),
@@ -61,6 +64,9 @@ export const api = createApi({
     }),
     colleges: b.query<any, Record<string, any> | void>({
       query: (p) => `config/colleges/${qs(p as any)}`, providesTags: ['College'],
+    }),
+    deleteCollege: b.mutation<any, number>({
+      query: (id) => ({ url: `config/colleges/${id}/`, method: 'DELETE' }), invalidatesTags: ['College'],
     }),
     saveCollege: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `config/colleges/${id}/` : 'config/colleges/', method: id ? 'PATCH' : 'POST', body }),
@@ -81,6 +87,9 @@ export const api = createApi({
     }),
     universities: b.query<any, Record<string, any> | void>({
       query: (p) => `config/universities/${qs(p as any)}`, providesTags: ['University'],
+    }),
+    deleteUniversity: b.mutation<any, number>({
+      query: (id) => ({ url: `config/universities/${id}/`, method: 'DELETE' }), invalidatesTags: ['University'],
     }),
     saveUniversity: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `config/universities/${id}/` : 'config/universities/', method: id ? 'PATCH' : 'POST', body }),
@@ -126,12 +135,18 @@ export const api = createApi({
     prices: b.query<any, Record<string, any> | void>({
       query: (p) => `config/prices/${qs(p as any)}`, providesTags: ['Price'],
     }),
+    deletePrice: b.mutation<any, number>({
+      query: (id) => ({ url: `config/prices/${id}/`, method: 'DELETE' }), invalidatesTags: ['Price'],
+    }),
     savePrice: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `config/prices/${id}/` : 'config/prices/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['Price'],
     }),
     paymentMethods: b.query<any, void>({ query: () => 'config/payment-methods/', providesTags: ['PayMethod'] }),
     paymentAccounts: b.query<any, void>({ query: () => 'config/payment-accounts/', providesTags: ['PayAccount'] }),
+    deletePaymentAccount: b.mutation<any, number>({
+      query: (id) => ({ url: `config/payment-accounts/${id}/`, method: 'DELETE' }), invalidatesTags: ['PayAccount'],
+    }),
     savePaymentAccount: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `config/payment-accounts/${id}/` : 'config/payment-accounts/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['PayAccount'],
@@ -266,6 +281,9 @@ export const api = createApi({
     vehicles2: b.query<any, Record<string, any> | void>({
       query: (p) => `fleet/vehicles/${qs(p as any)}`, providesTags: ['FVehicle'],
     }),
+    deleteVehicle: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/vehicles/${id}/`, method: 'DELETE' }), invalidatesTags: ['FVehicle'],
+    }),
     saveVehicle: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `fleet/vehicles/${id}/` : 'fleet/vehicles/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['FVehicle', 'FleetDash'],
@@ -273,6 +291,9 @@ export const api = createApi({
     vehicleHistory: b.query<any, number>({ query: (id) => `fleet/vehicles/${id}/history/` }),
     drivers: b.query<any, Record<string, any> | void>({
       query: (p) => `fleet/drivers/${qs(p as any)}`, providesTags: ['FDriver'],
+    }),
+    deleteDriver: b.mutation<any, number>({
+      query: (id) => ({ url: `fleet/drivers/${id}/`, method: 'DELETE' }), invalidatesTags: ['FDriver'],
     }),
     saveDriver: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `fleet/drivers/${id}/` : 'fleet/drivers/', method: id ? 'PATCH' : 'POST', body }),
@@ -346,18 +367,18 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useRegisterMutation, useMeQuery, useUpdateProfileMutation,
-  useUsersQuery, useSaveUserMutation, useDashboardQuery, useDashboardChartsQuery, useExploreQuery, usePublicUniversitiesQuery,
+  useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useDashboardQuery, useDashboardChartsQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
-  usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation,
+  usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation,
   useDestinationsQuery, useSaveDestinationMutation,
-  useUniversitiesQuery, useSaveUniversityMutation,
+  useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, usePublicPickupPointsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
   useCapacitiesQuery, useSaveCapacityMutation,
-  usePricesQuery, useSavePriceMutation,
-  usePaymentMethodsQuery, usePaymentAccountsQuery, useSavePaymentAccountMutation,
+  usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
+  usePaymentMethodsQuery, usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation,
   useCompanyQuery,
   useSubscriptionsQuery, useCreateSubscriptionMutation, useSubmitPaymentMutation,
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
@@ -373,8 +394,8 @@ export const {
   useCreateQuotationMutation, useSendQuotationMutation,
   useUnreadNotificationsQuery, useMarkAllReadMutation,
   // fleet
-  useFleetDashboardQuery, useVehicles2Query, useSaveVehicleMutation, useVehicleHistoryQuery,
-  useDriversQuery, useSaveDriverMutation, useDriverAlertsQuery, useDriverReportQuery,
+  useFleetDashboardQuery, useVehicles2Query, useSaveVehicleMutation, useDeleteVehicleMutation, useVehicleHistoryQuery,
+  useDriversQuery, useSaveDriverMutation, useDeleteDriverMutation, useDriverAlertsQuery, useDriverReportQuery,
   useAssignmentsQuery, useSaveAssignmentMutation, useMyTodayQuery, useStartTripMutation, useCompleteTripMutation,
   useExpensesQuery, useCreateExpenseMutation, useApproveExpenseMutation, useRejectExpenseMutation,
   useMaintenanceQuery, useSaveMaintenanceMutation, useFinesQuery, useSaveFineMutation,

@@ -44,6 +44,12 @@ class UserViewSet(viewsets.ModelViewSet):
             return qs.filter(pk=self.request.user.pk)
         return qs
 
+    def destroy(self, request, *args, **kwargs):
+        from config.permissions import STAFF_ROLES
+        if request.user.role not in STAFF_ROLES:
+            return Response({'detail': 'غير مصرح بالحذف'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=False, methods=['get'])
     def me(self, request):
         return Response(UserSerializer(request.user).data)

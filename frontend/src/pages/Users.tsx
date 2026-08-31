@@ -1,7 +1,7 @@
-import { Card, Table, Tag, Button, Modal, Form, Input, Select, App as AntdApp } from 'antd'
+import { Card, Table, Tag, Button, Modal, Form, Input, Select, Space, App as AntdApp } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useState } from 'react'
-import { useUsersQuery, useSaveUserMutation } from '../app/api'
+import { useUsersQuery, useSaveUserMutation, useDeleteUserMutation } from '../app/api'
 
 const ROLE_OPTS = [
   { value: 'admin', label: 'مدير عام' },
@@ -19,11 +19,23 @@ export default function Users() {
   const [role, setRole] = useState<string>()
   const { data, isFetching } = useUsersQuery(role ? { role } : undefined)
   const [save] = useSaveUserMutation()
+  const [del] = useDeleteUserMutation()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
 
   const openModal = (row?: any) => { setEditing(row || null); form.resetFields(); if (row) form.setFieldsValue(row); setOpen(true) }
+  const remove = (row: any) => {
+    Modal.confirm({
+      title: `حذف «${row.full_name || row.username}»؟`,
+      content: 'سيتم حذف الحساب وكل بياناته المرتبطة نهائياً. لا يمكن التراجع.',
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => {
+        try { await del(row.id).unwrap(); message.success('تم الحذف') }
+        catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحذف') }
+      },
+    })
+  }
   const submit = async () => {
     const v = await form.validateFields()
     await save({ ...(editing ? { id: editing.id } : {}), ...v }).unwrap()
@@ -47,7 +59,12 @@ export default function Users() {
           { title: 'الدور', dataIndex: 'role_display', render: (v, r: any) => <Tag color={ROLE_COLOR[r.role] || 'blue'}>{v}</Tag> },
           { title: 'الهاتف', dataIndex: 'phone', render: (v) => v || '—' },
           { title: 'نشط', dataIndex: 'is_active', render: (v) => v ? <Tag color="green">نعم</Tag> : <Tag>لا</Tag> },
-          { title: '', render: (_, r: any) => r.role !== 'student' && <Button size="small" onClick={() => openModal(r)}>تعديل</Button> },
+          { title: '', render: (_, r: any) => (
+            <Space>
+              {r.role !== 'student' && <Button size="small" onClick={() => openModal(r)}>تعديل</Button>}
+              <Button size="small" danger onClick={() => remove(r)}>حذف</Button>
+            </Space>
+          ) },
         ]}
       />
       <Modal title="موظف" open={open} onOk={submit} onCancel={() => setOpen(false)}>

@@ -6,13 +6,13 @@ import dayjs from 'dayjs'
 import {
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, useDestinationsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
-  useUniversitiesQuery, useSaveUniversityMutation,
-  useCollegesQuery, useSaveCollegeMutation, useLayoutsQuery,
-  usePricesQuery, useSavePriceMutation,
+  useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
+  useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation, useLayoutsQuery,
+  usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
   useCapacitiesQuery, useSaveCapacityMutation,
-  usePaymentAccountsQuery, useSavePaymentAccountMutation, usePaymentMethodsQuery,
+  usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation, usePaymentMethodsQuery,
 } from '../app/api'
 
 const TYPE_OPTS = [{ value: 'term', label: 'ترم' }, { value: 'monthly', label: 'شهري' }, { value: 'daily', label: 'يومي' }]
@@ -123,11 +123,23 @@ function RoutesTab() {
 }
 
 /* ---------- generic simple CRUD tab ---------- */
-function SimpleTab({ title, rows, columns, fields, onSave, extraAction }: any) {
+function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, extraAction }: any) {
   const { message } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
+
+  const remove = (row: any) => {
+    Modal.confirm({
+      title: `حذف «${rowLabel ? rowLabel(row) : (row.name || row.holder_name || '')}»؟`,
+      content: 'لا يمكن التراجع عن هذا الإجراء.',
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => {
+        try { await onDelete(row.id).unwrap(); message.success('تم الحذف') }
+        catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحذف — قد يكون مرتبطاً بسجلات أخرى.') }
+      },
+    })
+  }
 
   const openModal = (row?: any) => {
     setEditing(row || null); form.resetFields()
@@ -148,6 +160,7 @@ function SimpleTab({ title, rows, columns, fields, onSave, extraAction }: any) {
           <Space>
             {extraAction && extraAction(r)}
             <Button size="small" onClick={() => openModal(r)}>تعديل</Button>
+            {onDelete && <Button size="small" danger onClick={() => remove(r)}>حذف</Button>}
           </Space>
         ) }]} />
       <Modal title={title} open={open} onOk={submit} onCancel={() => setOpen(false)}>
@@ -173,7 +186,8 @@ function UniversitiesTab() {
   const { data } = useUniversitiesQuery()
   const { data: dests } = useDestinationsQuery()
   const [save] = useSaveUniversityMutation()
-  return <SimpleTab title="جامعة" rows={data?.results || []} onSave={save}
+  const [del] = useDeleteUniversityMutation()
+  return <SimpleTab title="جامعة" rows={data?.results || []} onSave={save} onDelete={del}
     columns={[{ title: 'الاسم', dataIndex: 'name' }, { title: 'الوجهة', dataIndex: 'destination_name' }, { title: 'نشط', dataIndex: 'active', render: (v: any) => v ? 'نعم' : 'لا' }]}
     fields={[
       { name: 'name', label: 'الاسم', required: true },
@@ -187,7 +201,8 @@ function CollegesTab() {
   const { data } = useCollegesQuery()
   const { data: unis } = useUniversitiesQuery({ active: true })
   const [save] = useSaveCollegeMutation()
-  return <SimpleTab title="كلية" rows={data?.results || []} onSave={save}
+  const [del] = useDeleteCollegeMutation()
+  return <SimpleTab title="كلية" rows={data?.results || []} onSave={save} onDelete={del}
     columns={[{ title: 'الكلية', dataIndex: 'name' }, { title: 'الجامعة', dataIndex: 'university_name' }, { title: 'نشط', dataIndex: 'active', render: (v: any) => v ? 'نعم' : 'لا' }]}
     fields={[
       { name: 'name', label: 'اسم الكلية', required: true },
@@ -200,7 +215,9 @@ function PricesTab() {
   const { data } = usePricesQuery()
   const { data: routes } = useRoutesQuery({ active: true })
   const [save] = useSavePriceMutation()
-  return <SimpleTab title="سعر" rows={data?.results || []} onSave={save}
+  const [del] = useDeletePriceMutation()
+  return <SimpleTab title="سعر" rows={data?.results || []} onSave={save} onDelete={del}
+    rowLabel={(r: any) => `${r.type_display} — ${r.route_name}`}
     columns={[{ title: 'النوع', dataIndex: 'type_display' }, { title: 'المسار', dataIndex: 'route_name' }, { title: 'السعر', dataIndex: 'price' }, { title: 'من', dataIndex: 'effective_date' }, { title: 'نشط', dataIndex: 'active', render: (v: any) => v ? 'نعم' : 'لا' }]}
     fields={[
       { name: 'subscription_type', label: 'نوع الاشتراك', type: 'select', required: true, options: TYPE_OPTS },
@@ -272,7 +289,9 @@ function PaymentsTab() {
   const { data } = usePaymentAccountsQuery()
   const { data: methods } = usePaymentMethodsQuery()
   const [save] = useSavePaymentAccountMutation()
-  return <SimpleTab title="حساب استلام" rows={data?.results || data || []} onSave={save}
+  const [del] = useDeletePaymentAccountMutation()
+  return <SimpleTab title="حساب استلام" rows={data?.results || data || []} onSave={save} onDelete={del}
+    rowLabel={(r: any) => `${r.method_name} — ${r.holder_name}`}
     columns={[{ title: 'الوسيلة', dataIndex: 'method_name' }, { title: 'صاحب الحساب', dataIndex: 'holder_name' }, { title: 'الرقم', dataIndex: 'number' }]}
     fields={[
       { name: 'method', label: 'الوسيلة', type: 'select', required: true, options: (methods?.results || methods || []).map((m: any) => ({ value: m.id, label: m.name })) },

@@ -1,6 +1,6 @@
 import { Tag, Select, Alert } from 'antd'
 import { useState } from 'react'
-import { useDriversQuery, useSaveDriverMutation, useDriverAlertsQuery } from '../../app/api'
+import { useDriversQuery, useSaveDriverMutation, useDeleteDriverMutation, useDriverAlertsQuery } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
 
 const STATUS = [
@@ -17,6 +17,7 @@ export default function Drivers() {
   const { data, isFetching } = useDriversQuery({ status })
   const { data: alerts } = useDriverAlertsQuery()
   const [save] = useSaveDriverMutation()
+  const [del] = useDeleteDriverMutation()
 
   return (
     <div>
@@ -30,6 +31,8 @@ export default function Drivers() {
         rows={data?.results || []}
         loading={isFetching}
         onSave={(v) => save(v).unwrap()}
+        onDelete={(id) => del(id).unwrap()}
+        rowName={(r) => r.full_name}
         toolbar={<Select placeholder="كل الحالات" allowClear style={{ width: 180 }} value={status} onChange={setStatus} options={STATUS} />}
         columns={[
           { title: 'الاسم', dataIndex: 'full_name' },
