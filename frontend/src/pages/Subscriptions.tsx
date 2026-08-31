@@ -36,20 +36,27 @@ function waPhone(raw?: string) {
 }
 
 function buildWhatsApp(r: any) {
+  // Prefix every line with a Right-to-Left Mark so mixed Arabic/Latin/number
+  // content stays RTL and each field renders correctly on its own line.
+  const rlm = '‏'
+  const L = (s: string) => rlm + s
+  const route = String(r.route_name || '').replace(/\s*[←→]\s*/g, ' - ')
+  const amount = Number(r.amount || 0).toLocaleString('ar-EG')
   const lines = [
-    `أهلا بكم يا ${r.student_name || ''} في شركة القاضي للرحلات 🚌`,
+    L(`أهلاً بك يا ${r.student_name || ''} في شركة القاضي للرحلات`),
     '',
-    'تفاصيل اشتراككم معنا:',
-    `• نوع الاشتراك: ${r.type_display || ''}`,
-    `• خط السير: ${r.route_name || ''}`,
-    `• الوجهة: ${r.destination_name || ''}`,
-    `• الجامعة: ${r.university_name || ''}`,
-    `• نقطة الالتقاط: ${r.pickup_name || '—'}`,
-    `• المبلغ: ${Number(r.amount || 0).toLocaleString()} ج.م`,
-    `• طريقة الدفع: ${r.method_name || '—'}`,
-    `• حالة الحجز: ${r.status_display || ''}`,
+    L('تفاصيل اشتراكك معنا:'),
+    L(`- نوع الاشتراك: ${r.type_display || '—'}`),
+    L(`- خط السير: ${route || '—'}`),
+    L(`- الوجهة: ${r.destination_name || '—'}`),
+    L(`- الجامعة: ${r.university_name || '—'}`),
+    L(`- المركز: ${r.pickup_center_display || '—'}`),
+    L(`- نقطة الالتقاط: ${r.pickup_name || '—'}`),
+    L(`- المبلغ: ${amount} جنيه`),
+    L(`- طريقة الدفع: ${r.method_name || '—'}`),
+    L(`- حالة الحجز: ${r.status_display || '—'}`),
     '',
-    'شكراً لاختياركم القاضي — ELKADY TRAVEL ✨',
+    L('شكراً لاختيارك القاضي لخدمات النقل والرحلات.'),
   ]
   return lines.join('\n')
 }
