@@ -104,30 +104,49 @@ def public_colleges(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def public_pickup_points(request):
-    """Public pickup points, filtered by center, incl. per-slot pickup/drop times."""
-    from apps.config_app.models import PickupTime
+    """Public pickup points, filtered by center, incl. per-slot pickup/drop times.
+
+    A physical stop (e.g. "النساجون") may exist as multiple PickupPoint rows —
+    one per route that serves it. For the public dropdown we collapse them by
+    (center, normalized-name) so the student sees each place once. Times from
+    every duplicate row are merged, so the chosen row still has all slot times.
+    """
+    import unicodedata, re
+    from apps.config_app.models import PickupTime  # noqa: F401  (kept for compat)
     qs = PickupPoint.objects.filter(active=True, route__active=True).select_related(
         'route', 'route__destination').prefetch_related('times')
     center = request.query_params.get('center')
     if center:
         qs = qs.filter(center=center)
-    out = []
-    for p in qs.order_by('sequence', 'name'):
-        go_times, ret_times = {}, {}
+
+    def norm(s: str) -> str:
+        # NFKC + strip diacritics/tatweel + collapse whitespace, so
+        # "النساجون" vs "الْنَسَّاجُون " map to the same key.
+        s = unicodedata.normalize('NFKC', (s or '')).strip()
+        s = ''.join(c for c in s if unicodedata.category(c) != 'Mn' and c != 'ـ')
+        return re.sub(r'\s+', ' ', s)
+
+    grouped: dict = {}
+    for p in qs.order_by('sequence', 'name', 'id'):
+        key = (p.center or '', norm(p.name))
+        row = grouped.get(key)
+        if row is None:
+            row = {
+                'id': p.id, 'name': p.name, 'center': p.center,
+                'route': p.route.name, 'route_id': p.route_id,
+                'seat_selection': p.route.seat_selection_enabled,
+                'destination': p.route.destination_id,
+                'destination_name': p.route.destination.name if p.route.destination_id else '',
+                'sequence': p.sequence, 'go_times': {}, 'return_times': {},
+            }
+            grouped[key] = row
         for t in p.times.all():
             if t.direction == 'return' and t.return_slot_id:
-                ret_times[t.return_slot_id] = t.time.strftime('%H:%M')
+                row['return_times'].setdefault(t.return_slot_id, t.time.strftime('%H:%M'))
             elif t.direction == 'go' and t.morning_slot_id:
-                go_times[t.morning_slot_id] = t.time.strftime('%H:%M')
-        out.append({
-            'id': p.id, 'name': p.name, 'center': p.center,
-            'route': p.route.name, 'route_id': p.route_id,
-            'seat_selection': p.route.seat_selection_enabled,
-            'destination': p.route.destination_id,
-            'destination_name': p.route.destination.name if p.route.destination_id else '',
-            'sequence': p.sequence, 'go_times': go_times, 'return_times': ret_times,
-        })
-    return Response(out)
+                row['go_times'].setdefault(t.morning_slot_id, t.time.strftime('%H:%M'))
+
+    return Response(list(grouped.values()))
 
 
 @api_view(['GET'])
