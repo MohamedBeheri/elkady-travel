@@ -23,7 +23,7 @@ export const api = createApi({
   tagTypes: [
     'User', 'Route', 'University', 'College', 'Destination', 'Pickup', 'Slot', 'ReturnSlot',
     'Capacity', 'Price', 'PayMethod', 'PayAccount', 'Company',
-    'Subscription', 'DailyTrip', 'SeatRequest', 'ReturnBooking', 'SeatMap', 'Ticket', 'Attendance',
+    'Subscription', 'DailyTrip', 'SeatRequest', 'ReturnBooking', 'SeatMap', 'Ticket', 'Attendance', 'PickupTime',
     'Tourism', 'Quotation', 'Vehicle', 'Notification', 'Dashboard',
     'FVehicle', 'FDriver', 'Assignment', 'Expense', 'Maintenance', 'Fine', 'Audit', 'FleetDash',
   ],
@@ -116,6 +116,13 @@ export const api = createApi({
     deletePickup: b.mutation<any, number>({
       query: (id) => ({ url: `config/pickup-points/${id}/`, method: 'DELETE' }),
       invalidatesTags: ['Pickup', 'Route'],
+    }),
+    pickupTimesMatrix: b.query<any, { route: number; direction: string; slot: number }>({
+      query: (p) => `config/pickup-times/matrix/${qs(p as any)}`, providesTags: ['PickupTime'],
+    }),
+    savePickupTimes: b.mutation<any, { direction: string; slot: number; times: any[] }>({
+      query: (body) => ({ url: 'config/pickup-times/bulk/', method: 'POST', body }),
+      invalidatesTags: ['PickupTime'],
     }),
     morningSlots: b.query<any, void>({ query: () => 'config/morning-slots/', providesTags: ['Slot'] }),
     saveMorningSlot: b.mutation<any, any>({
@@ -374,6 +381,7 @@ export const {
   useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, usePublicPickupPointsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
+  usePickupTimesMatrixQuery, useSavePickupTimesMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
   useCapacitiesQuery, useSaveCapacityMutation,

@@ -182,9 +182,16 @@ function DailyFlow({ unis }: any) {
           <Form layout="vertical">
             <Form.Item label="موعد الذهاب" required style={{ maxWidth: 260 }}>
               <Select placeholder="اختر الموعد" value={goSlot} onChange={setGoSlot} disabled={!routeId}
-                options={(mSlots?.results || mSlots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
+                options={(mSlots?.results || mSlots || []).map((s: any) => ({
+                  value: s.id,
+                  label: selPickup?.go_times?.[s.id] ? `${s.name} — التقاطك ${selPickup.go_times[s.id]}` : s.name,
+                }))} />
             </Form.Item>
           </Form>
+          {goSlot && selPickup?.go_times?.[goSlot] && (
+            <Alert type="info" showIcon style={{ marginBottom: 12 }}
+              message={`⏰ موعد التقاطك من ${pointName}: ${selPickup.go_times[goSlot]}`} />
+          )}
           {!seatSelection
             ? goSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعدك تلقائياً لهذه الرحلة (اختيار المقاعد غير مفعّل لهذا الخط)." />
             : goQuery && (goFetch ? <Spin /> : goMap && (
@@ -208,9 +215,16 @@ function DailyFlow({ unis }: any) {
           <Form layout="vertical">
             <Form.Item label="موعد العودة" required style={{ maxWidth: 260 }}>
               <Select placeholder="اختر موعد العودة" value={retSlot} onChange={setRetSlot} disabled={!routeId}
-                options={(rSlots?.results || rSlots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
+                options={(rSlots?.results || rSlots || []).map((s: any) => ({
+                  value: s.id,
+                  label: selPickup?.return_times?.[s.id] ? `${s.name} — نزولك ${selPickup.return_times[s.id]}` : s.name,
+                }))} />
             </Form.Item>
           </Form>
+          {retSlot && selPickup?.return_times?.[retSlot] && (
+            <Alert type="info" showIcon style={{ marginBottom: 12 }}
+              message={`⏰ موعد نزولك في ${pointName}: ${selPickup.return_times[retSlot]}`} />
+          )}
           {!seatSelection
             ? retSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعد العودة تلقائياً (اختيار المقاعد غير مفعّل لهذا الخط)." />
             : retQuery && (retFetch ? <Spin /> : retMap && (

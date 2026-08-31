@@ -104,20 +104,30 @@ def public_colleges(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def public_pickup_points(request):
-    """Public pickup points, filtered by center (for the sign-up address)."""
-    qs = PickupPoint.objects.filter(active=True, route__active=True).select_related('route', 'route__destination')
+    """Public pickup points, filtered by center, incl. per-slot pickup/drop times."""
+    from apps.config_app.models import PickupTime
+    qs = PickupPoint.objects.filter(active=True, route__active=True).select_related(
+        'route', 'route__destination').prefetch_related('times')
     center = request.query_params.get('center')
     if center:
         qs = qs.filter(center=center)
-    return Response([
-        {'id': p.id, 'name': p.name, 'center': p.center,
-         'route': p.route.name, 'route_id': p.route_id,
-         'seat_selection': p.route.seat_selection_enabled,
-         'destination': p.route.destination_id,
-         'destination_name': p.route.destination.name if p.route.destination_id else '',
-         'sequence': p.sequence}
-        for p in qs.order_by('sequence', 'name')
-    ])
+    out = []
+    for p in qs.order_by('sequence', 'name'):
+        go_times, ret_times = {}, {}
+        for t in p.times.all():
+            if t.direction == 'return' and t.return_slot_id:
+                ret_times[t.return_slot_id] = t.time.strftime('%H:%M')
+            elif t.direction == 'go' and t.morning_slot_id:
+                go_times[t.morning_slot_id] = t.time.strftime('%H:%M')
+        out.append({
+            'id': p.id, 'name': p.name, 'center': p.center,
+            'route': p.route.name, 'route_id': p.route_id,
+            'seat_selection': p.route.seat_selection_enabled,
+            'destination': p.route.destination_id,
+            'destination_name': p.route.destination.name if p.route.destination_id else '',
+            'sequence': p.sequence, 'go_times': go_times, 'return_times': ret_times,
+        })
+    return Response(out)
 
 
 @api_view(['GET'])

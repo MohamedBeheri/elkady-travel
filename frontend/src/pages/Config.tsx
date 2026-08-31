@@ -1,11 +1,12 @@
-import { Card, Tabs, Table, Button, Modal, Form, Input, Select, InputNumber, Switch, DatePicker, Tag, Space, Drawer, App as AntdApp } from 'antd'
+import { Card, Tabs, Table, Button, Modal, Form, Input, Select, InputNumber, Switch, DatePicker, Tag, Space, Drawer, Segmented, App as AntdApp } from 'antd'
 import SeatGenderEditor from '../components/SeatGenderEditor'
 import { PlusOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 import {
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, useDestinationsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
+  usePickupTimesMatrixQuery, useSavePickupTimesMutation,
   useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
   useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation, useLayoutsQuery,
   usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
@@ -314,12 +315,81 @@ function PaymentsTab() {
     ]} />
 }
 
+/* ---------- Per-point times matrix (admin sets each point's time under each slot) ---------- */
+function PickupTimesTab() {
+  const { message } = AntdApp.useApp()
+  const { data: routes } = useRoutesQuery({ active: true, page_size: 1000 })
+  const { data: mslots } = useMorningSlotsQuery()
+  const { data: rslots } = useReturnSlotsQuery()
+  const [routeId, setRouteId] = useState<number>()
+  const [direction, setDirection] = useState<'go' | 'return'>('go')
+  const [slot, setSlot] = useState<number>()
+  const [edited, setEdited] = useState<Record<number, string>>({})
+
+  const { data: matrix, isFetching } = usePickupTimesMatrixQuery(
+    { route: routeId as number, direction, slot: slot as number },
+    { skip: !routeId || !slot })
+  const [saveTimes, { isLoading }] = useSavePickupTimesMutation()
+
+  useEffect(() => {
+    const m: Record<number, string> = {}
+    ;(matrix || []).forEach((r: any) => { if (r.time) m[r.pickup_point] = r.time })
+    setEdited(m)
+  }, [matrix])
+
+  const slots = direction === 'return' ? (rslots?.results || rslots || []) : (mslots?.results || mslots || [])
+  const reset = (fn: () => void) => { fn(); setSlot(undefined) }
+
+  const save = async () => {
+    const times = (matrix || []).map((r: any) => ({ pickup_point: r.pickup_point, time: edited[r.pickup_point] || '' }))
+    try { await saveTimes({ direction, slot: slot as number, times }).unwrap(); message.success('تم حفظ مواعيد النقاط') }
+    catch { message.error('تعذّر الحفظ') }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+        <Select placeholder="المسار" style={{ width: 260 }} value={routeId}
+          onChange={(v) => reset(() => setRouteId(v))}
+          options={(routes?.results || []).map((r: any) => ({ value: r.id, label: r.name }))} />
+        <Segmented value={direction} onChange={(v) => reset(() => setDirection(v as any))}
+          options={[{ value: 'go', label: 'ذهاب' }, { value: 'return', label: 'عودة' }]} />
+        <Select placeholder="الرحلة (الموعد)" style={{ width: 160 }} value={slot} onChange={setSlot} disabled={!routeId}
+          options={slots.map((s: any) => ({ value: s.id, label: s.name }))} />
+        {routeId && slot && <Button type="primary" loading={isLoading} onClick={save}>حفظ كل المواعيد</Button>}
+      </div>
+
+      {!routeId || !slot ? (
+        <div style={{ color: '#94a3b8', padding: 20, textAlign: 'center' }}>اختر المسار والاتجاه والرحلة لعرض نقاطها وتحديد مواعيدها.</div>
+      ) : (
+        <>
+          <div style={{ color: '#64748b', fontSize: 13, marginBottom: 8 }}>
+            حدّد وقت مرور الباص على كل نقطة تحت هذه الرحلة. اترك الوقت فارغاً إذا كانت النقطة لا تخدمها هذه الرحلة.
+          </div>
+          <Table rowKey="pickup_point" loading={isFetching} dataSource={matrix || []} scroll={{ x: 'max-content' }}
+            pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['20', '50', '100', '300'], showTotal: (t) => `الإجمالي: ${t}` }}
+            columns={[
+              { title: '#', dataIndex: 'sequence', width: 60 },
+              { title: 'نقطة الالتقاط', dataIndex: 'name' },
+              { title: 'المركز', dataIndex: 'center_display', render: (v) => v || '—' },
+              { title: direction === 'return' ? 'وقت النزول' : 'وقت الالتقاط', width: 160, render: (_, r: any) => (
+                <Input type="time" style={{ width: 130 }} value={edited[r.pickup_point] || ''}
+                  onChange={(e) => setEdited((p) => ({ ...p, [r.pickup_point]: e.target.value }))} />
+              ) },
+            ]} />
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function Config() {
   return (
     <Card title="الإعدادات والتهيئة">
       <Tabs
         items={[
           { key: 'routes', label: 'المسارات ونقاط الالتقاط', children: <RoutesTab /> },
+          { key: 'pickup-times', label: 'مواعيد النقاط', children: <PickupTimesTab /> },
           { key: 'unis', label: 'الجامعات', children: <UniversitiesTab /> },
           { key: 'colleges', label: 'الكليات', children: <CollegesTab /> },
           { key: 'prices', label: 'الأسعار', children: <PricesTab /> },

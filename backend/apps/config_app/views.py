@@ -105,3 +105,63 @@ def company_settings(request):
         ser.save()
         return Response(ser.data)
     return Response(CompanySettingsSerializer(obj).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pickup_times_matrix(request):
+    """All pickup points of a route + their time for a given slot/direction.
+
+    Query: route, direction (go|return), slot (morning_slot or return_slot id).
+    Returns every point (ordered by sequence) with its saved time (or null).
+    """
+    from .models import PickupTime
+    route_id = request.query_params.get('route')
+    direction = request.query_params.get('direction', 'go')
+    slot_id = request.query_params.get('slot')
+    if not (route_id and slot_id):
+        return Response({'detail': 'route و slot مطلوبان'}, status=400)
+    slot_field = 'return_slot_id' if direction == 'return' else 'morning_slot_id'
+    times = {
+        t.pickup_point_id: t.time.strftime('%H:%M')
+        for t in PickupTime.objects.filter(**{'direction': direction, slot_field: slot_id},
+                                           pickup_point__route_id=route_id)
+    }
+    points = PickupPoint.objects.filter(route_id=route_id, active=True).order_by('sequence', 'name')
+    return Response([
+        {'pickup_point': p.id, 'name': p.name, 'sequence': p.sequence,
+         'center': p.center, 'center_display': p.get_center_display(),
+         'time': times.get(p.id)}
+        for p in points
+    ])
+
+
+@api_view(['POST'])
+@permission_classes([IsStaff])
+def pickup_times_bulk(request):
+    """Upsert times for many points at once (empty/blank time removes the row)."""
+    from datetime import datetime
+    from .models import PickupTime
+    direction = request.data.get('direction', 'go')
+    slot_id = request.data.get('slot')
+    items = request.data.get('times', [])
+    if not slot_id:
+        return Response({'detail': 'slot مطلوب'}, status=400)
+    slot_field = 'return_slot_id' if direction == 'return' else 'morning_slot_id'
+    saved, removed = 0, 0
+    for it in items:
+        pp = it.get('pickup_point')
+        raw = (it.get('time') or '').strip()
+        if not pp:
+            continue
+        key = {'pickup_point_id': pp, 'direction': direction, slot_field: slot_id}
+        if not raw:
+            removed += PickupTime.objects.filter(**key).delete()[0]
+            continue
+        try:
+            t = datetime.strptime(raw, '%H:%M').time()
+        except ValueError:
+            continue
+        PickupTime.objects.update_or_create(**key, defaults={'time': t})
+        saved += 1
+    return Response({'saved': saved, 'removed': removed})

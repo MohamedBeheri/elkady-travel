@@ -112,6 +112,46 @@ class PickupPoint(models.Model):
         return f'{self.name} ({self.route.origin_label})'
 
 
+class PickupTime(models.Model):
+    """The time the bus passes a specific pickup point under a specific slot.
+
+    Going: keyed on (pickup_point, morning_slot) — the pickup time on that point.
+    Return: keyed on (pickup_point, return_slot) — the drop-off time on that point.
+    A point served by two morning slots (e.g. 06:00 & 09:00) has two rows; a point
+    served only by 06:00 has one. The presence of a row means the point is served
+    by that slot in that direction.
+    """
+    DIRECTION_CHOICES = [('go', _('ذهاب')), ('return', _('عودة'))]
+
+    pickup_point = models.ForeignKey(
+        PickupPoint, on_delete=models.CASCADE, related_name='times',
+        verbose_name=_('نقطة الالتقاط'))
+    direction = models.CharField(max_length=6, choices=DIRECTION_CHOICES, verbose_name=_('الاتجاه'))
+    morning_slot = models.ForeignKey(
+        'MorningSlot', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='pickup_times', verbose_name=_('رحلة الذهاب'))
+    return_slot = models.ForeignKey(
+        'ReturnSlot', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='pickup_times', verbose_name=_('رحلة العودة'))
+    time = models.TimeField(verbose_name=_('الوقت'))
+
+    class Meta:
+        verbose_name = _('موعد نقطة')
+        verbose_name_plural = _('مواعيد النقاط')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pickup_point', 'morning_slot'],
+                condition=models.Q(direction='go'), name='uniq_go_pickup_time'),
+            models.UniqueConstraint(
+                fields=['pickup_point', 'return_slot'],
+                condition=models.Q(direction='return'), name='uniq_return_pickup_time'),
+        ]
+        ordering = ['time']
+
+    def __str__(self):
+        return f'{self.pickup_point.name} — {self.time:%H:%M} ({self.get_direction_display()})'
+
+
 class MorningSlot(models.Model):
     """Morning departure time, e.g. 06:00, 09:00."""
     code = models.CharField(max_length=20, unique=True, verbose_name=_('الكود'))
