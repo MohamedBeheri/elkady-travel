@@ -32,6 +32,13 @@
 
 ---
 
+## 0.0) حزم مطلوبة (مرة واحدة)
+```bash
+apt update && apt install -y python3-venv python3-pip git
+```
+
+---
+
 ## 0) DNS (من لوحة الدومين elkady-travel.com)
 أضِف سجلَّي A يشيران إلى السيرفر:
 ```
@@ -57,18 +64,19 @@ SQL
 sudo -u postgres psql -d elkady_db -c "GRANT ALL ON SCHEMA public TO elkady_user;"
 ```
 
-## 2) مستخدم النظام والمجلدات
+## 2) مستخدم النظام (بدون إنشاء home حتى لا يتعارض مع git clone)
 
 ```bash
-sudo useradd --system --create-home --home-dir /opt/elkady --shell /bin/bash elkady
+sudo useradd --system --shell /bin/bash --home-dir /opt/elkady elkady
 ```
 
-## 3) جلب الكود (المستودع خاص)
+## 3) جلب الكود (المستودع خاص) ثم منح الملكية للمستخدم
 
 استخدم **Personal Access Token** من GitHub (أو مفتاح Deploy):
 
 ```bash
-sudo -u elkady git clone https://<GITHUB_TOKEN>@github.com/MohamedBeheri/elkady-travel.git /opt/elkady
+sudo git clone https://<GITHUB_TOKEN>@github.com/MohamedBeheri/elkady-travel.git /opt/elkady
+sudo chown -R elkady:elkady /opt/elkady
 ```
 
 ## 4) بيئة بايثون والتثبيت
