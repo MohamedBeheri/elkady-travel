@@ -331,7 +331,7 @@ def operations_dashboard(request):
     from apps.operations.models import DailyTrip, SeatRequest
     date = request.query_params.get('date') or str(timezone.localdate())
 
-    trips = DailyTrip.objects.filter(date=date).select_related('route', 'route__destination', 'morning_slot')
+    trips = DailyTrip.objects.filter(date=date, direction='go').select_related('route', 'route__destination', 'morning_slot')
     assignments = VehicleAssignment.objects.filter(date=date).exclude(status='cancelled').select_related('driver', 'vehicle', 'daily_trip', 'route')
     by_trip = {}
     for a in assignments:
@@ -343,7 +343,7 @@ def operations_dashboard(request):
         confirmed = t.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).count()
         assigns = by_trip.get(t.id, [])
         row = {
-            'id': t.id, 'route': t.route.name, 'slot': t.morning_slot.name,
+            'id': t.id, 'route': t.route.name, 'slot': t.slot_label,
             'destination': t.route.destination.name, 'passengers': confirmed,
             'capacity': t.total_seats,
             'vehicle': assigns[0].vehicle.plate_number if assigns else '',
@@ -352,7 +352,7 @@ def operations_dashboard(request):
         }
         trip_rows.append(row)
         if not assigns:
-            missing.append({'route': t.route.name, 'slot': t.morning_slot.name})
+            missing.append({'route': t.route.name, 'slot': t.slot_label})
 
     # Pickup point distribution across today's confirmed passengers.
     dist = {}

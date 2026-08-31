@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 # Priority ranking for daily seat allocation (RULE 1/2/3): lower = higher priority.
@@ -6,15 +7,33 @@ PRIORITY_RANK = {'term': 0, 'monthly': 1, 'daily': 2}
 
 
 class DailyTrip(models.Model):
-    """One operational morning trip: a date × route × departure time, with capacity."""
+    """One operational trip: a date × route × slot, with capacity.
+
+    ``direction`` distinguishes the morning going trip (uses ``morning_slot``)
+    from the return trip (uses ``return_slot``). Both directions share the same
+    seat-map / allocation machinery.
+    """
+
+    class Direction(models.TextChoices):
+        GO = 'go', _('ذهاب')
+        RETURN = 'return', _('عودة')
+
     date = models.DateField(verbose_name=_('التاريخ'))
     route = models.ForeignKey(
         'config_app.Route', on_delete=models.CASCADE, related_name='daily_trips',
         verbose_name=_('المسار'),
     )
+    direction = models.CharField(
+        max_length=6, choices=Direction.choices, default=Direction.GO,
+        verbose_name=_('الاتجاه'),
+    )
     morning_slot = models.ForeignKey(
         'config_app.MorningSlot', on_delete=models.CASCADE, related_name='daily_trips',
-        verbose_name=_('الموعد'),
+        null=True, blank=True, verbose_name=_('موعد الذهاب'),
+    )
+    return_slot = models.ForeignKey(
+        'config_app.ReturnSlot', on_delete=models.CASCADE, related_name='daily_trips',
+        null=True, blank=True, verbose_name=_('موعد العودة'),
     )
     layout = models.CharField(max_length=12, default='bus50', verbose_name=_('نوع المركبة'))
     total_seats = models.PositiveIntegerField(default=49, verbose_name=_('إجمالي المقاعد'))
@@ -23,11 +42,25 @@ class DailyTrip(models.Model):
     class Meta:
         verbose_name = _('رحلة يومية')
         verbose_name_plural = _('الرحلات اليومية')
-        unique_together = [('date', 'route', 'morning_slot')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['date', 'route', 'morning_slot'],
+                condition=Q(direction='go'), name='uniq_go_trip'),
+            models.UniqueConstraint(
+                fields=['date', 'route', 'return_slot'],
+                condition=Q(direction='return'), name='uniq_return_trip'),
+        ]
         ordering = ['date', 'morning_slot', 'route']
 
+    @property
+    def slot_label(self):
+        """Human name of the slot for either direction (safe when one is null)."""
+        if self.direction == self.Direction.RETURN and self.return_slot_id:
+            return self.return_slot.name
+        return self.morning_slot.name if self.morning_slot_id else '—'
+
     def __str__(self):
-        return f'{self.date} {self.morning_slot} - {self.route}'
+        return f'{self.date} {self.slot_label} - {self.route} ({self.get_direction_display()})'
 
     @property
     def confirmed_count(self):

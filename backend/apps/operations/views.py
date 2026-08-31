@@ -29,16 +29,34 @@ def layouts(request):
     return Response(LAYOUTS)
 
 
-def _get_or_create_trip(date, route, slot):
-    """Fetch (or lazily create) the operational trip, seeding capacity/layout from config."""
-    trip = DailyTrip.objects.filter(date=date, route=route, morning_slot=slot).first()
+def _get_or_create_trip(date, route, *, morning_slot=None, return_slot=None, direction='go'):
+    """Fetch (or lazily create) the operational trip, seeding capacity/layout from config.
+
+    ``direction='go'`` keys on ``morning_slot``; ``direction='return'`` keys on
+    ``return_slot`` (reverse leg, same route) and inherits the route's vehicle layout.
+    """
+    if direction == 'return':
+        trip = DailyTrip.objects.filter(
+            date=date, route=route, return_slot=return_slot, direction='return').first()
+        if trip:
+            return trip
+        cap = SeatCapacity.objects.filter(route=route).first()
+        layout = cap.layout if cap else 'bus50'
+        total = cap.total_seats if cap else layout_capacity(layout)
+        return DailyTrip.objects.create(
+            date=date, route=route, return_slot=return_slot, direction='return',
+            layout=layout, total_seats=total)
+
+    trip = DailyTrip.objects.filter(
+        date=date, route=route, morning_slot=morning_slot, direction='go').first()
     if trip:
         return trip
-    cap = SeatCapacity.objects.filter(route=route, morning_slot=slot).first()
+    cap = SeatCapacity.objects.filter(route=route, morning_slot=morning_slot).first()
     layout = cap.layout if cap else 'bus50'
     total = cap.total_seats if cap else layout_capacity(layout)
-    return DailyTrip.objects.create(date=date, route=route, morning_slot=slot,
-                                    layout=layout, total_seats=total)
+    return DailyTrip.objects.create(
+        date=date, route=route, morning_slot=morning_slot, direction='go',
+        layout=layout, total_seats=total)
 
 
 def _active_priority(student, route):
@@ -70,7 +88,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         if request.user.role not in STAFF_ROLES:
             return Response(status=403)
         date = request.query_params.get('date') or timezone.localdate().isoformat()
-        trips = self.get_queryset().filter(date=date)
+        trips = self.get_queryset().filter(date=date, direction='go')
         data = DailyTripSerializer(trips, many=True).data
         return Response({'date': date, 'trips': data})
 
@@ -103,13 +121,26 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='seatmap-for')
     def seatmap_for(self, request):
-        """Seat map by date/route/slot (creates the trip lazily) for the booking flow."""
+        """Seat map by date/route/slot (creates the trip lazily) for the booking flow.
+
+        ``direction=return`` reads ``return_slot`` instead of ``morning_slot``.
+        """
         date = request.query_params.get('date')
         route_id = request.query_params.get('route')
-        slot_id = request.query_params.get('morning_slot')
-        if not (date and route_id and slot_id):
+        direction = request.query_params.get('direction', 'go')
+        if not (date and route_id):
             return Response({'detail': 'البيانات ناقصة'}, status=400)
-        trip = _get_or_create_trip(date, Route.objects.get(pk=route_id), MorningSlot.objects.get(pk=slot_id))
+        route = Route.objects.get(pk=route_id)
+        if direction == 'return':
+            rs_id = request.query_params.get('return_slot')
+            if not rs_id:
+                return Response({'detail': 'البيانات ناقصة'}, status=400)
+            trip = _get_or_create_trip(date, route, return_slot=ReturnSlot.objects.get(pk=rs_id), direction='return')
+        else:
+            slot_id = request.query_params.get('morning_slot')
+            if not slot_id:
+                return Response({'detail': 'البيانات ناقصة'}, status=400)
+            trip = _get_or_create_trip(date, route, morning_slot=MorningSlot.objects.get(pk=slot_id))
         is_staff = request.user.role in STAFF_ROLES
         data = build_seatmap(trip, viewer=request.user, is_staff=is_staff)
         return Response({'trip': DailyTripSerializer(trip).data, **data})
@@ -141,7 +172,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         date = request.data.get('date') or timezone.localdate().isoformat()
         count = run_daily_allocation(date)
         # Notify newly confirmed / still-waiting students.
-        for trip in DailyTrip.objects.filter(date=date):
+        for trip in DailyTrip.objects.filter(date=date, direction='go'):
             for r in trip.seat_requests.exclude(status=SeatRequest.Status.CANCELLED).select_related('student'):
                 if r.status == SeatRequest.Status.CONFIRMED:
                     notify(r.student, 'تم تأكيد مقعدك', f'رحلة {trip.date} - {trip.route}',
@@ -181,7 +212,7 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
 
         route = Route.objects.get(pk=route_id)
         slot = MorningSlot.objects.get(pk=slot_id)
-        trip = _get_or_create_trip(date, route, slot)
+        trip = _get_or_create_trip(date, route, morning_slot=slot)
         priority_type, sub = _active_priority(user, route)
 
         req = request_seat(
@@ -193,24 +224,36 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='book-seat')
     def book_seat(self, request):
-        """Student picks a specific seat on the seat map."""
+        """Student picks a specific seat on the seat map (going or return leg)."""
         user = request.user
         date = request.data.get('date')
         route_id = request.data.get('route')
-        slot_id = request.data.get('morning_slot')
+        direction = request.data.get('direction', 'go')
         seat_number = request.data.get('seat_number')
+        pickup_id = request.data.get('pickup_point')
         university_id = request.data.get('university') or user.university_id
-        if not (date and route_id and slot_id and seat_number and university_id):
+        if not (date and route_id and seat_number and university_id):
             return Response({'detail': 'البيانات ناقصة'}, status=400)
 
         route = Route.objects.get(pk=route_id)
-        slot = MorningSlot.objects.get(pk=slot_id)
-        trip = _get_or_create_trip(date, route, slot)
-        priority_type, sub = _active_priority(user, route)
+        if direction == 'return':
+            rs_id = request.data.get('return_slot')
+            if not rs_id:
+                return Response({'detail': 'البيانات ناقصة'}, status=400)
+            trip = _get_or_create_trip(date, route, return_slot=ReturnSlot.objects.get(pk=rs_id), direction='return')
+            # Return legs are booked/paid separately (no term/monthly seat priority).
+            priority_type, sub = 'daily', None
+        else:
+            slot_id = request.data.get('morning_slot')
+            if not slot_id:
+                return Response({'detail': 'البيانات ناقصة'}, status=400)
+            trip = _get_or_create_trip(date, route, morning_slot=MorningSlot.objects.get(pk=slot_id))
+            priority_type, sub = _active_priority(user, route)
         try:
             kind, obj, msg = book_specific_seat(
                 trip=trip, student=user, seat_number=int(seat_number),
                 university_id=university_id, priority_type=priority_type, subscription=sub,
+                pickup_point_id=pickup_id,
             )
         except ValueError as e:
             return Response({'detail': str(e)}, status=409)
@@ -244,14 +287,17 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         reqs = SeatRequest.objects.filter(
             student=user, seat_number__isnull=False,
             status__in=[SeatRequest.Status.HELD, SeatRequest.Status.CONFIRMED],
-        ).select_related('daily_trip', 'daily_trip__route', 'daily_trip__morning_slot')
+        ).select_related('daily_trip', 'daily_trip__route', 'daily_trip__morning_slot', 'daily_trip__return_slot')
         for r in reqs:
             confirmed = r.status == SeatRequest.Status.CONFIRMED
-            payload = f'ELKADY|{r.qr_token or "-"}|مقعد {r.seat_number}|{r.daily_trip.date}|{r.daily_trip.route.name}|{user.full_name}'
+            trip = r.daily_trip
+            dir_label = 'عودة' if trip.direction == 'return' else 'ذهاب'
+            payload = f'ELKADY|{r.qr_token or "-"}|مقعد {r.seat_number}|{trip.date}|{trip.route.name}|{dir_label}|{user.full_name}'
             out.append({
                 'kind': 'daily', 'id': r.id, 'seat_number': r.seat_number,
-                'date': str(r.daily_trip.date), 'route': r.daily_trip.route.name,
-                'slot': r.daily_trip.morning_slot.name, 'status': r.status,
+                'date': str(trip.date), 'route': trip.route.name,
+                'direction': trip.direction, 'direction_display': dir_label,
+                'slot': trip.slot_label, 'status': r.status,
                 'status_display': r.get_status_display(),
                 'qr': make_qr(payload) if confirmed else '', 'token': r.qr_token,
             })

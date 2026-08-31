@@ -1,149 +1,226 @@
 import {
-  Card, Segmented, Form, Select, DatePicker, Button, App as AntdApp, Alert, Spin, Result,
-  Statistic, Input, Upload, Descriptions, Radio, Row, Col, Tag, Progress,
+  Card, Tabs, Form, Select, DatePicker, Button, App as AntdApp, Alert, Spin, Result,
+  Statistic, Input, Upload, Descriptions, Radio, Divider, Tag,
 } from 'antd'
-import { UploadOutlined } from '@ant-design/icons'
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  UploadOutlined, EnvironmentOutlined, CarOutlined, RollbackOutlined,
+} from '@ant-design/icons'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
-  useRoutesQuery, useMorningSlotsQuery, useUniversitiesQuery, usePickupPointsQuery, usePricesQuery,
+  useRoutesQuery, useMorningSlotsQuery, useReturnSlotsQuery, useUniversitiesQuery,
+  usePublicPickupPointsQuery, usePricesQuery, usePickupPointsQuery,
   useSeatmapForQuery, useBookSpecificSeatMutation,
   useCreateSubscriptionMutation, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
-  useReturnAvailabilityQuery, useBookReturnMutation,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
+import TourismRequest from './TourismRequest'
 import { useAppSelector } from '../app/store'
 
+const CENTERS = [
+  { value: 'shebin', label: 'شبين الكوم' },
+  { value: 'quesna', label: 'قويسنا' },
+  { value: 'bagour', label: 'الباجور' },
+  { value: 'benha', label: 'بنها' },
+]
 const SUB_TYPES = [
   { value: 'term', label: 'اشتراك ترم' },
   { value: 'monthly', label: 'اشتراك شهري' },
 ]
 
-/* ================= Daily seat booking + return prompt ================= */
-function DailyBooking({ routes, slots, unis, preRoute }: any) {
-  const [form] = Form.useForm()
+/* ================= Daily booking: university → trip type → center → pickup → slot(s) → seat(s) ================= */
+function DailyFlow({ unis }: any) {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const gender = useAppSelector((s) => s.auth.user?.gender)
-  const [routeId, setRouteId] = useState<number | undefined>(preRoute)
-  const [tripType, setTripType] = useState<'single' | 'round'>('single')
-  const [query, setQuery] = useState<any>(null)
-  const [selected, setSelected] = useState<number | null>(null)
-  const [step, setStep] = useState<'seat' | 'return' | 'done'>('seat')
-  const [bookedInfo, setBookedInfo] = useState<any>(null)
 
-  const { data: seatmap, isFetching } = useSeatmapForQuery(query, { skip: !query })
+  const [university, setUniversity] = useState<number>()
+  const [tripType, setTripType] = useState<'go' | 'return' | 'round'>('go')
+  const [center, setCenter] = useState<string>()
+  const [pickupId, setPickupId] = useState<number>()
+  const [date, setDate] = useState<any>(dayjs().add(1, 'day'))
+  const [goSlot, setGoSlot] = useState<number>()
+  const [goSeat, setGoSeat] = useState<number | null>(null)
+  const [retSlot, setRetSlot] = useState<number>()
+  const [retSeat, setRetSeat] = useState<number | null>(null)
+  const [done, setDone] = useState<any>(null)
+
+  const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
+  const { data: mSlots } = useMorningSlotsQuery()
+  const { data: rSlots } = useReturnSlotsQuery()
+  const { data: prices } = usePricesQuery({ active: true })
   const [bookSeat, { isLoading }] = useBookSpecificSeatMutation()
-  const [bookReturn, { isLoading: rLoading }] = useBookReturnMutation()
-  const dateStr = () => form.getFieldValue('date')?.format('YYYY-MM-DD')
-  const { data: retAvail } = useReturnAvailabilityQuery(step === 'return' ? { date: dateStr() } : undefined, { skip: step !== 'return' })
 
-  const selectedRoute = routes.find((r: any) => r.id === routeId)
-  const destUnis = unis.filter((u: any) => !selectedRoute || u.destination === selectedRoute.destination)
+  const selUni = unis.find((u: any) => u.id === university)
+  const availPickups = (pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination)
+  const selPickup = availPickups.find((p: any) => p.id === pickupId)
+  const routeId: number | undefined = selPickup?.route_id
 
-  const loadMap = (v: any) => { setSelected(null); setStep('seat'); setBookedInfo(null); setQuery({ date: v.date.format('YYYY-MM-DD'), route: v.route, morning_slot: v.morning_slot }) }
+  const wantGo = tripType === 'go' || tripType === 'round'
+  const wantRet = tripType === 'return' || tripType === 'round'
+  const dateStr = date ? date.format('YYYY-MM-DD') : undefined
+
+  const goQuery = wantGo && routeId && goSlot && dateStr ? { date: dateStr, route: routeId, direction: 'go', morning_slot: goSlot } : undefined
+  const retQuery = wantRet && routeId && retSlot && dateStr ? { date: dateStr, route: routeId, direction: 'return', return_slot: retSlot } : undefined
+  const { data: goMap, isFetching: goFetch } = useSeatmapForQuery(goQuery as any, { skip: !goQuery })
+  const { data: retMap, isFetching: retFetch } = useSeatmapForQuery(retQuery as any, { skip: !retQuery })
+
+  // Reset chosen seats whenever the trip that owns them changes.
+  useEffect(() => { setGoSeat(null) }, [routeId, goSlot, dateStr])
+  useEffect(() => { setRetSeat(null) }, [routeId, retSlot, dateStr])
+
+  const dailyPrice = Number(prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === 'daily')?.price || 0)
+  const legs = tripType === 'round' ? 2 : 1
+  const total = dailyPrice * legs
+
+  const canConfirm = !!(university && center && pickupId && dateStr && routeId
+    && (!wantGo || (goSlot && goSeat))
+    && (!wantRet || (retSlot && retSeat)))
 
   const confirm = async () => {
-    if (!selected) { message.warning('اختر مقعداً'); return }
-    const v = form.getFieldsValue()
     try {
-      const res = await bookSeat({ date: v.date.format('YYYY-MM-DD'), route: v.route, morning_slot: v.morning_slot, seat_number: selected, university: v.university }).unwrap()
-      setBookedInfo({ ...res, seat: selected })
-      setStep(tripType === 'round' ? 'return' : 'done')
-    } catch (e: any) { message.error(e?.data?.detail || 'تعذر الحجز') }
+      if (wantGo) {
+        await bookSeat({ date: dateStr, route: routeId, direction: 'go', morning_slot: goSlot, seat_number: goSeat, university, pickup_point: pickupId }).unwrap()
+      }
+      if (wantRet) {
+        await bookSeat({ date: dateStr, route: routeId, direction: 'return', return_slot: retSlot, seat_number: retSeat, university, pickup_point: pickupId }).unwrap()
+      }
+      setDone({ total, goSeat, retSeat })
+    } catch (e: any) { message.error(e?.data?.detail || 'تعذر إتمام الحجز') }
   }
 
-  const doReturn = async (slotId: number) => {
-    const v = form.getFieldsValue()
-    try {
-      await bookReturn({ date: v.date.format('YYYY-MM-DD'), return_slot: slotId, university: v.university, route: v.route }).unwrap()
-      message.success('تم حجز رحلة العودة'); setStep('done')
-    } catch (e: any) { message.error(e?.data?.detail || 'تعذر حجز العودة') }
+  const reset = () => {
+    setDone(null); setGoSeat(null); setRetSeat(null); setGoSlot(undefined); setRetSlot(undefined)
   }
 
-  if (step === 'done' || (step === 'return' && bookedInfo === null)) {
-    return <Result status="success" title={`تم حجز مقعدك رقم ${bookedInfo?.seat}`} subTitle="يمكنك متابعة تذكرتك ورمز QR من صفحة تذاكري."
-      extra={[<Button type="primary" key="t" onClick={() => navigate('/tickets')}>عرض تذكرتي</Button>, <Button key="n" onClick={() => { setStep('seat'); setQuery(null); setBookedInfo(null) }}>حجز آخر</Button>]} />
+  if (done) {
+    return (
+      <Result status="success"
+        title="تم تسجيل حجزك بنجاح"
+        subTitle={`${wantGo ? `مقعد الذهاب رقم ${done.goSeat}` : ''}${wantGo && wantRet ? ' · ' : ''}${wantRet ? `مقعد العودة رقم ${done.retSeat}` : ''} — بانتظار تأكيد الدفع من الإدارة. تابع تذكرتك ورمز QR بعد التأكيد.`}
+        extra={[
+          <Button type="primary" key="t" onClick={() => navigate('/tickets')}>عرض تذاكري</Button>,
+          <Button key="b" onClick={() => navigate('/my-bookings')}>الدفع ومتابعة الحجز</Button>,
+          <Button key="n" type="dashed" onClick={reset}>حجز آخر</Button>,
+        ]} />
+    )
   }
+
+  const noPickups = center && selUni && availPickups.length === 0
 
   return (
     <div>
-      <Alert type="info" showIcon style={{ marginBottom: 12 }}
-        message="اختر التاريخ والمسار والموعد لعرض خريطة المقاعد، ثم اختر مقعدك."
-        description="جميع الطلاب يختارون مقاعدهم من هنا: مشترك الترم يختار مقعده الثابت لمرة واحدة، ومشترك الشهري يحجز مقعده يومياً بأولوية، وطالب اليومي يحجز مقعداً متاحاً." />
-      <div style={{ marginBottom: 14 }}>
-        <span style={{ marginInlineEnd: 10, fontWeight: 600 }}>نوع الرحلة:</span>
-        <Radio.Group value={tripType} onChange={(e) => setTripType(e.target.value)} optionType="button" buttonStyle="solid">
-          <Radio.Button value="single">ذهاب فقط</Radio.Button>
-          <Radio.Button value="round">ذهاب + عودة</Radio.Button>
-        </Radio.Group>
-        <span style={{ marginInlineStart: 12, color: '#64748b', fontSize: 13 }}>للعودة فقط استخدم تبويب «العودة».</span>
-      </div>
-      <Form form={form} layout="inline" onFinish={loadMap} initialValues={{ date: dayjs().add(1, 'day'), route: preRoute }} style={{ rowGap: 12, marginBottom: 8 }}>
-        <Form.Item name="date" label="التاريخ" rules={[{ required: true }]}><DatePicker /></Form.Item>
-        <Form.Item name="route" label="المسار" rules={[{ required: true }]}>
-          <Select style={{ width: 220 }} placeholder="المسار" onChange={(v) => { setRouteId(v); form.setFieldsValue({ university: undefined }) }}
-            options={routes.map((r: any) => ({ value: r.id, label: r.name }))} />
-        </Form.Item>
-        <Form.Item name="morning_slot" label="الموعد" rules={[{ required: true }]}>
-          <Select style={{ width: 130 }} placeholder="الموعد" options={slots.map((s: any) => ({ value: s.id, label: s.name }))} />
-        </Form.Item>
-        <Form.Item name="university" label="الجامعة" rules={[{ required: true }]}>
-          <Select style={{ width: 200 }} placeholder="الجامعة" options={destUnis.map((u: any) => ({ value: u.id, label: u.name }))} />
-        </Form.Item>
-        <Form.Item><Button type="primary" htmlType="submit">عرض المقاعد</Button></Form.Item>
-      </Form>
-
-      {query && step === 'seat' && (isFetching ? <Spin /> : seatmap && (
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <SeatMap layout={seatmap.layout} seats={seatmap.seats} selected={selected} onSelect={setSelected} viewerGender={gender} />
-          <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
-          <Button type="primary" size="large" disabled={!selected} loading={isLoading} onClick={confirm} style={{ marginTop: 18 }}>
-            {selected ? `تأكيد حجز المقعد رقم ${selected}` : 'اختر مقعداً'}
-          </Button>
-        </div>
-      ))}
-
-      {step === 'return' && bookedInfo && (
-        <Card style={{ marginTop: 16, maxWidth: 720, marginInline: 'auto' }}>
-          <Result status="success" style={{ paddingBottom: 8 }}
-            title={`تم حجز مقعد الذهاب رقم ${bookedInfo.seat}`}
-            subTitle="هل تريد حجز رحلة العودة أيضاً في نفس اليوم؟" />
-          <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <Button onClick={() => setStep('done')} style={{ marginInlineEnd: 10 }}>لا، شكراً</Button>
-            <span style={{ color: '#64748b' }}>أو اختر موعد العودة بالأسفل ↓</span>
+      {/* Step 1 — University + trip type */}
+      <Card size="small" style={{ marginBottom: 14 }} title={<span><b>١) الجامعة ونوع الرحلة</b></span>}>
+        <Form layout="vertical">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 12 }}>
+            <Form.Item label="الجامعة" required style={{ marginBottom: 8 }}>
+              <Select placeholder="اختر الجامعة" value={university}
+                onChange={(v) => { setUniversity(v); setPickupId(undefined) }}
+                options={unis.map((u: any) => ({ value: u.id, label: u.name }))} />
+            </Form.Item>
+            <Form.Item label="نوع الرحلة" required style={{ marginBottom: 8 }}>
+              <Radio.Group value={tripType} onChange={(e) => setTripType(e.target.value)} optionType="button" buttonStyle="solid">
+                <Radio.Button value="go">ذهاب فقط</Radio.Button>
+                <Radio.Button value="return">عودة فقط</Radio.Button>
+                <Radio.Button value="round">ذهاب وعودة</Radio.Button>
+              </Radio.Group>
+            </Form.Item>
           </div>
-          <Row gutter={[12, 12]}>
-            {(retAvail?.slots || []).map((s: any) => {
-              const pct = Math.round((s.used / s.capacity) * 100)
-              return (
-                <Col xs={12} md={8} key={s.id}>
-                  <div className="pickup-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <b>{s.name}</b>{s.full ? <Tag color="red">مكتمل</Tag> : <Tag color="green">{s.available} متاح</Tag>}
-                    </div>
-                    <Progress percent={pct} showInfo={false} strokeColor={s.full ? '#ef4444' : '#0e7490'} style={{ margin: '8px 0' }} />
-                    <Button type="primary" block disabled={s.full} loading={rLoading} onClick={() => doReturn(s.id)}>احجز العودة</Button>
-                  </div>
-                </Col>
-              )
-            })}
-          </Row>
+        </Form>
+      </Card>
+
+      {/* Step 2 — Center + pickup + date */}
+      <Card size="small" style={{ marginBottom: 14 }} title={<span><b>٢) المركز ونقطة الالتقاط والتاريخ</b></span>}>
+        <Form layout="vertical">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+            <Form.Item label="المركز" required style={{ marginBottom: 8 }}>
+              <Select placeholder="اختر المركز" value={center}
+                onChange={(v) => { setCenter(v); setPickupId(undefined) }} options={CENTERS} />
+            </Form.Item>
+            <Form.Item label="نقطة الالتقاط" required style={{ marginBottom: 8 }}>
+              <Select placeholder={center ? 'اختر نقطة الالتقاط' : 'اختر المركز أولاً'} disabled={!center}
+                value={pickupId} onChange={setPickupId} showSearch optionFilterProp="label"
+                options={availPickups.map((p: any) => ({ value: p.id, label: `${p.name} — ${p.route}` }))} />
+            </Form.Item>
+            <Form.Item label="تاريخ الرحلة" required style={{ marginBottom: 8 }}>
+              <DatePicker style={{ width: '100%' }} value={date} onChange={setDate}
+                disabledDate={(d) => d && d < dayjs().startOf('day')} />
+            </Form.Item>
+          </div>
+          {noPickups && <Alert type="warning" showIcon message="لا توجد نقاط التقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
+          {selPickup && <Tag icon={<EnvironmentOutlined />} color="blue">الخط: {selPickup.route}</Tag>}
+        </Form>
+      </Card>
+
+      {/* Step 3 — Going leg */}
+      {wantGo && (
+        <Card size="small" style={{ marginBottom: 14 }}
+          title={<span><CarOutlined /> <b>٣) الذهاب — الموعد واختيار المقعد</b></span>}>
+          <Form layout="vertical">
+            <Form.Item label="موعد الذهاب" required style={{ maxWidth: 260 }}>
+              <Select placeholder="اختر الموعد" value={goSlot} onChange={setGoSlot} disabled={!routeId}
+                options={(mSlots?.results || mSlots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
+            </Form.Item>
+          </Form>
+          {goQuery && (goFetch ? <Spin /> : goMap && (
+            <div style={{ textAlign: 'center' }}>
+              <SeatMap layout={goMap.layout} seats={goMap.seats} selected={goSeat} onSelect={setGoSeat} viewerGender={gender} />
+              <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
+              {goSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد الذهاب المختار: {goSeat}</Tag>}
+            </div>
+          ))}
         </Card>
       )}
+
+      {/* Step 4 — Return leg */}
+      {wantRet && (
+        <Card size="small" style={{ marginBottom: 14 }}
+          title={<span><RollbackOutlined /> <b>{wantGo ? '٤' : '٣'}) العودة — الموعد واختيار المقعد</b></span>}>
+          <Form layout="vertical">
+            <Form.Item label="موعد العودة" required style={{ maxWidth: 260 }}>
+              <Select placeholder="اختر موعد العودة" value={retSlot} onChange={setRetSlot} disabled={!routeId}
+                options={(rSlots?.results || rSlots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
+            </Form.Item>
+          </Form>
+          {retQuery && (retFetch ? <Spin /> : retMap && (
+            <div style={{ textAlign: 'center' }}>
+              <SeatMap layout={retMap.layout} seats={retMap.seats} selected={retSeat} onSelect={setRetSeat} viewerGender={gender} />
+              <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
+              {retSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد العودة المختار: {retSeat}</Tag>}
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* Step 5 — Invoice + confirm */}
+      <Card size="small" style={{ background: '#f8fafc' }} title={<span><b>{wantGo && wantRet ? '٥' : '٤'}) إجمالي الفاتورة</b></span>}>
+        <Descriptions size="small" column={1} bordered style={{ marginBottom: 12 }}>
+          {wantGo && <Descriptions.Item label="رحلة الذهاب">{dailyPrice.toLocaleString()} ج.م {goSeat ? `· مقعد ${goSeat}` : ''}</Descriptions.Item>}
+          {wantRet && <Descriptions.Item label="رحلة العودة">{dailyPrice.toLocaleString()} ج.م {retSeat ? `· مقعد ${retSeat}` : ''}</Descriptions.Item>}
+        </Descriptions>
+        <Statistic title="الإجمالي المطلوب" value={total} suffix="ج.م" valueStyle={{ color: '#0B2E5E', fontWeight: 800 }} />
+        <Divider style={{ margin: '14px 0' }} />
+        <Button type="primary" size="large" disabled={!canConfirm} loading={isLoading} onClick={confirm}>
+          تأكيد الحجز {total ? `(${total.toLocaleString()} ج.م)` : ''}
+        </Button>
+        <div style={{ color: '#64748b', fontSize: 13, marginTop: 8 }}>
+          يُحجز المقعد مؤقتاً ثم يُعتمد بعد رفع إثبات الدفع ومراجعة الإدارة من صفحة «حجوزاتي والدفع».
+        </div>
+      </Card>
     </div>
   )
 }
 
 /* ================= Subscription (term / monthly) + inline payment ================= */
-function SubscriptionBooking({ routes, unis, preRoute }: any) {
+function SubscriptionBooking({ routes, unis }: any) {
   const [form] = Form.useForm()
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const [subType, setSubType] = useState('term')
-  const [routeId, setRouteId] = useState<number | undefined>(preRoute)
-  const [created, setCreated] = useState<any>(null)   // created subscription → payment step
+  const [routeId, setRouteId] = useState<number>()
+  const [created, setCreated] = useState<any>(null)
   const [methodId, setMethodId] = useState<number>()
   const [reference, setReference] = useState('')
   const [file, setFile] = useState<any>(null)
@@ -177,7 +254,7 @@ function SubscriptionBooking({ routes, unis, preRoute }: any) {
 
   if (created?._paid) {
     return <Result status="success" title="تم إرسال إثبات الدفع للمراجعة"
-      subTitle="سيتم تأكيد اشتراكك بعد مراجعة الإدارة. أصحاب الترم يختارون مقعدهم الثابت بعد التأكيد."
+      subTitle="سيتم تأكيد اشتراكك بعد مراجعة الإدارة. أصحاب الترم يختارون مقعدهم الثابت بعد التأكيد، والشهري يحجز مقعده اليومي بأولوية."
       extra={[<Button type="primary" key="m" onClick={() => navigate('/my-bookings')}>حجوزاتي والدفع</Button>]} />
   }
 
@@ -215,7 +292,7 @@ function SubscriptionBooking({ routes, unis, preRoute }: any) {
       <Radio.Group value={subType} onChange={(e) => setSubType(e.target.value)} optionType="button" buttonStyle="solid" style={{ marginBottom: 16 }}>
         {SUB_TYPES.map((t) => <Radio.Button key={t.value} value={t.value}>{t.label}</Radio.Button>)}
       </Radio.Group>
-      <Form form={form} layout="vertical" onFinish={create} initialValues={{ route: preRoute }} style={{ maxWidth: 520 }}>
+      <Form form={form} layout="vertical" onFinish={create} style={{ maxWidth: 520 }}>
         <Form.Item name="route" label="المسار" rules={[{ required: true }]}>
           <Select placeholder="اختر المسار" onChange={(v) => { setRouteId(v); form.setFieldsValue({ university: undefined, pickup_point: undefined }) }}
             options={routes.map((r: any) => ({ value: r.id, label: r.name }))} />
@@ -233,28 +310,22 @@ function SubscriptionBooking({ routes, unis, preRoute }: any) {
   )
 }
 
-/* ================= Unified booking page ================= */
+/* ================= Unified booking home ================= */
 export default function Book() {
-  const [params] = useSearchParams()
-  const preRoute = params.get('route') ? Number(params.get('route')) : undefined
-  const [mode, setMode] = useState<'daily' | 'sub'>(params.get('mode') === 'sub' ? 'sub' : 'daily')
-
+  const [tab, setTab] = useState('daily')
   const { data: routesQ } = useRoutesQuery({ active: true })
-  const { data: slotsQ } = useMorningSlotsQuery()
   const { data: unisQ } = useUniversitiesQuery({ active: true })
   const routes = routesQ?.results || []
-  const slots = slotsQ?.results || slotsQ || []
   const unis = unisQ?.results || []
 
   return (
-    <Card title={<span style={{ fontWeight: 800 }}>احجز رحلتك</span>}>
-      <div style={{ textAlign: 'center', marginBottom: 20 }}>
-        <Segmented size="large" value={mode} onChange={(v) => setMode(v as any)}
-          options={[{ value: 'daily', label: '🚌 رحلة يومية (اختيار مقعد)' }, { value: 'sub', label: '🎫 اشتراك (ترم / شهري)' }]} />
-      </div>
-      {mode === 'daily'
-        ? <DailyBooking routes={routes} slots={slots} unis={unis} preRoute={preRoute} />
-        : <SubscriptionBooking routes={routes} unis={unis} preRoute={preRoute} />}
+    <Card title={<span style={{ fontWeight: 800, fontSize: 18 }}>احجز رحلتك</span>}>
+      <Tabs activeKey={tab} onChange={setTab} size="large"
+        items={[
+          { key: 'daily', label: '🚌 حجز يومي', children: <DailyFlow unis={unis} /> },
+          { key: 'sub', label: '🎫 حجز ترم / شهري', children: <SubscriptionBooking routes={routes} unis={unis} /> },
+          { key: 'tourism', label: '🏖️ رحلات سياحية', children: <TourismRequest /> },
+        ]} />
     </Card>
   )
 }

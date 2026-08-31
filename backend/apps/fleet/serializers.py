@@ -48,7 +48,7 @@ class VehicleAssignmentSerializer(serializers.ModelSerializer):
 
     def get_trip_label(self, obj):
         if obj.daily_trip:
-            return f'{obj.daily_trip.morning_slot.name} - {obj.daily_trip.route.name}'
+            return f'{obj.daily_trip.slot_label} - {obj.daily_trip.route.name}'
         return ''
 
 

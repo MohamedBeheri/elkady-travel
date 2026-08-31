@@ -220,7 +220,7 @@ export default function Explore() {
   const [mode, setMode] = useState<'uni' | 'tourism'>('uni')
   const user = useAppSelector((s) => s.auth.user)
   const isStudent = user?.role === 'student'
-  const bookTo = isStudent ? '/book' : '/login'
+  const bookTo = isStudent ? '/' : '/login'
 
   return (
     <div>

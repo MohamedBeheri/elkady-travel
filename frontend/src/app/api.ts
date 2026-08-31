@@ -189,7 +189,7 @@ export const api = createApi({
     }),
     // ---- interactive seat map ----
     layouts: b.query<any, void>({ query: () => 'operations/layouts/' }),
-    seatmapFor: b.query<any, { date: string; route: number; morning_slot: number }>({
+    seatmapFor: b.query<any, { date: string; route: number; direction?: string; morning_slot?: number; return_slot?: number }>({
       query: (p) => `operations/daily-trips/seatmap-for/${qs(p)}`, providesTags: ['SeatMap'],
     }),
     seatmap: b.query<any, number>({

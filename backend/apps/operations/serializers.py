@@ -28,8 +28,8 @@ class DailyTripSerializer(serializers.ModelSerializer):
     route_name = serializers.CharField(source='route.name', read_only=True)
     route_origin = serializers.CharField(source='route.origin_label', read_only=True)
     destination_name = serializers.CharField(source='route.destination.name', read_only=True)
-    slot_name = serializers.CharField(source='morning_slot.name', read_only=True)
-    departure_time = serializers.TimeField(source='morning_slot.departure_time', read_only=True)
+    slot_name = serializers.CharField(source='slot_label', read_only=True)
+    direction_display = serializers.CharField(source='get_direction_display', read_only=True)
     confirmed_count = serializers.IntegerField(read_only=True)
     waiting_count = serializers.IntegerField(read_only=True)
     available_seats = serializers.IntegerField(read_only=True)
@@ -38,7 +38,8 @@ class DailyTripSerializer(serializers.ModelSerializer):
         model = DailyTrip
         fields = [
             'id', 'date', 'route', 'route_name', 'route_origin', 'destination_name',
-            'morning_slot', 'slot_name', 'departure_time', 'layout', 'total_seats',
+            'direction', 'direction_display', 'morning_slot', 'return_slot',
+            'slot_name', 'layout', 'total_seats',
             'confirmed_count', 'waiting_count', 'available_seats', 'allocated_at',
         ]
 

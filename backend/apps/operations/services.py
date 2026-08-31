@@ -208,7 +208,7 @@ def _seat_occupied(trip, seat_number, exclude_student=None):
 
 
 @transaction.atomic
-def book_specific_seat(*, trip, student, seat_number, university_id, priority_type, subscription):
+def book_specific_seat(*, trip, student, seat_number, university_id, priority_type, subscription, pickup_point_id=None):
     """Reserve a physical seat. Returns (kind, obj, message).
 
     kind is 'term' | 'seat'. Term subscribers lock the seat for the whole term
@@ -249,6 +249,8 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
     req.university_id = university_id
     req.priority_type = priority_type
     req.subscription = subscription
+    if pickup_point_id:
+        req.pickup_point_id = pickup_point_id
     req.status = status
     if status == SeatRequest.Status.CONFIRMED and not req.qr_token:
         req.qr_token = new_token()
@@ -294,7 +296,7 @@ def release_seat(*, trip, seat_number, by_user=None):
 
 def run_daily_allocation(date):
     """Run the deadline allocation for every trip on a given date (RULE 5)."""
-    trips = DailyTrip.objects.filter(date=date)
+    trips = DailyTrip.objects.filter(date=date, direction='go')
     now = timezone.now()
     count = 0
     for trip in trips:

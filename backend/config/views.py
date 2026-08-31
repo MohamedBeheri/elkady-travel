@@ -20,7 +20,7 @@ from apps.users.models import User
 
 def _trip_availability(route, slot, date):
     """Read-only seat availability for a route/slot/date (no trip is created)."""
-    trip = DailyTrip.objects.filter(date=date, route=route, morning_slot=slot).first()
+    trip = DailyTrip.objects.filter(date=date, route=route, morning_slot=slot, direction='go').first()
     if trip:
         sm = build_seatmap(trip)
         occ = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'held', 'term'))
@@ -105,14 +105,17 @@ def public_colleges(request):
 @permission_classes([AllowAny])
 def public_pickup_points(request):
     """Public pickup points, filtered by center (for the sign-up address)."""
-    qs = PickupPoint.objects.filter(active=True).select_related('route')
+    qs = PickupPoint.objects.filter(active=True, route__active=True).select_related('route', 'route__destination')
     center = request.query_params.get('center')
     if center:
         qs = qs.filter(center=center)
     return Response([
         {'id': p.id, 'name': p.name, 'center': p.center,
-         'route': p.route.name, 'sequence': p.sequence}
-        for p in qs.order_by('name')
+         'route': p.route.name, 'route_id': p.route_id,
+         'destination': p.route.destination_id,
+         'destination_name': p.route.destination.name if p.route.destination_id else '',
+         'sequence': p.sequence}
+        for p in qs.order_by('sequence', 'name')
     ])
 
 
@@ -182,12 +185,13 @@ def dashboard_stats(request):
         'waiting': SeatRequest.objects.filter(status=SeatRequest.Status.WAITING).count(),
     }
 
-    tomorrow_trips = DailyTrip.objects.filter(date=tomorrow)
+    tomorrow_trips = DailyTrip.objects.filter(date=tomorrow, direction='go')
     total_seats = tomorrow_trips.aggregate(s=Sum('total_seats'))['s'] or 0
     confirmed_seats = SeatRequest.objects.filter(
-        daily_trip__date=tomorrow, status=SeatRequest.Status.CONFIRMED).count()
+        daily_trip__date=tomorrow, daily_trip__direction='go',
+        status=SeatRequest.Status.CONFIRMED).count()
     transport = {
-        'today_trips': DailyTrip.objects.filter(date=today).count(),
+        'today_trips': DailyTrip.objects.filter(date=today, direction='go').count(),
         'tomorrow_trips': tomorrow_trips.count(),
         'tomorrow_passengers': confirmed_seats,
         'tomorrow_capacity': total_seats,
@@ -225,7 +229,7 @@ def dashboard_stats(request):
 def dashboard_charts(request):
     """Chart data: per-route fill for tomorrow, subscription & payment distributions."""
     tomorrow = timezone.localdate() + timezone.timedelta(days=1)
-    trips = DailyTrip.objects.filter(date=tomorrow).select_related(
+    trips = DailyTrip.objects.filter(date=tomorrow, direction='go').select_related(
         'route', 'route__destination', 'morning_slot')
 
     trip_rows = []
@@ -235,7 +239,7 @@ def dashboard_charts(request):
         occupied = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'held', 'term'))
         cap = t.total_seats or 1
         trip_rows.append({
-            'route': t.route.name, 'slot': t.morning_slot.name, 'layout': t.layout,
+            'route': t.route.name, 'slot': t.slot_label, 'layout': t.layout,
             'capacity': t.total_seats, 'occupied': occupied,
             'waiting': t.waiting_count,
             'occupancy': round(occupied / cap * 100),
