@@ -1,4 +1,4 @@
-import { Layout, Menu, Avatar, Dropdown, Badge, Popover, List, Tag, Button, Grid } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Badge, Popover, List, Tag, Button, Grid, Drawer } from 'antd'
 import {
   DashboardOutlined, DollarOutlined, TeamOutlined, ClockCircleOutlined,
   CarOutlined, RollbackOutlined, SettingOutlined, CompassOutlined,
@@ -61,7 +61,9 @@ export default function AppLayout() {
   const user = useAppSelector((s) => s.auth.user)
   const { data: company } = useCompanyQuery()
   const screens = Grid.useBreakpoint()
+  const isMobile = !screens.lg
   const [collapsed, setCollapsed] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const isStaff = STAFF.includes(user?.role || '')
 
   const role = user?.role || ''
@@ -112,40 +114,48 @@ export default function AppLayout() {
   const selectedKey = allKeys.filter((k: string) => k === '/' ? location.pathname === '/' : location.pathname.startsWith(k)).sort((a: string, b: string) => b.length - a.length)[0] || '/'
   const openKeys = items.filter((i: any) => (i.children || []).some((c: any) => c.key === selectedKey)).map((i: any) => i.key)
 
+  const brand = (compact = false) => (
+    <div style={{ padding: '18px 14px', color: '#fff', display: 'flex', alignItems: 'center', gap: 11 }}>
+      <Logo size={compact ? 40 : 46} className="sidebar-logo" />
+      {(!collapsed || compact) && <div style={{ lineHeight: 1.25 }}>
+        <div style={{ fontWeight: 800, fontSize: 17 }}>القاضي</div>
+        <div style={{ fontSize: 11, color: '#F5A44E', fontWeight: 800, letterSpacing: 1.5 }}>ELKADY TRAVEL</div>
+      </div>}
+    </div>
+  )
+  const menu = (onNavigate?: () => void) => (
+    <Menu
+      theme="dark"
+      mode="inline"
+      selectedKeys={[selectedKey]}
+      defaultOpenKeys={openKeys}
+      items={items}
+      onClick={({ key }) => { if (String(key).startsWith('/')) { navigate(key); onNavigate?.() } }}
+    />
+  )
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        theme="dark"
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        breakpoint="lg"
-        collapsedWidth={screens.lg ? 80 : 0}
-        width={240}
-        style={{ position: 'sticky', top: 0, height: '100vh' }}
-      >
-        <div style={{ padding: '18px 14px', color: '#fff', display: 'flex', alignItems: 'center', gap: 11 }}>
-          <Logo size={46} className="sidebar-logo" />
-          {!collapsed && <div style={{ lineHeight: 1.25 }}>
-            <div style={{ fontWeight: 800, fontSize: 17 }}>القاضي</div>
-            <div style={{ fontSize: 11, color: '#F5A44E', fontWeight: 800, letterSpacing: 1.5 }}>ELKADY TRAVEL</div>
-          </div>}
-        </div>
-        <Menu
+      {!isMobile && (
+        <Sider
           theme="dark"
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          defaultOpenKeys={openKeys}
-          items={items}
-          onClick={({ key }) => { if (String(key).startsWith('/')) navigate(key) }}
-        />
-      </Sider>
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          collapsedWidth={80}
+          width={240}
+          style={{ position: 'sticky', top: 0, height: '100vh' }}
+        >
+          {brand()}
+          {menu()}
+        </Sider>
+      )}
 
       <Layout>
-        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#fff' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {!screens.lg && <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} style={{ color: '#fff' }} />}
-            <span style={{ fontWeight: 600 }}>{isStaff ? 'بوابة الإدارة' : 'بوابة الطالب'}</span>
+        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#fff', padding: isMobile ? '0 12px' : '0 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+            {isMobile && <Button type="text" icon={<MenuOutlined />} onClick={() => setDrawerOpen(true)} style={{ color: '#fff' }} />}
+            <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{isStaff ? 'بوابة الإدارة' : 'بوابة الطالب'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <Bell />
@@ -156,15 +166,29 @@ export default function AppLayout() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                 <Avatar style={{ background: '#0e7490' }} icon={<UserOutlined />} size="small" />
-                <span style={{ color: '#fff' }}>{user?.full_name || user?.username}</span>
+                {screens.sm && <span style={{ color: '#fff', whiteSpace: 'nowrap' }}>{user?.full_name || user?.username}</span>}
               </div>
             </Dropdown>
           </div>
         </Header>
-        <Content style={{ margin: screens.md ? 24 : 12 }}>
+        <Content style={{ margin: screens.md ? 24 : 12, minWidth: 0 }}>
           <Outlet />
         </Content>
       </Layout>
+
+      {isMobile && (
+        <Drawer
+          placement="right"
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          width={260}
+          closable={false}
+          styles={{ body: { padding: 0, background: '#001529' }, header: { display: 'none' } }}
+        >
+          {brand(true)}
+          {menu(() => setDrawerOpen(false))}
+        </Drawer>
+      )}
     </Layout>
   )
 }

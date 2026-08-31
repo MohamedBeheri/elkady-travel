@@ -59,7 +59,7 @@ function RoutesTab() {
     <>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openRoute()} style={{ marginBottom: 12 }}>مسار جديد</Button>
       <Table
-        rowKey="id" dataSource={routes?.results || []} pagination={false}
+        rowKey="id" dataSource={routes?.results || []} pagination={false} scroll={{ x: 'max-content' }}
         expandable={{
           expandedRowRender: (r: any) => (
             <div>
@@ -155,7 +155,7 @@ function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, e
   return (
     <>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} style={{ marginBottom: 12 }}>إضافة</Button>
-      <Table rowKey="id" dataSource={rows} pagination={false}
+      <Table rowKey="id" dataSource={rows} pagination={false} scroll={{ x: 'max-content' }}
         columns={[...columns, { title: '', render: (_: any, r: any) => (
           <Space>
             {extraAction && extraAction(r)}
