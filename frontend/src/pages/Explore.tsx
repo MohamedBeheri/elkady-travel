@@ -1,6 +1,6 @@
 import {
-  Button, Card, Col, Row, Tag, Segmented, Empty, Select, DatePicker,
-  Form, Input, InputNumber, App as AntdApp, Alert, Result,
+  Button, Card, Col, Row, Tag, Segmented, Empty, Select, DatePicker, Radio,
+  Form, Input, InputNumber, App as AntdApp, Alert, Result, Divider,
 } from 'antd'
 import {
   EnvironmentOutlined, ClockCircleOutlined, RollbackOutlined, CarOutlined,
@@ -10,74 +10,119 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
-  useExploreQuery, useLazyAvailabilityQuery, usePublicTourismRequestMutation,
+  useExploreQuery, usePublicTourismRequestMutation,
+  usePublicPickupPointsQuery,
 } from '../app/api'
 import { useAppSelector } from '../app/store'
 
 const TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شهري', daily: 'يومي' }
 const TYPE_COLOR: Record<string, string> = { term: 'green', monthly: 'orange', daily: 'gold' }
+const CENTERS = [
+  { value: 'shebin', label: 'شبين الكوم' }, { value: 'quesna', label: 'قويسنا' },
+  { value: 'bagour', label: 'الباجور' }, { value: 'benha', label: 'بنها' },
+]
 
-/* ---------- availability checker ---------- */
+/* ---------- advanced search: trip type → center → university → point → matching trip ---------- */
 function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
-  const [uni, setUni] = useState<string>()
-  const [routeId, setRouteId] = useState<number>()
-  const [slotId, setSlotId] = useState<number>()
-  const [date, setDate] = useState(dayjs().add(1, 'day'))
-  const [check, { data: res, isFetching }] = useLazyAvailabilityQuery()
+  const [tripType, setTripType] = useState<'go' | 'return'>('go')
+  const [center, setCenter] = useState<string>()
+  const [university, setUniversity] = useState<number>()
+  const [pickupId, setPickupId] = useState<number>()
+  const [searched, setSearched] = useState(false)
+  const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
 
-  const routes = data?.routes || []
-  const uniObj = (data?.universities || []).find((u: any) => u.name === uni)
-  const routeOpts = (uniObj ? routes.filter((r: any) => r.destination === uniObj.destination) : routes)
+  const unis = data?.universities || []
+  const selUni = unis.find((u: any) => u.id === university)
+  // explore data exposes destination as a NAME; the pickup endpoint as destination_name.
+  const availPickups = (pickups || []).filter((p: any) => !selUni || p.destination_name === selUni.destination)
+  const selPickup = availPickups.find((p: any) => p.id === pickupId)
+  const routeId: number | undefined = selPickup?.route_id
+  const route = (data?.routes || []).find((r: any) => r.id === routeId)
+
+  const isReturn = tripType === 'return'
+  const pointLabel = isReturn ? 'نقطة النزول' : 'نقطة الالتقاط'
+  const times = (isReturn ? (data?.return_slots || []) : (data?.morning_slots || []))
+  const noPickups = center && selUni && availPickups.length === 0
 
   const run = () => {
-    if (!routeId || !slotId) { message.warning('اختر الخط والموعد'); return }
-    check({ route: routeId, morning_slot: slotId, date: date.format('YYYY-MM-DD') })
+    if (!center || !university || !pickupId) { message.warning('أكمل بيانات البحث'); return }
+    setSearched(true)
   }
+  const reset = (fn: () => void) => { fn(); setSearched(false) }
 
   return (
     <Card style={{ marginBottom: 20, borderTop: '4px solid #0B2E5E' }}
-      title={<span style={{ fontWeight: 800 }}><SearchOutlined style={{ color: '#F07E1B' }} /> استعلام عن الأماكن المتاحة</span>}>
+      title={<span style={{ fontWeight: 800 }}><SearchOutlined style={{ color: '#F07E1B' }} /> بحث متقدم عن رحلتك</span>}>
+      <div style={{ marginBottom: 14 }}>
+        <span style={{ fontWeight: 700, marginInlineEnd: 10 }}>نوع الرحلة:</span>
+        <Radio.Group value={tripType} optionType="button" buttonStyle="solid"
+          onChange={(e) => reset(() => setTripType(e.target.value))}>
+          <Radio.Button value="go">ذهاب</Radio.Button>
+          <Radio.Button value="return">عودة</Radio.Button>
+        </Radio.Group>
+      </div>
       <Row gutter={[12, 12]}>
         <Col xs={24} sm={12} md={6}>
-          <Select style={{ width: '100%' }} placeholder="الجامعة" allowClear value={uni}
-            onChange={(v) => { setUni(v); setRouteId(undefined) }}
-            options={(data?.universities || []).map((u: any) => ({ value: u.name, label: u.name }))} />
+          <Select style={{ width: '100%' }} placeholder="المركز" value={center}
+            onChange={(v) => reset(() => { setCenter(v); setPickupId(undefined) })} options={CENTERS} />
         </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Select style={{ width: '100%' }} placeholder="الخط" value={routeId} onChange={setRouteId}
-            options={routeOpts.map((r: any) => ({ value: r.id, label: r.name }))} />
+        <Col xs={24} sm={12} md={7}>
+          <Select style={{ width: '100%' }} placeholder="الجامعة" value={university}
+            onChange={(v) => reset(() => { setUniversity(v); setPickupId(undefined) })}
+            options={unis.map((u: any) => ({ value: u.id, label: u.name }))} />
         </Col>
-        <Col xs={24} sm={12} md={5}>
-          <Select style={{ width: '100%' }} placeholder="الموعد" value={slotId} onChange={setSlotId}
-            options={(data?.morning_slots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
+        <Col xs={24} sm={12} md={7}>
+          <Select style={{ width: '100%' }} placeholder={center ? pointLabel : 'اختر المركز أولاً'} disabled={!center}
+            value={pickupId} onChange={(v) => reset(() => setPickupId(v))} showSearch optionFilterProp="label"
+            options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
         </Col>
-        <Col xs={24} sm={12} md={4}>
-          <DatePicker style={{ width: '100%' }} value={date} onChange={(d) => d && setDate(d)} allowClear={false} />
-        </Col>
-        <Col xs={24} md={3}>
-          <Button type="primary" block icon={<SearchOutlined />} loading={isFetching} onClick={run}>استعلام</Button>
+        <Col xs={24} md={4}>
+          <Button type="primary" block icon={<SearchOutlined />} onClick={run}>بحث</Button>
         </Col>
       </Row>
+      {noPickups && <Alert style={{ marginTop: 12 }} type="warning" showIcon message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
 
-      {res && (
+      {searched && (route ? (
         <div style={{ marginTop: 16 }}>
-          {res.full ? (
-            <Alert type="error" showIcon message={`الرحلة ممتلئة — ${res.route} (${res.slot})`}
-              description={`السعة ${res.capacity} مقعد — لا توجد أماكن متاحة في هذا التاريخ.`} />
-          ) : (
-            <Alert type="success" showIcon
-              message={`متاح ${res.available} مكان — ${res.route} (${res.slot})`}
-              description={`المشغول ${res.occupied} من ${res.capacity} مقعد.`} />
-          )}
-          <div style={{ marginTop: 12, textAlign: 'center' }}>
-            <Button type="primary" disabled={res.full} onClick={() => navigate(bookTo === '/book' ? `/book?route=${routeId}` : bookTo)}>
-              {res.full ? 'ممتلئة' : 'احجز مقعدك الآن'}
-            </Button>
-          </div>
+          <Divider style={{ margin: '4px 0 16px' }}>الرحلة المتاحة</Divider>
+          <Card styles={{ body: { padding: 18 } }} style={{ borderTop: '4px solid #16a34a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: '#ecfdf5', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+                {isReturn ? <RollbackOutlined /> : <CarOutlined />}
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: '#0B2E5E' }}>{route.name}</div>
+                <div style={{ color: '#64748b', fontSize: 13 }}>
+                  {isReturn
+                    ? `العودة: من ${route.destination} إلى ${selPickup?.name} (نقطة النزول)`
+                    : `الذهاب: من ${selPickup?.name} إلى ${selUni?.name}`}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              {['term', 'monthly', 'daily'].filter((k) => route.prices[k] != null).map((k) => (
+                <div key={k} style={{ border: '1px solid #eef1f6', borderRadius: 10, padding: '6px 12px', textAlign: 'center', flex: 1, minWidth: 90 }}>
+                  <Tag color={TYPE_COLOR[k]} style={{ marginInlineEnd: 0 }}>{TYPE_LABEL[k]}</Tag>
+                  <div style={{ fontWeight: 800, color: '#0B2E5E', marginTop: 4 }}>{Number(route.prices[k]).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 600 }}>ج.م</span></div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>
+              <ClockCircleOutlined style={{ color: '#F07E1B' }} /> {isReturn ? 'مواعيد العودة' : 'مواعيد الذهاب'}:
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {times.length ? times.map((s: any) => (
+                <Tag key={s.time} bordered style={{ borderRadius: 20 }}>{s.time}{isReturn && s.capacity ? ` · ${s.capacity} مقعد` : ''}</Tag>
+              )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
+            </div>
+            <Button type="primary" block onClick={() => navigate(bookTo === '/book' ? `/book?route=${routeId}` : bookTo)}>احجز هذا الخط</Button>
+          </Card>
         </div>
-      )}
+      ) : (
+        <Empty style={{ marginTop: 16 }} description="لا توجد رحلة تخدم هذا الاختيار. جرّب مركزاً أو جامعة أخرى." />
+      ))}
     </Card>
   )
 }
