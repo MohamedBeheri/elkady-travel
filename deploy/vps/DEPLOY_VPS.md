@@ -190,6 +190,8 @@ sudo -u elkady /opt/elkady/venv/bin/python manage.py loaddata /tmp/elkady_data.j
 
 ---
 
+> ✅ تم التحقق من النشر التلقائي (cron + ci-deploy.sh) على elkady-travel.com.
+
 ## فحص سريع للعزل
 - `sudo systemctl status elkady` خدمة مستقلة (ليست في PM2).
 - `sudo -u postgres psql -c "\l"` تُظهر `elkady_db` بجانب قاعدة MPFC — منفصلتان.
