@@ -5,6 +5,7 @@ import {
   DollarOutlined, IdcardOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import KaffoCredit from './KaffoCredit'
 import { useAppDispatch, useAppSelector } from '../app/store'
 import { logout } from '../app/authSlice'
 
@@ -92,7 +93,8 @@ export default function SiteLayout() {
       </main>
 
       <footer style={{ background: '#0a2242', color: '#cdd8ea', textAlign: 'center', padding: '16px', fontSize: 13 }}>
-        القاضي — ELKADY TRAVEL · جميع الحقوق محفوظة
+        <div>القاضي — ELKADY TRAVEL · جميع الحقوق محفوظة</div>
+        <KaffoCredit dark style={{ marginTop: 6 }} />
       </footer>
     </div>
   )

@@ -1,5 +1,6 @@
 import { Card, Row, Col, Tag, Empty, Descriptions } from 'antd'
 import { useMyTicketsQuery } from '../app/api'
+import KaffoCredit from '../components/KaffoCredit'
 
 const STATUS_COLOR: Record<string, string> = { confirmed: 'green', held: 'orange' }
 
@@ -39,6 +40,9 @@ export default function Tickets() {
                   <Descriptions.Item label="الحالة"><Tag color={STATUS_COLOR[t.status] || 'default'}>{t.status_display}</Tag></Descriptions.Item>
                   <Descriptions.Item label="الرقم المرجعي">{t.token}</Descriptions.Item>
                 </Descriptions>
+              </div>
+              <div style={{ borderTop: '1px dashed #e6ebf3', padding: '10px 12px' }}>
+                <KaffoCredit />
               </div>
             </div>
           </Col>

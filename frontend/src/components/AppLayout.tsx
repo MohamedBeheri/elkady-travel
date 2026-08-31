@@ -12,6 +12,7 @@ import { useAppDispatch, useAppSelector } from '../app/store'
 import { logout } from '../app/authSlice'
 import { useUnreadNotificationsQuery, useMarkAllReadMutation, useCompanyQuery } from '../app/api'
 import Logo from './Logo'
+import KaffoCredit from './KaffoCredit'
 
 const { Header, Sider, Content } = Layout
 const STAFF = ['admin', 'transport_manager', 'payment_officer', 'operations', 'tourism_manager']
@@ -179,6 +180,9 @@ export default function AppLayout() {
         <Content style={{ margin: screens.md ? 24 : 12, minWidth: 0 }}>
           <Outlet />
         </Content>
+        <div style={{ padding: '14px 12px 20px' }}>
+          <KaffoCredit />
+        </div>
       </Layout>
 
       {isMobile && (

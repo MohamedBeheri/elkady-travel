@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useLoginMutation } from '../app/api'
 import { useAppDispatch } from '../app/store'
 import { setCredentials } from '../app/authSlice'
+import KaffoCredit from '../components/KaffoCredit'
 
 export default function Login() {
   const [login, { isLoading }] = useLoginMutation()
@@ -43,6 +44,7 @@ export default function Login() {
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <Link to="/explore" style={{ color: '#F07E1B', fontWeight: 700 }}>تصفّح الخطوط والمواعيد والأسعار ←</Link>
           </div>
+          <KaffoCredit style={{ marginTop: 18 }} />
         </div>
       </div>
     </div>
