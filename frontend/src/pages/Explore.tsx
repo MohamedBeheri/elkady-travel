@@ -4,7 +4,7 @@ import {
 } from 'antd'
 import {
   EnvironmentOutlined, ClockCircleOutlined, RollbackOutlined, CarOutlined,
-  LoginOutlined, UserAddOutlined, CompassOutlined, SearchOutlined,
+  LoginOutlined, UserAddOutlined, CompassOutlined, SearchOutlined, CalendarOutlined,
 } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -28,6 +28,7 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
   const [center, setCenter] = useState<string>()
   const [university, setUniversity] = useState<number>()
   const [pickupId, setPickupId] = useState<number>()
+  const [date, setDate] = useState<any>(dayjs().add(1, 'day'))
   const [searched, setSearched] = useState(false)
   const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
   const { message } = AntdApp.useApp()
@@ -98,6 +99,11 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
             value={pickupId} onChange={(v) => reset(() => setPickupId(v))} showSearch optionFilterProp="label"
             options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
         </Col>
+        <Col xs={24} sm={12} md={10}>
+          <DatePicker style={{ width: '100%' }} value={date} onChange={(d) => reset(() => setDate(d || dayjs().add(1, 'day')))}
+            allowClear={false} format="YYYY-MM-DD" placeholder="تاريخ السفر" suffixIcon={<CalendarOutlined />}
+            disabledDate={(d) => d && d < dayjs().startOf('day')} inputReadOnly />
+        </Col>
         <Col xs={24}>
           <Button type="primary" block size="large" icon={<SearchOutlined />} onClick={run}
             style={{ background: '#16a34a', borderColor: '#16a34a', fontWeight: 800, height: 46 }}>
@@ -132,6 +138,9 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
                 </div>
               ))}
             </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              <Tag icon={<CalendarOutlined />} color="blue">تاريخ السفر: {date?.format('YYYY-MM-DD')}</Tag>
+            </div>
             <div style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>
               <ClockCircleOutlined style={{ color: '#F07E1B' }} /> {isReturn ? 'مواعيد العودة' : 'مواعيد الذهاب'}:
             </div>
@@ -140,7 +149,8 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
                 <Tag key={s.time} bordered style={{ borderRadius: 20 }}>{s.time}{isReturn && s.capacity ? ` · ${s.capacity} مقعد` : ''}</Tag>
               )) : <span style={{ color: '#94a3b8', fontSize: 13 }}>—</span>}
             </div>
-            <Button type="primary" block onClick={() => navigate(bookTo === '/book' ? `/book?route=${routeId}` : bookTo)}>احجز هذا الخط</Button>
+            <Button type="primary" block size="large" style={{ background: '#16a34a', borderColor: '#16a34a', fontWeight: 800 }}
+              onClick={() => navigate(bookTo === '/' ? `/?date=${date?.format('YYYY-MM-DD')}` : bookTo)}>احجز هذا الخط</Button>
           </Card>
         </div>
       ) : (

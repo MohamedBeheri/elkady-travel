@@ -6,7 +6,7 @@ import {
   UploadOutlined, CarOutlined, RollbackOutlined,
 } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   useMorningSlotsQuery, useReturnSlotsQuery, useUniversitiesQuery,
@@ -41,7 +41,9 @@ function DailyFlow({ unis }: any) {
   const [tripType, setTripType] = useState<'go' | 'return' | 'round'>('go')
   const [center, setCenter] = useState<string | undefined>(user?.center || undefined)
   const [pickupId, setPickupId] = useState<number | undefined>(user?.pickup_point || undefined)
-  const [date, setDate] = useState<any>(dayjs().add(1, 'day'))
+  const [params] = useSearchParams()
+  const qDate = params.get('date')
+  const [date, setDate] = useState<any>(qDate ? dayjs(qDate) : dayjs().add(1, 'day'))
   const [goSlot, setGoSlot] = useState<number>()
   const [goSeat, setGoSeat] = useState<number | null>(null)
   const [retSlot, setRetSlot] = useState<number>()

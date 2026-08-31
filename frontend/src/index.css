@@ -99,8 +99,9 @@ body {
 .gb-hero-visual { color: #fff; display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; }
 .gb-hero-title { font-size: 34px; font-weight: 900; line-height: 1.15; text-shadow: 0 2px 10px rgba(0,0,0,0.18); }
 .gb-hero-sub { font-size: 18px; font-weight: 700; opacity: 0.95; }
-.gb-hero-bus { width: 100%; max-width: 540px; align-self: center; margin-top: 6px;
-  filter: drop-shadow(0 16px 22px rgba(0,0,0,0.28)); }
+.gb-hero-bus { display: block; width: 100%; max-width: 500px; height: auto; max-height: 300px;
+  object-fit: contain; align-self: center; margin: 8px auto 0;
+  filter: drop-shadow(0 10px 16px rgba(0,0,0,0.22)); }
 .gb-hero-search .ant-card { margin: 0 !important; box-shadow: 0 12px 30px rgba(11,46,94,0.18); border: none; }
 @media (max-width: 900px) {
   .gb-hero { grid-template-columns: 1fr; padding: 18px; }
