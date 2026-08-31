@@ -8,6 +8,9 @@ git pull origin main
 
 cd /opt/elkady/backend
 /opt/elkady/venv/bin/pip install -r requirements.txt
+
+# Load env (DATABASE_URL etc.) for the management commands.
+set -a && source /opt/elkady/backend/.env && set +a
 /opt/elkady/venv/bin/python manage.py migrate --no-input
 /opt/elkady/venv/bin/python manage.py collectstatic --no-input
 

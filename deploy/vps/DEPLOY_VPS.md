@@ -102,14 +102,19 @@ sudo -u elkady nano /opt/elkady/backend/.env
 
 ## 6) الهجرات والملفات الثابتة والبيانات الأولية
 
+الأوامر اليدوية لا تحمّل `.env` تلقائياً (systemd فقط يحمّله وقت التشغيل)، لذلك
+نُحمّله يدوياً قبل كل أمر عبر `source`:
+
 ```bash
 cd /opt/elkady/backend
-sudo -u elkady /opt/elkady/venv/bin/python manage.py migrate --no-input
-sudo -u elkady /opt/elkady/venv/bin/python manage.py collectstatic --no-input
+runpy() { sudo -u elkady bash -c "set -a && source /opt/elkady/backend/.env && set +a && /opt/elkady/venv/bin/python manage.py $*"; }
+
+runpy migrate --no-input
+runpy collectstatic --no-input
 
 # بيانات أولية (حسابات النظام + المسارات + الأسطول). مرة واحدة فقط:
-sudo -u elkady /opt/elkady/venv/bin/python manage.py seed_demo
-sudo -u elkady /opt/elkady/venv/bin/python manage.py seed_fleet
+runpy seed_demo
+runpy seed_fleet
 ```
 > حسابات الدخول الافتراضية بعد seed: `admin/admin123` — **غيّر كلمة المرور فوراً**
 > من صفحة المستخدمين أو عبر `createsuperuser`.
