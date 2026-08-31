@@ -28,7 +28,7 @@ class Subscription(models.Model):
         verbose_name=_('الطالب'),
     )
     subscription_type = models.CharField(
-        max_length=10, choices=SUBSCRIPTION_TYPES, verbose_name=_('نوع الاشتراك'),
+        max_length=15, choices=SUBSCRIPTION_TYPES, verbose_name=_('نوع الاشتراك'),
     )
     route = models.ForeignKey(
         'config_app.Route', on_delete=models.PROTECT, related_name='subscriptions',

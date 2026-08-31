@@ -1,12 +1,48 @@
-import { Card, Col, Row, Progress, Table, Tag } from 'antd'
+import { Card, Col, Row, Progress, Table, Tag, Switch, Space, App as AntdApp } from 'antd'
 import {
   TeamOutlined, ClockCircleOutlined, DollarOutlined, CarOutlined,
   CompassOutlined, CheckCircleOutlined, WalletOutlined, RiseOutlined,
+  LockOutlined,
 } from '@ant-design/icons'
 import { CarOutlined as CarIcon, ToolOutlined, IdcardOutlined, ApartmentOutlined } from '@ant-design/icons'
-import { useDashboardQuery, useDashboardChartsQuery, useFleetDashboardQuery } from '../app/api'
+import {
+  useDashboardQuery, useDashboardChartsQuery, useFleetDashboardQuery,
+  useCompanyQuery, useSaveCompanyMutation,
+} from '../app/api'
 import { useAppSelector } from '../app/store'
 import { Donut, BarList, LineChart } from '../components/Charts'
+
+function BookingTogglesCard() {
+  const { message } = AntdApp.useApp()
+  const { data: company } = useCompanyQuery()
+  const [save, { isLoading }] = useSaveCompanyMutation()
+  const toggle = async (field: string, value: boolean) => {
+    try {
+      await save({ [field]: value }).unwrap()
+      message.success(value ? 'تم فتح الحجز' : 'تم إغلاق الحجز')
+    } catch { message.error('تعذّر الحفظ') }
+  }
+  const rows: [string, string, boolean][] = [
+    ['booking_term_open', 'حجز الترم', company?.booking_term_open !== false],
+    ['booking_monthly_open', 'الحجز الشهري', company?.booking_monthly_open !== false],
+    ['booking_daily_open', 'الحجز اليومي', company?.booking_daily_open !== false],
+  ]
+  return (
+    <Card size="small" style={{ marginBottom: 14 }}
+      title={<span><LockOutlined /> <b>فتح / إغلاق الحجز للجميع</b></span>}
+      extra={<Tag color="blue">يسري على جميع الطلاب فوراً</Tag>}>
+      <Space size={24} wrap>
+        {rows.map(([f, label, on]) => (
+          <Space key={f}>
+            <Switch checked={on} loading={isLoading} onChange={(v) => toggle(f, v)}
+              checkedChildren="مفتوح" unCheckedChildren="مغلق" />
+            <span style={{ fontWeight: 600 }}>{label}</span>
+          </Space>
+        ))}
+      </Space>
+    </Card>
+  )
+}
 
 function Section({ title, children }: any) {
   return <div style={{ marginBottom: 20 }}>
@@ -60,6 +96,8 @@ export default function Dashboard() {
           <span className="tag">— نظرة شاملة على التشغيل والمدفوعات والسياحة</span>
         </div>
       </div>
+
+      <BookingTogglesCard />
 
       <Section title="الطلاب">
         <Kpi title="إجمالي الطلاب" value={s?.total ?? 0} icon={<TeamOutlined />} color={NAVY} />

@@ -105,4 +105,7 @@ class PaymentAccountSerializer(serializers.ModelSerializer):
 class CompanySettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanySettings
-        fields = ['id', 'name', 'tagline', 'phone', 'logo']
+        fields = [
+            'id', 'name', 'tagline', 'phone', 'logo',
+            'booking_term_open', 'booking_monthly_open', 'booking_daily_open',
+        ]

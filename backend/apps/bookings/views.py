@@ -1,9 +1,11 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from config.permissions import STAFF_ROLES
+from apps.config_app.models import CompanySettings
 from apps.notifications.models import notify
 from .models import Subscription
 from .serializers import SubscriptionCreateSerializer, SubscriptionSerializer
@@ -22,6 +24,18 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return SubscriptionCreateSerializer
         return SubscriptionSerializer
+
+    def create(self, request, *args, **kwargs):
+        if request.user.role not in STAFF_ROLES:
+            stype = (request.data.get('subscription_type') or '').strip()
+            cs = CompanySettings.load()
+            if stype == 'term' and not cs.booking_term_open:
+                raise PermissionDenied('حجز اشتراك الترم مغلق حالياً من الإدارة')
+            if stype == 'monthly' and not cs.booking_monthly_open:
+                raise PermissionDenied('حجز الاشتراك الشهري مغلق حالياً من الإدارة')
+            if stype.startswith('daily') and not cs.booking_daily_open:
+                raise PermissionDenied('الحجز اليومي مغلق حالياً من الإدارة')
+        return super().create(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         """Only staff may hard-delete a subscription record."""

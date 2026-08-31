@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from config.permissions import STAFF_ROLES
 from apps.bookings.models import Subscription
-from apps.config_app.models import MorningSlot, Route, ReturnSlot, SeatCapacity
+from apps.config_app.models import CompanySettings, MorningSlot, Route, ReturnSlot, SeatCapacity
 from apps.notifications.models import notify
 from .layouts import LAYOUTS, layout_capacity
 from .models import DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
@@ -391,6 +391,8 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
     def book(self, request):
         """Student books tomorrow's daily seat. Priority derives from confirmed subscription."""
         user = request.user
+        if user.role not in STAFF_ROLES and not CompanySettings.load().booking_daily_open:
+            return Response({'detail': 'الحجز اليومي مغلق حالياً من الإدارة'}, status=403)
         date = request.data.get('date')
         route_id = request.data.get('route')
         slot_id = request.data.get('morning_slot')
@@ -415,6 +417,8 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
     def book_seat(self, request):
         """Student picks a specific seat on the seat map (going or return leg)."""
         user = request.user
+        if user.role not in STAFF_ROLES and not CompanySettings.load().booking_daily_open:
+            return Response({'detail': 'الحجز اليومي مغلق حالياً من الإدارة'}, status=403)
         date = request.data.get('date')
         route_id = request.data.get('route')
         direction = request.data.get('direction', 'go')

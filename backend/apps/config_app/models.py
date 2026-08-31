@@ -5,6 +5,9 @@ SUBSCRIPTION_TYPES = [
     ('term', _('ترم')),
     ('monthly', _('شهري')),
     ('daily', _('يومي')),
+    ('daily_go', _('يومي — ذهاب فقط')),
+    ('daily_return', _('يومي — عودة فقط')),
+    ('daily_round', _('يومي — ذهاب وعودة')),
 ]
 
 
@@ -226,7 +229,7 @@ class SeatCapacity(models.Model):
 
 class PricingRule(models.Model):
     subscription_type = models.CharField(
-        max_length=10, choices=SUBSCRIPTION_TYPES, verbose_name=_('نوع الاشتراك'),
+        max_length=15, choices=SUBSCRIPTION_TYPES, verbose_name=_('نوع الاشتراك'),
     )
     route = models.ForeignKey(
         Route, on_delete=models.CASCADE, related_name='prices',
@@ -285,6 +288,9 @@ class CompanySettings(models.Model):
     tagline = models.CharField(max_length=200, blank=True, verbose_name=_('الشعار النصي'))
     phone = models.CharField(max_length=40, blank=True, verbose_name=_('الهاتف'))
     logo = models.ImageField(upload_to='branding/', null=True, blank=True, verbose_name=_('الشعار'))
+    booking_term_open = models.BooleanField(default=True, verbose_name=_('حجز الترم مفتوح'))
+    booking_monthly_open = models.BooleanField(default=True, verbose_name=_('حجز الشهري مفتوح'))
+    booking_daily_open = models.BooleanField(default=True, verbose_name=_('الحجز اليومي مفتوح'))
 
     class Meta:
         verbose_name = _('إعدادات الشركة')

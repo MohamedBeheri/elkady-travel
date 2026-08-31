@@ -16,7 +16,14 @@ import {
   usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation, usePaymentMethodsQuery,
 } from '../app/api'
 
-const TYPE_OPTS = [{ value: 'term', label: 'ترم' }, { value: 'monthly', label: 'شهري' }, { value: 'daily', label: 'يومي' }]
+const TYPE_OPTS = [
+  { value: 'term', label: 'ترم' },
+  { value: 'monthly', label: 'شهري' },
+  { value: 'daily', label: 'يومي (قديم / احتياطي)' },
+  { value: 'daily_go', label: 'يومي — ذهاب فقط' },
+  { value: 'daily_return', label: 'يومي — عودة فقط' },
+  { value: 'daily_round', label: 'يومي — ذهاب وعودة' },
+]
 
 /* ---------- Routes + pickup points ---------- */
 function RoutesTab() {

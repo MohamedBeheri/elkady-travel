@@ -13,6 +13,7 @@ import {
   usePublicPickupPointsQuery, usePricesQuery,
   useSeatmapForQuery, useBookSpecificSeatMutation,
   useCreateSubscriptionMutation, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
+  useCompanyQuery,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
 import TourismRequest from './TourismRequest'
@@ -84,9 +85,15 @@ function DailyFlow({ unis }: any) {
   useEffect(() => { setGoSeat(null) }, [routeId, goSlot, dateStr])
   useEffect(() => { setRetSeat(null) }, [routeId, retSlot, dateStr])
 
-  const dailyPrice = Number(prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === 'daily')?.price || 0)
-  const legs = tripType === 'round' ? 2 : 1
-  const total = dailyPrice * legs
+  const priceFor = (t: string) => {
+    const row = prices?.results?.find((p: any) => p.route === routeId && p.subscription_type === t)
+    return row ? Number(row.price) : undefined
+  }
+  const legacyDaily = priceFor('daily') ?? 0
+  const goPrice = priceFor('daily_go') ?? legacyDaily
+  const returnPrice = priceFor('daily_return') ?? legacyDaily
+  const roundPrice = priceFor('daily_round') ?? (goPrice + returnPrice)
+  const total = tripType === 'round' ? roundPrice : tripType === 'return' ? returnPrice : goPrice
 
   const canConfirm = !!(university && center && pickupId && dateStr && routeId
     && (!wantGo || (goSlot && (goSeat || !seatSelection)))
@@ -241,8 +248,14 @@ function DailyFlow({ unis }: any) {
       {/* Step 5 — Invoice + confirm */}
       <Card size="small" style={{ background: '#f8fafc' }} title={<span><b>{wantGo && wantRet ? '٥' : '٤'}) إجمالي الفاتورة</b></span>}>
         <Descriptions size="small" column={1} bordered style={{ marginBottom: 12 }}>
-          {wantGo && <Descriptions.Item label="رحلة الذهاب">{dailyPrice.toLocaleString()} ج.م {goSeat ? `· مقعد ${goSeat}` : ''}</Descriptions.Item>}
-          {wantRet && <Descriptions.Item label="رحلة العودة">{dailyPrice.toLocaleString()} ج.م {retSeat ? `· مقعد ${retSeat}` : ''}</Descriptions.Item>}
+          {tripType === 'round'
+            ? <Descriptions.Item label="ذهاب وعودة (سعر مجمّع)">
+                {roundPrice.toLocaleString()} ج.م {goSeat ? `· مقعد ذهاب ${goSeat}` : ''}{retSeat ? ` · مقعد عودة ${retSeat}` : ''}
+              </Descriptions.Item>
+            : <>
+                {wantGo && <Descriptions.Item label="رحلة الذهاب">{goPrice.toLocaleString()} ج.م {goSeat ? `· مقعد ${goSeat}` : ''}</Descriptions.Item>}
+                {wantRet && <Descriptions.Item label="رحلة العودة">{returnPrice.toLocaleString()} ج.م {retSeat ? `· مقعد ${retSeat}` : ''}</Descriptions.Item>}
+              </>}
         </Descriptions>
         <Statistic title="الإجمالي المطلوب" value={total} suffix="ج.م" valueStyle={{ color: '#0B2E5E', fontWeight: 800 }} />
         <Divider style={{ margin: '14px 0' }} />
@@ -258,11 +271,12 @@ function DailyFlow({ unis }: any) {
 }
 
 /* ================= Subscription (term / monthly) + inline payment ================= */
-function SubscriptionBooking({ unis }: any) {
+function SubscriptionBooking({ unis, termOpen = true, monthlyOpen = true }: any) {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
-  const [subType, setSubType] = useState('term')
+  const availableSubTypes = SUB_TYPES.filter((t) => (t.value === 'term' ? termOpen : monthlyOpen))
+  const [subType, setSubType] = useState(availableSubTypes[0]?.value || 'term')
   const [university, setUniversity] = useState<number | undefined>(user?.university ?? undefined)
   const [center, setCenter] = useState<string | undefined>(user?.center || undefined)
   const [pickupId, setPickupId] = useState<number | undefined>(user?.pickup_point || undefined)
@@ -375,7 +389,7 @@ function SubscriptionBooking({ unis }: any) {
       <Alert type="info" showIcon style={{ marginBottom: 16 }}
         message="اختر نوع الاشتراك والجامعة ونقطة الالتقاط وميعادَي الذهاب والعودة اليوميَّين، ثم أكمل الدفع. بعد تأكيد الإدارة يُخصَّص لك مقعد ثابت في المواعيد التي اخترتها ويظهر وقت التقاطك على التذكرة." />
       <Radio.Group value={subType} onChange={(e) => setSubType(e.target.value)} optionType="button" buttonStyle="solid" style={{ marginBottom: 16 }}>
-        {SUB_TYPES.map((t) => <Radio.Button key={t.value} value={t.value}>{t.label}</Radio.Button>)}
+        {availableSubTypes.map((t) => <Radio.Button key={t.value} value={t.value}>{t.label}</Radio.Button>)}
       </Radio.Group>
       <Form layout="vertical" style={{ maxWidth: 560 }}>
         <Form.Item label="الجامعة" required>
@@ -408,17 +422,27 @@ function SubscriptionBooking({ unis }: any) {
 }
 
 /* ================= Unified booking home ================= */
+const Closed = ({ what }: { what: string }) => (
+  <Alert type="warning" showIcon message={`${what} مغلق حالياً`}
+    description="سيُفتح فور رفع القفل من إدارة المنصة. حاول لاحقاً أو تواصل مع الإدارة." />
+)
+
 export default function Book() {
   const [tab, setTab] = useState('daily')
   const { data: unisQ } = useUniversitiesQuery({ active: true })
+  const { data: company } = useCompanyQuery()
   const unis = unisQ?.results || []
+  const dailyOpen = company?.booking_daily_open !== false
+  const termOpen = company?.booking_term_open !== false
+  const monthlyOpen = company?.booking_monthly_open !== false
+  const subOpen = termOpen || monthlyOpen
 
   return (
     <Card title={<span style={{ fontWeight: 800, fontSize: 18 }}>احجز رحلتك</span>}>
       <Tabs activeKey={tab} onChange={setTab} size="large"
         items={[
-          { key: 'daily', label: '🚌 حجز يومي', children: <DailyFlow unis={unis} /> },
-          { key: 'sub', label: '🎫 حجز ترم / شهري', children: <SubscriptionBooking unis={unis} /> },
+          { key: 'daily', label: '🚌 حجز يومي', children: dailyOpen ? <DailyFlow unis={unis} /> : <Closed what="الحجز اليومي" /> },
+          { key: 'sub', label: '🎫 حجز ترم / شهري', children: subOpen ? <SubscriptionBooking unis={unis} termOpen={termOpen} monthlyOpen={monthlyOpen} /> : <Closed what="حجز الترم والشهري" /> },
           { key: 'tourism', label: '🏖️ رحلات سياحية', children: <TourismRequest /> },
         ]} />
     </Card>

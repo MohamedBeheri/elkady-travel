@@ -181,6 +181,10 @@ export const api = createApi({
       invalidatesTags: ['PayAccount'],
     }),
     company: b.query<any, void>({ query: () => 'config/company/', providesTags: ['Company'] }),
+    saveCompany: b.mutation<any, any>({
+      query: (body) => ({ url: 'config/company/', method: 'PATCH', body }),
+      invalidatesTags: ['Company'],
+    }),
 
     // ---- subscriptions / bookings ----
     subscriptions: b.query<any, Record<string, any> | void>({
@@ -434,7 +438,7 @@ export const {
   useCapacitiesQuery, useSaveCapacityMutation,
   usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
   usePaymentMethodsQuery, usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation,
-  useCompanyQuery,
+  useCompanyQuery, useSaveCompanyMutation,
   useSubscriptionsQuery, useCreateSubscriptionMutation, useDeleteSubscriptionMutation, useSubmitPaymentMutation,
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
   useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useRunAllocationMutation,
