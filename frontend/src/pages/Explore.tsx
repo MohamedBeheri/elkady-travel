@@ -321,8 +321,8 @@ export default function Explore() {
           <div className="gb-hero-sub">
             {isStudent ? 'اختر رحلتك واحجز مقعدك في دقيقة' : 'تصفّح المواعيد والأسعار بحرية — والتسجيل عند الحجز فقط'}
           </div>
-          <img className="gb-hero-bus" src="/hero-bus.png" alt="ELKADY TRAVEL"
-            onError={(e) => { const t = e.currentTarget; if (!t.dataset.fb) { t.dataset.fb = '1'; t.src = '/card-bus.png' } }} />
+          <img className="gb-hero-bus" src="/hero-bus.webp" alt="ELKADY TRAVEL" loading="eager"
+            onError={(e) => { const t = e.currentTarget; const fb = t.dataset.fb || ''; if (!fb) { t.dataset.fb = '1'; t.src = '/hero-bus.png' } else if (fb === '1') { t.dataset.fb = '2'; t.src = '/card-bus.png' } }} />
         </div>
         <div className="gb-hero-search">
           {mode === 'uni'

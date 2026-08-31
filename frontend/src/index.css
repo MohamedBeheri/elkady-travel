@@ -92,7 +92,7 @@ body {
 .gb-hero {
   position: relative; border-radius: 22px; overflow: hidden;
   /* branded watery pattern layered over the brand gradient (falls back to the gradient if the image is missing) */
-  background: url('/hero-bg.png') center/cover no-repeat,
+  background: url('/hero-bg.webp') center/cover no-repeat,
               radial-gradient(circle at 82% 18%, #F7A24A 0%, #EC6A16 52%, #d15c10 100%);
   padding: 26px; margin-bottom: 22px;
   display: grid; grid-template-columns: 1.05fr minmax(320px, 470px); gap: 22px; align-items: center;
