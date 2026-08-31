@@ -142,6 +142,33 @@ function UniversityRoutes({ data, navigate, bookTo }: { data: any; navigate: any
     <>
       <AvailabilityChecker data={data} bookTo={bookTo} />
 
+      <Row gutter={[16, 16]} style={{ marginBottom: 22 }}>
+        <Col xs={24} md={12}>
+          <Card title={<span style={{ fontWeight: 800 }}><ClockCircleOutlined style={{ color: '#F07E1B' }} /> مواعيد الذهاب</span>}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {(data?.morning_slots || []).map((s: any) => (
+                <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
+                  <div style={{ color: '#64748b', fontSize: 12 }}>{s.name}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card title={<span style={{ fontWeight: 800 }}><RollbackOutlined style={{ color: '#F07E1B' }} /> مواعيد العودة</span>}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {(data?.return_slots || []).map((s: any) => (
+                <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
+                  <div style={{ color: '#64748b', fontSize: 12 }}>{s.capacity} مقعد</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div className="sec-head" style={{ margin: 0 }}>خطوط السير المتاحة</div>
         <Segmented value={dest} onChange={(v) => setDest(v as string)}
@@ -182,33 +209,6 @@ function UniversityRoutes({ data, navigate, bookTo }: { data: any; navigate: any
             </Card>
           </Col>
         ))}
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 22 }}>
-        <Col xs={24} md={12}>
-          <Card title={<span style={{ fontWeight: 800 }}><ClockCircleOutlined style={{ color: '#F07E1B' }} /> مواعيد الذهاب</span>}>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {(data?.morning_slots || []).map((s: any) => (
-                <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
-                  <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
-                  <div style={{ color: '#64748b', fontSize: 12 }}>{s.name}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title={<span style={{ fontWeight: 800 }}><RollbackOutlined style={{ color: '#F07E1B' }} /> مواعيد العودة</span>}>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {(data?.return_slots || []).map((s: any) => (
-                <div key={s.time} style={{ border: '1px solid #eef1f6', borderRadius: 12, padding: '10px 18px', textAlign: 'center' }}>
-                  <div style={{ fontWeight: 800, color: '#0B2E5E', fontSize: 18 }}>{s.time}</div>
-                  <div style={{ color: '#64748b', fontSize: 12 }}>{s.capacity} مقعد</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </Col>
       </Row>
     </>
   )
