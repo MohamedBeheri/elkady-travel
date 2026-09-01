@@ -21,6 +21,7 @@ import ReturnLists from './pages/ReturnLists'
 import Config from './pages/Config'
 import TourismAdmin from './pages/TourismAdmin'
 import Users from './pages/Users'
+import FinanceReports from './pages/FinanceReports'
 // fleet (admin)
 import Vehicles from './pages/fleet/Vehicles'
 import Drivers from './pages/fleet/Drivers'
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/config" element={<Config />} />
           <Route path="/tourism" element={<TourismAdmin />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/reports/finance" element={<FinanceReports />} />
           {/* Fleet management */}
           <Route path="/fleet/vehicles" element={<Vehicles />} />
           <Route path="/fleet/drivers" element={<Drivers />} />

@@ -98,10 +98,15 @@ export default function AppLayout() {
       ],
     }, {
       key: 'g-rep', icon: <BarChartOutlined />, label: 'التقارير', children: [
+        { key: '/reports/finance', icon: <DollarOutlined />, label: 'التقارير المالية' },
         { key: '/fleet/reports', icon: <BarChartOutlined />, label: 'مصروفات المركبات' },
         { key: '/fleet/trip-cost', icon: <DollarOutlined />, label: 'تكلفة الرحلات' },
       ],
-    }] : []),
+    }] : [{
+      key: 'g-rep', icon: <BarChartOutlined />, label: 'التقارير', children: [
+        { key: '/reports/finance', icon: <DollarOutlined />, label: 'التقارير المالية' },
+      ],
+    }]),
     ...(isAdmin ? [{
       key: 'g-sys', icon: <SettingOutlined />, label: 'النظام', children: [
         { key: '/config', icon: <SettingOutlined />, label: 'الإعدادات والتهيئة' },

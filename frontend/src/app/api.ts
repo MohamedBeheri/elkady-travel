@@ -54,6 +54,17 @@ export const api = createApi({
     // ---- dashboard ----
     dashboard: b.query<any, void>({ query: () => 'dashboard/stats/', providesTags: ['Dashboard'] }),
     dashboardCharts: b.query<any, void>({ query: () => 'dashboard/charts/', providesTags: ['Dashboard'] }),
+    financeReport: b.query<any, { start?: string; end?: string; month?: string } | void>({
+      query: (p) => {
+        const q = new URLSearchParams()
+        if (p?.start) q.set('start', p.start)
+        if (p?.end) q.set('end', p.end)
+        if (p?.month) q.set('month', p.month)
+        const qs = q.toString()
+        return `reports/finance/${qs ? `?${qs}` : ''}`
+      },
+      providesTags: ['Dashboard'],
+    }),
     explore: b.query<any, void>({ query: () => 'public/explore/' }),
     publicUniversities: b.query<any, void>({ query: () => 'public/universities/' }),
     publicColleges: b.query<any, number | void>({
@@ -433,7 +444,7 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useRegisterMutation, useMeQuery, useUpdateProfileMutation,
-  useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useDashboardQuery, useDashboardChartsQuery, useExploreQuery, usePublicUniversitiesQuery,
+  useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
   usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation,
   useDestinationsQuery, useSaveDestinationMutation,

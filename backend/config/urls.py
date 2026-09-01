@@ -5,7 +5,7 @@ from django.urls import include, path, re_path
 from django.views.static import serve
 
 from .views import (
-    dashboard_stats, dashboard_charts, public_explore, public_universities,
+    dashboard_stats, dashboard_charts, finance_report, public_explore, public_universities,
     public_availability, public_tourism_request, public_colleges, public_pickup_points,
 )
 
@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/', include([
         path('dashboard/stats/', dashboard_stats, name='dashboard_stats'),
         path('dashboard/charts/', dashboard_charts, name='dashboard_charts'),
+        path('reports/finance/', finance_report, name='finance_report'),
         path('public/explore/', public_explore, name='public_explore'),
         path('public/universities/', public_universities, name='public_universities'),
         path('public/colleges/', public_colleges, name='public_colleges'),

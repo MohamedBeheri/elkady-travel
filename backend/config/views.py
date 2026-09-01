@@ -11,6 +11,7 @@ from apps.config_app.models import (
     College, CompanySettings, MorningSlot, PickupPoint, PricingRule, ReturnSlot,
     Route, SeatCapacity, University,
 )
+from apps.fleet.models import MaintenanceRecord, TrafficFine, TripExpense
 from apps.operations.models import DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
 from apps.operations.layouts import layout_capacity
 from apps.operations.services import build_seatmap
@@ -324,4 +325,124 @@ def dashboard_charts(request):
         'weekly': weekly,
         'overall': {'capacity': total_cap, 'occupied': total_occ,
                     'available': max(total_cap - total_occ, 0)},
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def finance_report(request):
+    """Financial report: collections by subscription type + fleet expenses + net profit.
+
+    Query params (all optional; defaults to current month):
+        - start:  YYYY-MM-DD (inclusive)
+        - end:    YYYY-MM-DD (inclusive)
+        - month:  YYYY-MM shortcut (sets start/end to that month)
+
+    Revenue is CONFIRMED subscriptions bucketed by verified_at date; daily variants
+    (daily / daily_go / daily_return / daily_round) collapse into one "daily" row.
+    Expenses cover approved TripExpense (fuel/tolls/other), MaintenanceRecord
+    (regular + workshop), and TrafficFine — all filtered by their `date`.
+    """
+    from datetime import date as _date, datetime as _dt
+
+    today = timezone.localdate()
+    month = request.query_params.get('month')
+    start_s = request.query_params.get('start')
+    end_s = request.query_params.get('end')
+
+    def parse(s):
+        try:
+            return _dt.strptime(s, '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            return None
+
+    if month:
+        try:
+            y, m = [int(x) for x in month.split('-', 1)]
+            start = _date(y, m, 1)
+            end = (_date(y + (m // 12), (m % 12) + 1, 1) - timezone.timedelta(days=1))
+        except (ValueError, IndexError):
+            start = today.replace(day=1); end = today
+    else:
+        start = parse(start_s) or today.replace(day=1)
+        end = parse(end_s) or today
+
+    # -------- Revenue: confirmed subscriptions verified in range --------
+    subs = Subscription.objects.filter(
+        status=Subscription.Status.CONFIRMED,
+        verified_at__date__gte=start,
+        verified_at__date__lte=end,
+    )
+
+    def bucket(stype: str) -> str:
+        if stype == 'term':
+            return 'term'
+        if stype == 'monthly':
+            return 'monthly'
+        return 'daily'  # daily / daily_go / daily_return / daily_round
+
+    collections = {
+        'term':    {'count': 0, 'total': 0.0},
+        'monthly': {'count': 0, 'total': 0.0},
+        'daily':   {'count': 0, 'total': 0.0},
+    }
+    for row in subs.values('subscription_type').annotate(
+            c=Count('id'), t=Sum('amount')):
+        b = bucket(row['subscription_type'])
+        collections[b]['count'] += row['c']
+        collections[b]['total'] += float(row['t'] or 0)
+
+    total_collections = sum(v['total'] for v in collections.values())
+    total_subs = sum(v['count'] for v in collections.values())
+
+    # -------- Expenses --------
+    exp = TripExpense.objects.filter(
+        status=TripExpense.Status.APPROVED, date__gte=start, date__lte=end)
+    exp_by_kind = {r['kind']: float(r['t'] or 0) for r in
+                   exp.values('kind').annotate(t=Sum('amount'))}
+    fuel = exp_by_kind.get('fuel', 0.0)
+    tolls = exp_by_kind.get('tolls', 0.0)
+    other = exp_by_kind.get('other', 0.0)
+
+    maint_qs = MaintenanceRecord.objects.filter(date__gte=start, date__lte=end)
+    maintenance = float(maint_qs.filter(is_workshop=False).aggregate(
+        t=Sum('amount'))['t'] or 0)
+    workshop = float(maint_qs.filter(is_workshop=True).aggregate(
+        t=Sum('amount'))['t'] or 0)
+
+    fines = float(TrafficFine.objects.filter(
+        date__gte=start, date__lte=end).aggregate(t=Sum('amount'))['t'] or 0)
+
+    expenses = {
+        'fuel': fuel, 'tolls': tolls, 'other': other,
+        'maintenance': maintenance, 'workshop': workshop, 'fines': fines,
+    }
+    total_expenses = sum(expenses.values())
+    net_profit = total_collections - total_expenses
+
+    # -------- Recent confirmed subscriptions (top 100) --------
+    recent = []
+    for s in subs.select_related('student', 'route').order_by('-verified_at')[:100]:
+        recent.append({
+            'id': s.id,
+            'student': s.student.get_full_name() or s.student.username,
+            'phone': getattr(s.student, 'phone', '') or '',
+            'route': s.route.name if s.route_id else '',
+            'type': s.subscription_type,
+            'bucket': bucket(s.subscription_type),
+            'amount': float(s.amount or 0),
+            'verified_at': s.verified_at.isoformat() if s.verified_at else None,
+        })
+
+    return Response({
+        'range': {'start': str(start), 'end': str(end)},
+        'collections': collections,
+        'totals': {
+            'collections': total_collections,
+            'expenses': total_expenses,
+            'net_profit': net_profit,
+            'subscriptions_count': total_subs,
+        },
+        'expenses': expenses,
+        'recent_subscriptions': recent,
     })
