@@ -35,6 +35,9 @@ export const api = createApi({
     register: b.mutation<any, any>({
       query: (body) => ({ url: 'auth/register/', method: 'POST', body }),
     }),
+    passwordResetLookup: b.mutation<any, { identifier: string }>({
+      query: (body) => ({ url: 'auth/password-reset/lookup/', method: 'POST', body }),
+    }),
     resetStudentPassword: b.mutation<any, any>({
       query: (body) => ({ url: 'auth/password-reset/', method: 'POST', body }),
     }),
@@ -450,7 +453,7 @@ export const api = createApi({
 })
 
 export const {
-  useLoginMutation, useRegisterMutation, useResetStudentPasswordMutation, useAdminResetUserPasswordMutation, useMeQuery, useUpdateProfileMutation,
+  useLoginMutation, useRegisterMutation, usePasswordResetLookupMutation, useResetStudentPasswordMutation, useAdminResetUserPasswordMutation, useMeQuery, useUpdateProfileMutation,
   useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
   usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation,

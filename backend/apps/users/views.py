@@ -80,6 +80,34 @@ class UserViewSet(viewsets.ModelViewSet):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def password_reset_lookup(request):
+    """Step 1 of forgot-password: verify the identifier belongs to a student.
+
+    Body: {identifier: "<email or 11-digit phone>"}
+    Returns 200 with {found: true, has_email: bool, has_phone: bool} if it matches
+    a student account, 404 otherwise.
+    """
+    ident = (request.data.get('identifier') or '').strip()
+    if not ident:
+        return Response({'detail': 'أدخل البريد الإلكتروني أو رقم الموبايل.'}, status=400)
+
+    if '@' in ident:
+        u = User.objects.filter(role=User.Role.STUDENT, email__iexact=ident).first()
+    else:
+        u = User.objects.filter(role=User.Role.STUDENT, phone=ident).first()
+
+    if not u:
+        return Response({'detail': 'لا يوجد حساب مسجل بهذه البيانات.'}, status=404)
+
+    return Response({
+        'found': True,
+        'has_email': bool(u.email),
+        'has_phone': bool(u.phone),
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def student_password_reset(request):
     """Self-service password reset for students: identity check via 6 fields.
 
