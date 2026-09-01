@@ -30,10 +30,12 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'amount', 'status', 'status_display',
             'payment_method', 'method_name', 'payment_reference', 'payment_proof',
             'submitted_at', 'verified_at', 'verified_by', 'rejection_reason',
+            'whatsapp_notified_at',
             'created_at',
         ]
         read_only_fields = [
             'status', 'submitted_at', 'verified_at', 'verified_by', 'created_at',
+            'whatsapp_notified_at',
         ]
 
 

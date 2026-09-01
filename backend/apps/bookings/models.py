@@ -76,6 +76,8 @@ class Subscription(models.Model):
     )
     rejection_reason = models.CharField(max_length=255, blank=True, verbose_name=_('سبب الرفض'))
 
+    whatsapp_notified_at = models.DateTimeField(null=True, blank=True, verbose_name=_('آخر إشعار واتساب'))
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -10,6 +10,7 @@ import dayjs from 'dayjs'
 import {
   useSubscriptionsQuery, useDeleteSubscriptionMutation, useRoutesQuery, useUniversitiesQuery, useUsersQuery,
   useSaveUserMutation, useCollegesQuery, usePublicPickupPointsQuery,
+  useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation,
 } from '../app/api'
 import { phoneRule, dedupePickups } from '../app/validators'
 
@@ -206,6 +207,8 @@ export default function Subscriptions() {
   const rows = data?.results || []
   const { message, modal } = AntdApp.useApp()
   const [del] = useDeleteSubscriptionMutation()
+  const [markNotified] = useMarkSubscriptionNotifiedMutation()
+  const [clearNotified] = useClearSubscriptionNotifiedMutation()
 
   const remove = (r: any) => {
     modal.confirm({
@@ -252,8 +255,16 @@ export default function Subscriptions() {
       <Table
         rowKey="id" loading={isFetching} scroll={{ x: 1100 }} dataSource={rows}
         pagination={{ pageSize: 20, showSizeChanger: true }}
+        rowClassName={(r: any) => (r.whatsapp_notified_at ? 'sub-row-notified' : '')}
         columns={[
-          { title: 'الطالب', dataIndex: 'student_name', sorter: (a: any, b: any) => (a.student_name || '').localeCompare(b.student_name || '', 'ar'), defaultSortOrder: undefined },
+          { title: 'الطالب', dataIndex: 'student_name', sorter: (a: any, b: any) => (a.student_name || '').localeCompare(b.student_name || '', 'ar'), defaultSortOrder: undefined,
+            render: (v, r: any) => (
+              <Space size={4}>
+                {r.whatsapp_notified_at && <Tag color="green" style={{ margin: 0 }}>✓ تم الإرسال</Tag>}
+                <span>{v}</span>
+              </Space>
+            ),
+          },
           { title: 'الهاتف', dataIndex: 'student_phone' },
           { title: 'النوع', dataIndex: 'type_display', render: (v) => <Tag color="cyan">{v}</Tag> },
           { title: 'المسار', dataIndex: 'route_name' },
@@ -263,13 +274,24 @@ export default function Subscriptions() {
           { title: 'طريقة الدفع', dataIndex: 'method_name', render: (v) => v || '—' },
           { title: 'الحالة', dataIndex: 'status_display', render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
           {
-            title: 'إجراءات', fixed: 'right', width: 170, render: (_, r: any) => (
+            title: 'إجراءات', fixed: 'right', width: 200, render: (_, r: any) => (
               <Space>
                 <Tooltip title="معاينة الملف"><Button size="small" icon={<EyeOutlined />} onClick={() => setProfileId(r.student)} /></Tooltip>
-                <Tooltip title="رسالة واتساب">
-                  <Button size="small" icon={<WhatsAppOutlined />} style={{ color: '#25D366' }}
-                    href={`https://wa.me/${waPhone(r.student_phone)}?text=${encodeURIComponent(buildWhatsApp(r))}`} target="_blank" />
+                <Tooltip title={r.whatsapp_notified_at
+                  ? `تم الإرسال — ${dayjs(r.whatsapp_notified_at).format('YYYY-MM-DD HH:mm')} — اضغط لإعادة الفتح`
+                  : 'رسالة واتساب — اضغط لفتح المحادثة وتعليمها كـ«تم الإرسال»'}>
+                  <Button size="small" icon={<WhatsAppOutlined />}
+                    style={{ color: r.whatsapp_notified_at ? '#94a3b8' : '#25D366' }}
+                    onClick={() => {
+                      window.open(`https://wa.me/${waPhone(r.student_phone)}?text=${encodeURIComponent(buildWhatsApp(r))}`, '_blank')
+                      markNotified(r.id)
+                    }} />
                 </Tooltip>
+                {r.whatsapp_notified_at && (
+                  <Tooltip title="إلغاء تعليم «تم الإرسال»">
+                    <Button size="small" onClick={() => clearNotified(r.id)}>↺</Button>
+                  </Tooltip>
+                )}
                 <Tooltip title="حذف الاشتراك"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(r)} /></Tooltip>
               </Space>
             ),

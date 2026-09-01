@@ -111,6 +111,26 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                link='/bookings', severity='error')
         return Response(SubscriptionSerializer(sub).data)
 
+    @action(detail=True, methods=['post'], url_path='mark-notified')
+    def mark_notified(self, request, pk=None):
+        """Stamp whatsapp_notified_at so the admin UI can dim already-contacted rows."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        from django.utils import timezone
+        sub = self.get_object()
+        sub.whatsapp_notified_at = timezone.now()
+        sub.save(update_fields=['whatsapp_notified_at', 'updated_at'])
+        return Response(SubscriptionSerializer(sub).data)
+
+    @action(detail=True, methods=['post'], url_path='clear-notified')
+    def clear_notified(self, request, pk=None):
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        sub = self.get_object()
+        sub.whatsapp_notified_at = None
+        sub.save(update_fields=['whatsapp_notified_at', 'updated_at'])
+        return Response(SubscriptionSerializer(sub).data)
+
     @action(detail=False, methods=['get'], url_path='payment-queue')
     def payment_queue(self, request):
         """Admin queue of payments awaiting review."""

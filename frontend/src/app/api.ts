@@ -213,6 +213,14 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: `bookings/subscriptions/${id}/reject/`, method: 'POST', body }),
       invalidatesTags: ['Subscription', 'Dashboard'],
     }),
+    markSubscriptionNotified: b.mutation<any, number>({
+      query: (id) => ({ url: `bookings/subscriptions/${id}/mark-notified/`, method: 'POST' }),
+      invalidatesTags: ['Subscription'],
+    }),
+    clearSubscriptionNotified: b.mutation<any, number>({
+      query: (id) => ({ url: `bookings/subscriptions/${id}/clear-notified/`, method: 'POST' }),
+      invalidatesTags: ['Subscription'],
+    }),
 
     // ---- operations ----
     dailyTrips: b.query<any, Record<string, any> | void>({
@@ -441,6 +449,7 @@ export const {
   useCompanyQuery, useSaveCompanyMutation,
   useSubscriptionsQuery, useCreateSubscriptionMutation, useDeleteSubscriptionMutation, useSubmitPaymentMutation,
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
+  useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation,
   useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useRunAllocationMutation,
   useSeatRequestsQuery, useBookSeatMutation, useCancelSeatMutation,
   useLayoutsQuery, useSeatmapForQuery, useSeatmapQuery, useBookSpecificSeatMutation,

@@ -111,3 +111,7 @@ body {
   .gb-hero-sub { font-size: 15px; }
   .gb-hero-bus { max-width: 360px; }
 }
+
+/* Admin subscriptions: highlight rows where WhatsApp was already sent. */
+.sub-row-notified > td { background: #ecfdf5 !important; }
+.sub-row-notified:hover > td { background: #d1fae5 !important; }
