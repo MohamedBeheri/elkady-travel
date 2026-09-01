@@ -1,7 +1,7 @@
 import { Card, Table, Tag, Button, Modal, Form, Input, Select, Space, App as AntdApp } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, KeyOutlined } from '@ant-design/icons'
 import { useState } from 'react'
-import { useUsersQuery, useSaveUserMutation, useDeleteUserMutation } from '../app/api'
+import { useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useAdminResetUserPasswordMutation } from '../app/api'
 import { phoneRule } from '../app/validators'
 
 const ROLE_OPTS = [
@@ -21,8 +21,11 @@ export default function Users() {
   const { data, isFetching } = useUsersQuery({ page_size: 1000, ...(role ? { role } : {}) })
   const [save] = useSaveUserMutation()
   const [del] = useDeleteUserMutation()
+  const [resetPw] = useAdminResetUserPasswordMutation()
   const [form] = Form.useForm()
+  const [pwForm] = Form.useForm()
   const [open, setOpen] = useState(false)
+  const [pwOpen, setPwOpen] = useState<any>(null)
   const [editing, setEditing] = useState<any>(null)
 
   const openModal = (row?: any) => { setEditing(row || null); form.resetFields(); if (row) form.setFieldsValue(row); setOpen(true) }
@@ -41,6 +44,17 @@ export default function Users() {
     const v = await form.validateFields()
     await save({ ...(editing ? { id: editing.id } : {}), ...v }).unwrap()
     message.success('تم الحفظ'); setOpen(false)
+  }
+  const openReset = (row: any) => { pwForm.resetFields(); setPwOpen(row) }
+  const submitReset = async () => {
+    const v = await pwForm.validateFields()
+    try {
+      const res = await resetPw({ id: pwOpen.id, password: v.password }).unwrap()
+      message.success(res.detail || 'تم تغيير كلمة السر')
+      setPwOpen(null)
+    } catch (e: any) {
+      message.error(e?.data?.detail || 'تعذّر تغيير كلمة السر')
+    }
   }
 
   return (
@@ -64,6 +78,7 @@ export default function Users() {
           { title: '', render: (_, r: any) => (
             <Space>
               {r.role !== 'student' && <Button size="small" onClick={() => openModal(r)}>تعديل</Button>}
+              <Button size="small" icon={<KeyOutlined />} onClick={() => openReset(r)}>كلمة السر</Button>
               <Button size="small" danger onClick={() => remove(r)}>حذف</Button>
             </Space>
           ) },
@@ -79,6 +94,31 @@ export default function Users() {
             <Input inputMode="email" placeholder="example@mail.com" />
           </Form.Item>
           <Form.Item name="password" label={editing ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'} rules={editing ? [] : [{ required: true, min: 6 }]}>
+            <Input.Password />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`تغيير كلمة السر لـ «${pwOpen?.full_name || pwOpen?.username || ''}»`}
+        open={!!pwOpen} onOk={submitReset} onCancel={() => setPwOpen(null)}
+        okText="حفظ" cancelText="إلغاء"
+      >
+        <Form form={pwForm} layout="vertical">
+          <Form.Item name="password" label="كلمة السر الجديدة"
+            rules={[{ required: true, min: 6, message: '٦ أحرف على الأقل' }]}>
+            <Input.Password autoFocus />
+          </Form.Item>
+          <Form.Item name="confirm" label="تأكيد كلمة السر" dependencies={['password']}
+            rules={[
+              { required: true, message: 'أعد كتابة كلمة السر' },
+              ({ getFieldValue }) => ({
+                validator: (_, value) =>
+                  !value || getFieldValue('password') === value
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('كلمة السر وتأكيدها غير متطابقين')),
+              }),
+            ]}>
             <Input.Password />
           </Form.Item>
         </Form>

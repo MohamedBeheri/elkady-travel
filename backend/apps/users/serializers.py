@@ -113,6 +113,7 @@ class UserWriteSerializer(serializers.ModelSerializer):
 class StudentRegisterSerializer(serializers.ModelSerializer):
     """Public student self-registration. Reuses profile on later bookings (§2)."""
     password = serializers.CharField(write_only=True, min_length=6)
+    email = serializers.EmailField(required=True, allow_blank=False)
 
     class Meta:
         model = User

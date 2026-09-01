@@ -38,7 +38,10 @@ export default function Login() {
             </Form.Item>
             <Button type="primary" htmlType="submit" block loading={isLoading} style={{ height: 48, fontSize: 16 }}>دخول إلى رحلاتي</Button>
           </Form>
-          <div style={{ textAlign: 'center', marginTop: 18, color: '#64748b' }}>
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <Link to="/forgot-password" style={{ color: '#0B2E5E', fontWeight: 700 }}>نسيت كلمة السر؟</Link>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 12, color: '#64748b' }}>
             طالب جديد؟ <Link to="/register" style={{ fontWeight: 700 }}>أنشئ حساباً</Link>
           </div>
           <div style={{ textAlign: 'center', marginTop: 8 }}>

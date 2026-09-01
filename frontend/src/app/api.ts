@@ -35,6 +35,13 @@ export const api = createApi({
     register: b.mutation<any, any>({
       query: (body) => ({ url: 'auth/register/', method: 'POST', body }),
     }),
+    resetStudentPassword: b.mutation<any, any>({
+      query: (body) => ({ url: 'auth/password-reset/', method: 'POST', body }),
+    }),
+    adminResetUserPassword: b.mutation<any, { id: number; password: string }>({
+      query: ({ id, password }) => ({ url: `auth/users/${id}/reset-password/`, method: 'POST', body: { password } }),
+      invalidatesTags: ['User'],
+    }),
     me: b.query<any, void>({ query: () => 'auth/users/me/', providesTags: ['User'] }),
     updateProfile: b.mutation<any, any>({
       query: (body) => ({ url: 'auth/users/update-profile/', method: 'PATCH', body }),
@@ -443,7 +450,7 @@ export const api = createApi({
 })
 
 export const {
-  useLoginMutation, useRegisterMutation, useMeQuery, useUpdateProfileMutation,
+  useLoginMutation, useRegisterMutation, useResetStudentPasswordMutation, useAdminResetUserPasswordMutation, useMeQuery, useUpdateProfileMutation,
   useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
   usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation,

@@ -90,7 +90,8 @@ export default function Register() {
                 showSearch optionFilterProp="label"
                 options={dedupePickups(pickups || []).map((p: any) => ({ value: p.id, label: p.name }))} />
             </Form.Item>
-            <Form.Item name="email" label="البريد الإلكتروني (اختياري)" rules={[{ type: 'email', message: 'بريد إلكتروني غير صحيح' }]}>
+            <Form.Item name="email" label="البريد الإلكتروني"
+              rules={[{ required: true, message: 'أدخل البريد الإلكتروني' }, { type: 'email', message: 'بريد إلكتروني غير صحيح' }]}>
               <Input inputMode="email" placeholder="example@mail.com" />
             </Form.Item>
             <Form.Item name="address" label="تفاصيل إضافية (اختياري)">
