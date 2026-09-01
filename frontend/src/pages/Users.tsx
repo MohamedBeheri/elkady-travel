@@ -75,6 +75,9 @@ export default function Users() {
           <Form.Item name="username" label="اسم المستخدم" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="role" label="الدور" rules={[{ required: true }]}><Select options={ROLE_OPTS} /></Form.Item>
           <Form.Item name="phone" label="الهاتف" rules={[phoneRule]}><Input inputMode="numeric" maxLength={11} /></Form.Item>
+          <Form.Item name="email" label="البريد الإلكتروني" rules={[{ type: 'email', message: 'بريد إلكتروني غير صحيح' }]}>
+            <Input inputMode="email" placeholder="example@mail.com" />
+          </Form.Item>
           <Form.Item name="password" label={editing ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'} rules={editing ? [] : [{ required: true, min: 6 }]}>
             <Input.Password />
           </Form.Item>

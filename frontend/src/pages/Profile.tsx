@@ -71,6 +71,7 @@ export default function Profile() {
             <Descriptions column={1} size="small">
               <Descriptions.Item label="الاسم">{user?.full_name}</Descriptions.Item>
               <Descriptions.Item label="الهاتف">{user?.phone || '—'}</Descriptions.Item>
+              <Descriptions.Item label="البريد الإلكتروني">{user?.email || '—'}</Descriptions.Item>
               <Descriptions.Item label="تاريخ الميلاد">{user?.date_of_birth || '—'}</Descriptions.Item>
               <Descriptions.Item label="النوع">{user?.gender_display || '—'}</Descriptions.Item>
               <Descriptions.Item label="الجامعة">{user?.university_name || '—'}</Descriptions.Item>
@@ -109,6 +110,9 @@ export default function Profile() {
       <Modal title="تعديل البيانات" open={open} onOk={() => form.submit()} confirmLoading={isLoading} onCancel={() => setOpen(false)} okText="حفظ">
         <Form form={form} layout="vertical" onFinish={onFinish}>
           <Form.Item name="full_name" label="الاسم الكامل"><Input /></Form.Item>
+          <Form.Item name="email" label="البريد الإلكتروني" rules={[{ type: 'email', message: 'بريد إلكتروني غير صحيح' }]}>
+            <Input inputMode="email" placeholder="example@mail.com" />
+          </Form.Item>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Form.Item name="phone" label="الهاتف" rules={[phoneRule]}><Input inputMode="numeric" maxLength={11} /></Form.Item>
             <Form.Item name="date_of_birth" label="تاريخ الميلاد"><DatePicker style={{ width: '100%' }} /></Form.Item>

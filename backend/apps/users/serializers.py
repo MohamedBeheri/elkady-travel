@@ -25,6 +25,18 @@ def ensure_unique_phone(value, exclude_pk=None):
     return value
 
 
+def ensure_unique_email(value, exclude_pk=None):
+    """Reject an email that already belongs to another user (blank/None is ignored)."""
+    if not value:
+        return value
+    qs = User.objects.filter(email__iexact=value)
+    if exclude_pk:
+        qs = qs.exclude(pk=exclude_pk)
+    if qs.exists():
+        raise serializers.ValidationError('البريد الإلكتروني مستخدم بالفعل لمستخدم آخر.')
+    return value
+
+
 def ensure_unique_username(value, exclude_pk=None):
     """Case-insensitive uniqueness check for username (belt-and-braces on top of DB)."""
     if not value:
@@ -49,7 +61,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'full_name', 'role', 'role_display',
+            'id', 'username', 'full_name', 'email', 'role', 'role_display',
             'national_id', 'phone', 'center', 'center_display',
             'pickup_point', 'pickup_name', 'address',
             'date_of_birth', 'gender', 'gender_display',
@@ -64,7 +76,7 @@ class UserWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'password', 'full_name', 'role',
+            'id', 'username', 'password', 'full_name', 'email', 'role',
             'national_id', 'phone', 'center', 'pickup_point', 'address', 'date_of_birth', 'gender',
             'university', 'college', 'academic_year', 'is_active',
         ]
@@ -76,6 +88,10 @@ class UserWriteSerializer(serializers.ModelSerializer):
     def validate_username(self, value):
         pk = self.instance.pk if self.instance else None
         return ensure_unique_username(value, exclude_pk=pk)
+
+    def validate_email(self, value):
+        pk = self.instance.pk if self.instance else None
+        return ensure_unique_email(value, exclude_pk=pk)
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -101,7 +117,7 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'password', 'full_name',
+            'id', 'username', 'password', 'full_name', 'email',
             'phone', 'center', 'pickup_point', 'address', 'date_of_birth', 'gender',
             'university', 'college', 'academic_year',
         ]
@@ -111,6 +127,9 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
 
     def validate_username(self, value):
         return ensure_unique_username(value)
+
+    def validate_email(self, value):
+        return ensure_unique_email(value)
 
     def create(self, validated_data):
         password = validated_data.pop('password')
