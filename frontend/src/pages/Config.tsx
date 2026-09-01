@@ -67,11 +67,11 @@ function RoutesTab() {
     <>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openRoute()} style={{ marginBottom: 12 }}>مسار جديد</Button>
       <Table
-        rowKey="id" dataSource={routes?.results || []} pagination={false} scroll={{ x: 'max-content' }}
+        rowKey="id" dataSource={routes?.results || []} pagination={false} scroll={{ x: 900 }}
         expandable={{
           expandedRowRender: (r: any) => (
-            <div>
-              <Space wrap style={{ marginBottom: 8 }}>
+            <div style={{ maxWidth: 'calc(100vw - 320px)' }}>
+              <Space wrap size={[8, 8]} style={{ marginBottom: 8, width: '100%' }}>
                 {(r.pickup_points || []).map((p: any) => (
                   <Tag key={p.id} closable onClose={async () => { await delPickup(p.id); message.success('تم الحذف') }}>
                     {p.sequence}. {p.name}{p.center_display ? ` — ${p.center_display}` : ''}
