@@ -13,6 +13,30 @@ def validate_phone_11(value):
     return value
 
 
+def ensure_unique_phone(value, exclude_pk=None):
+    """Reject a phone that already belongs to another user (blank is ignored)."""
+    if not value:
+        return value
+    qs = User.objects.filter(phone=value)
+    if exclude_pk:
+        qs = qs.exclude(pk=exclude_pk)
+    if qs.exists():
+        raise serializers.ValidationError('رقم الهاتف مستخدم بالفعل لمستخدم آخر.')
+    return value
+
+
+def ensure_unique_username(value, exclude_pk=None):
+    """Case-insensitive uniqueness check for username (belt-and-braces on top of DB)."""
+    if not value:
+        return value
+    qs = User.objects.filter(username__iexact=value)
+    if exclude_pk:
+        qs = qs.exclude(pk=exclude_pk)
+    if qs.exists():
+        raise serializers.ValidationError('اسم المستخدم مستخدم بالفعل.')
+    return value
+
+
 class UserSerializer(serializers.ModelSerializer):
     role_display = serializers.CharField(source='get_role_display', read_only=True)
     university_name = serializers.CharField(source='university.name', read_only=True)
@@ -46,7 +70,12 @@ class UserWriteSerializer(serializers.ModelSerializer):
         ]
 
     def validate_phone(self, value):
-        return validate_phone_11(value)
+        pk = self.instance.pk if self.instance else None
+        return ensure_unique_phone(validate_phone_11(value), exclude_pk=pk)
+
+    def validate_username(self, value):
+        pk = self.instance.pk if self.instance else None
+        return ensure_unique_username(value, exclude_pk=pk)
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -78,7 +107,10 @@ class StudentRegisterSerializer(serializers.ModelSerializer):
         ]
 
     def validate_phone(self, value):
-        return validate_phone_11(value)
+        return ensure_unique_phone(validate_phone_11(value))
+
+    def validate_username(self, value):
+        return ensure_unique_username(value)
 
     def create(self, validated_data):
         password = validated_data.pop('password')
