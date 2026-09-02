@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAppSelector } from './app/store'
+import { useIdleLogout } from './app/useIdleLogout'
 import AppLayout from './components/AppLayout'
 import SiteLayout from './components/SiteLayout'
 import Login from './pages/Login'
@@ -42,6 +43,7 @@ const STAFF = ['admin', 'transport_manager', 'payment_officer', 'operations', 'b
 export default function App() {
   const access = useAppSelector((s) => s.auth.access)
   const user = useAppSelector((s) => s.auth.user)
+  useIdleLogout()
 
   // ---- Public visitor (not logged in): the external site + auth screens ----
   if (!access || !user) {
