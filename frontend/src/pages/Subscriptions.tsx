@@ -200,11 +200,22 @@ export default function Subscriptions() {
   const { data: routes } = useRoutesQuery({ active: true })
   const { data: unis } = useUniversitiesQuery({ active: true })
   const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
+  // All registered students — used to surface those without any subscription.
+  const { data: allStudentsData } = useUsersQuery({ role: 'student', page_size: 5000 })
+  const [orphansOpen, setOrphansOpen] = useState(false)
 
   const params: any = { route, university, status, center, pickup_point: pickup, ordering, page_size: 1000 }
   if (type !== 'all') params.subscription_type = type
   const { data, isFetching } = useSubscriptionsQuery(params)
   const rows = data?.results || []
+
+  // Unfiltered subscriptions count → to compute who has none.
+  const { data: allSubsData } = useSubscriptionsQuery({ page_size: 5000 })
+  const studentsWithSubs = new Set<number>(
+    (allSubsData?.results || []).map((s: any) => s.student).filter(Boolean)
+  )
+  const allStudents = allStudentsData?.results || []
+  const orphanStudents = allStudents.filter((u: any) => !studentsWithSubs.has(u.id))
   const { message, modal } = AntdApp.useApp()
   const [del] = useDeleteSubscriptionMutation()
   const [markNotified] = useMarkSubscriptionNotifiedMutation()
@@ -232,6 +243,29 @@ export default function Subscriptions() {
         </Space>
       }
     >
+      <div style={{
+        display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
+        marginBottom: 12, padding: '8px 12px', background: '#f8fafc',
+        border: '1px solid #e5e7eb', borderRadius: 8,
+      }}>
+        <Tag color="blue" style={{ margin: 0, fontSize: 13, padding: '2px 10px' }}>
+          طلاب مسجّلون: <b>{allStudents.length}</b>
+        </Tag>
+        <Tag color="green" style={{ margin: 0, fontSize: 13, padding: '2px 10px' }}>
+          لديهم اشتراك: <b>{studentsWithSubs.size}</b>
+        </Tag>
+        <Tag color={orphanStudents.length ? 'orange' : 'default'} style={{ margin: 0, fontSize: 13, padding: '2px 10px' }}>
+          بدون اشتراك: <b>{orphanStudents.length}</b>
+        </Tag>
+        {orphanStudents.length > 0 && (
+          <Button size="small" onClick={() => setOrphansOpen(true)}>
+            عرض الطلاب بدون اشتراك
+          </Button>
+        )}
+        <span style={{ color: '#64748b', fontSize: 12, marginInlineStart: 'auto' }}>
+          الجدول أدناه يعرض <b>سجلات الاشتراكات</b> — الطالب المسجل الذي لم يحجز أي اشتراك لن يظهر فيه.
+        </span>
+      </div>
       <Space wrap style={{ marginBottom: 12 }}>
         <Segmented value={type} onChange={(v) => setType(v as string)}
           options={[{ value: 'all', label: 'الكل' }, { value: 'term', label: 'ترم' },
@@ -299,6 +333,25 @@ export default function Subscriptions() {
         ]}
       />
       <ProfileModal studentId={profileId} onClose={() => setProfileId(null)} />
+
+      <Modal
+        title={`طلاب مسجلون بلا أي اشتراك (${orphanStudents.length})`}
+        open={orphansOpen} onCancel={() => setOrphansOpen(false)} footer={null} width={720}
+      >
+        <Table
+          rowKey="id" size="small" pagination={{ pageSize: 20, showSizeChanger: false }}
+          dataSource={orphanStudents} scroll={{ x: 560 }}
+          locale={{ emptyText: 'لا يوجد' }}
+          columns={[
+            { title: 'الاسم', dataIndex: 'full_name', render: (v, r: any) => v || r.username },
+            { title: 'اسم المستخدم', dataIndex: 'username' },
+            { title: 'الهاتف', dataIndex: 'phone', render: (v) => v || '—' },
+            { title: 'البريد', dataIndex: 'email', render: (v) => v || '—' },
+            { title: 'الجامعة', dataIndex: 'university_name', render: (v) => v || '—' },
+            { title: 'المركز', dataIndex: 'center_display', render: (v) => v || '—' },
+          ]}
+        />
+      </Modal>
     </Card>
   )
 }
