@@ -1,6 +1,23 @@
+import re
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
+
+# Arabic-Indic (٠-٩) and Persian (۰-۹) digits → Latin, so the same phone typed
+# on an Arabic keyboard can't slip past uniqueness as a different string.
+_DIGIT_MAP = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')
+
+
+def normalize_phone(value):
+    if not value:
+        return ''
+    return re.sub(r'\s+', '', str(value).translate(_DIGIT_MAP)).strip()
+
+
+def normalize_email(value):
+    return (value or '').strip().lower()
 
 
 class User(AbstractUser):
@@ -67,6 +84,19 @@ class User(AbstractUser):
     class Meta:
         verbose_name = _('مستخدم')
         verbose_name_plural = _('المستخدمون')
+        constraints = [
+            # Non-blank phone/email must be unique across all users (hard DB guarantee).
+            models.UniqueConstraint(fields=['phone'], condition=~Q(phone=''),
+                                    name='uniq_user_phone_nonblank'),
+            models.UniqueConstraint(fields=['email'], condition=~Q(email=''),
+                                    name='uniq_user_email_nonblank'),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Normalize so identical contacts always collide regardless of how typed.
+        self.phone = normalize_phone(self.phone)
+        self.email = normalize_email(self.email)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.full_name or self.username

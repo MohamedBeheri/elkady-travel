@@ -3,18 +3,20 @@ import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import User
+from .models import User, normalize_email, normalize_phone
 
 
 def validate_phone_11(value):
-    """Phone must be exactly 11 digits (blank allowed for optional fields)."""
-    if value and not re.fullmatch(r'\d{11}', str(value)):
+    """Normalize (Arabic→Latin, strip spaces) then require exactly 11 digits."""
+    value = normalize_phone(value)
+    if value and not re.fullmatch(r'[0-9]{11}', value):
         raise serializers.ValidationError('رقم الهاتف يجب أن يكون ١١ رقماً.')
     return value
 
 
 def ensure_unique_phone(value, exclude_pk=None):
     """Reject a phone that already belongs to another user (blank is ignored)."""
+    value = normalize_phone(value)
     if not value:
         return value
     qs = User.objects.filter(phone=value)
@@ -27,6 +29,7 @@ def ensure_unique_phone(value, exclude_pk=None):
 
 def ensure_unique_email(value, exclude_pk=None):
     """Reject an email that already belongs to another user (blank/None is ignored)."""
+    value = normalize_email(value)
     if not value:
         return value
     qs = User.objects.filter(email__iexact=value)
