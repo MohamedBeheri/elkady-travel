@@ -291,12 +291,13 @@ export default function Subscriptions() {
         pagination={{ pageSize: 20, showSizeChanger: true }}
         rowClassName={(r: any) => (r.whatsapp_notified_at ? 'sub-row-notified' : '')}
         columns={[
-          { title: 'الطالب', dataIndex: 'student_name', sorter: (a: any, b: any) => (a.student_name || '').localeCompare(b.student_name || '', 'ar'), defaultSortOrder: undefined,
+          { title: 'الطالب', dataIndex: 'student_name', width: 200,
+            sorter: (a: any, b: any) => (a.student_name || '').localeCompare(b.student_name || '', 'ar'), defaultSortOrder: undefined,
             render: (v, r: any) => (
-              <Space size={4}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+                <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{v}</span>
                 {r.whatsapp_notified_at && <Tag color="green" style={{ margin: 0 }}>✓ تم الإرسال</Tag>}
-                <span>{v}</span>
-              </Space>
+              </div>
             ),
           },
           { title: 'الهاتف', dataIndex: 'student_phone' },
