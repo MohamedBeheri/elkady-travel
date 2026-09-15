@@ -1,7 +1,8 @@
 from rest_framework import viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.db import transaction
 
 from config.permissions import IsStaff, ReadOnlyOrStaff
 from .models import (
@@ -49,6 +50,57 @@ class PickupPointViewSet(viewsets.ModelViewSet):
     serializer_class = PickupPointSerializer
     permission_classes = [ReadOnlyOrStaff]
     filterset_fields = ['active', 'route']
+
+    @action(detail=False, methods=['post'], url_path='bulk-set')
+    def bulk_set(self, request):
+        """Replace a route's pickup points in one shot (Excel-style editing).
+
+        Body: {"route": <id>, "points": [{"id"?, "name", "center"?}, ...]}
+        The list order IS the order — `sequence` is auto-assigned 1..N so the
+        admin never types numbers. Rows with an id are updated, rows without are
+        created, and any existing point whose id is absent is deleted. Existing
+        per-point pickup times survive because updates keep the same row id.
+        """
+        if not IsStaff().has_permission(request, self):
+            return Response({'detail': 'غير مصرح'}, status=403)
+        route_id = request.data.get('route')
+        points = request.data.get('points') or []
+        try:
+            route = Route.objects.get(pk=route_id)
+        except Route.DoesNotExist:
+            return Response({'detail': 'المسار غير موجود'}, status=404)
+
+        valid_centers = {c[0] for c in PickupPoint.CENTER_CHOICES}
+        with transaction.atomic():
+            existing = {p.id: p for p in route.pickup_points.all()}
+            kept_ids = set()
+            for idx, row in enumerate(points, start=1):
+                name = (row.get('name') or '').strip()
+                if not name:
+                    continue  # skip blank rows
+                center = (row.get('center') or '').strip()
+                if center not in valid_centers:
+                    center = ''
+                pid = row.get('id')
+                obj = existing.get(pid) if pid else None
+                if obj:
+                    obj.name = name
+                    obj.center = center
+                    obj.sequence = idx
+                    obj.save(update_fields=['name', 'center', 'sequence'])
+                    kept_ids.add(obj.id)
+                else:
+                    created = PickupPoint.objects.create(
+                        route=route, name=name, center=center, sequence=idx)
+                    kept_ids.add(created.id)
+            # Delete points the admin removed from the list.
+            for pid, obj in existing.items():
+                if pid not in kept_ids:
+                    obj.delete()
+
+        data = PickupPointSerializer(
+            route.pickup_points.order_by('sequence', 'id'), many=True).data
+        return Response(data)
 
 
 class MorningSlotViewSet(viewsets.ModelViewSet):

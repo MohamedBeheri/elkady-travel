@@ -138,6 +138,10 @@ export const api = createApi({
       query: (id) => ({ url: `config/pickup-points/${id}/`, method: 'DELETE' }),
       invalidatesTags: ['Pickup', 'Route'],
     }),
+    bulkSetPickups: b.mutation<any, { route: number; points: any[] }>({
+      query: (body) => ({ url: 'config/pickup-points/bulk-set/', method: 'POST', body }),
+      invalidatesTags: ['Pickup', 'Route'],
+    }),
     pickupTimesMatrix: b.query<any, { route: number; direction: string; slot: number }>({
       query: (p) => `config/pickup-times/matrix/${qs(p as any)}`, providesTags: ['PickupTime'],
     }),
@@ -460,7 +464,7 @@ export const {
   useDestinationsQuery, useSaveDestinationMutation,
   useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, usePublicPickupPointsQuery,
-  usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
+  usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation, useBulkSetPickupsMutation,
   usePickupTimesMatrixQuery, useSavePickupTimesMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,

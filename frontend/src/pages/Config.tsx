@@ -1,11 +1,11 @@
 import { Card, Tabs, Table, Button, Modal, Form, Input, Select, InputNumber, Switch, DatePicker, Tag, Space, Drawer, Segmented, Upload, App as AntdApp } from 'antd'
 import SeatGenderEditor from '../components/SeatGenderEditor'
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons'
+import { PlusOutlined, UploadOutlined, ArrowUpOutlined, ArrowDownOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 import {
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, useDestinationsQuery,
-  usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation,
+  usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation, useBulkSetPickupsMutation,
   usePickupTimesMatrixQuery, useSavePickupTimesMutation,
   useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
   useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation, useLayoutsQuery,
@@ -25,6 +25,79 @@ const TYPE_OPTS = [
   { value: 'daily_round', label: 'يومي — ذهاب وعودة' },
 ]
 
+const CENTER_OPTS = [
+  { value: 'shebin', label: 'شبين الكوم' },
+  { value: 'quesna', label: 'قويسنا' },
+  { value: 'bagour', label: 'الباجور' },
+  { value: 'benha', label: 'بنها' },
+]
+
+/* ---------- Excel-like pickup points editor (per route) ---------- */
+function PickupEditor({ route, onClose }: { route: any; onClose: () => void }) {
+  const { message } = AntdApp.useApp()
+  const [bulkSet, { isLoading }] = useBulkSetPickupsMutation()
+  let seq = 0
+  const [rows, setRows] = useState<any[]>(
+    (route.pickup_points || []).map((p: any) => ({ key: `e${p.id}`, id: p.id, name: p.name, center: p.center || '' }))
+  )
+
+  const addRow = () => setRows((rs) => [...rs, { key: `n${Date.now()}${seq++}`, name: '', center: '' }])
+  const update = (key: string, patch: any) => setRows((rs) => rs.map((r) => r.key === key ? { ...r, ...patch } : r))
+  const remove = (key: string) => setRows((rs) => rs.filter((r) => r.key !== key))
+  const move = (idx: number, dir: -1 | 1) => setRows((rs) => {
+    const j = idx + dir
+    if (j < 0 || j >= rs.length) return rs
+    const copy = [...rs];[copy[idx], copy[j]] = [copy[j], copy[idx]]; return copy
+  })
+
+  const save = async () => {
+    const points = rows
+      .map((r) => ({ id: r.id, name: (r.name || '').trim(), center: r.center || '' }))
+      .filter((r) => r.name)
+    try {
+      await bulkSet({ route: route.id, points }).unwrap()
+      message.success('تم حفظ نقاط الالتقاط')
+      onClose()
+    } catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحفظ') }
+  }
+
+  return (
+    <Drawer
+      title={`تعديل نقاط الالتقاط — ${route.name}`} open width={640} onClose={onClose}
+      extra={<Space>
+        <Button onClick={addRow} icon={<PlusOutlined />}>إضافة سطر</Button>
+        <Button type="primary" onClick={save} loading={isLoading}>حفظ</Button>
+      </Space>}
+    >
+      <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>
+        الترقيم تلقائي حسب الترتيب. عدّل أي سطر لوحده، أو استخدم الأسهم لتغيير الترتيب — بدون التأثير على باقي النقاط.
+      </div>
+      <Table
+        rowKey="key" dataSource={rows} pagination={false} size="small" scroll={{ y: '62vh' }}
+        locale={{ emptyText: 'لا توجد نقاط — اضغط «إضافة سطر»' }}
+        columns={[
+          { title: '#', width: 48, render: (_: any, __: any, i: number) => <b style={{ color: '#0B2E5E' }}>{i + 1}</b> },
+          { title: 'اسم نقطة الالتقاط', render: (_: any, r: any) => (
+            <Input value={r.name} placeholder="اسم النقطة"
+              onChange={(e) => update(r.key, { name: e.target.value })} />
+          ) },
+          { title: 'المركز', width: 150, render: (_: any, r: any) => (
+            <Select allowClear style={{ width: '100%' }} placeholder="—" value={r.center || undefined}
+              options={CENTER_OPTS} onChange={(v) => update(r.key, { center: v || '' })} />
+          ) },
+          { title: '', width: 110, render: (_: any, r: any, i: number) => (
+            <Space size={2}>
+              <Button size="small" type="text" icon={<ArrowUpOutlined />} disabled={i === 0} onClick={() => move(i, -1)} />
+              <Button size="small" type="text" icon={<ArrowDownOutlined />} disabled={i === rows.length - 1} onClick={() => move(i, 1)} />
+              <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => remove(r.key)} />
+            </Space>
+          ) },
+        ]}
+      />
+    </Drawer>
+  )
+}
+
 /* ---------- Routes + pickup points ---------- */
 function RoutesTab() {
   const { message, modal } = AntdApp.useApp()
@@ -32,13 +105,11 @@ function RoutesTab() {
   const { data: dests } = useDestinationsQuery()
   const [saveRoute] = useSaveRouteMutation()
   const [delRoute] = useDeleteRouteMutation()
-  const [savePickup] = useSavePickupMutation()
   const [delPickup] = useDeletePickupMutation()
   const [form] = Form.useForm()
-  const [pForm] = Form.useForm()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
-  const [pickupFor, setPickupFor] = useState<any>(null)
+  const [editPickupsFor, setEditPickupsFor] = useState<any>(null)
 
   const openRoute = (row?: any) => {
     setEditing(row || null); form.resetFields()
@@ -58,11 +129,6 @@ function RoutesTab() {
       onOk: async () => { await delRoute(r.id).unwrap(); message.success('تم حذف المسار') },
     })
   }
-  const addPickup = async () => {
-    const v = await pForm.validateFields()
-    await savePickup({ ...v, route: pickupFor.id }).unwrap(); message.success('تمت الإضافة'); pForm.resetFields()
-  }
-
   return (
     <>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openRoute()} style={{ marginBottom: 12 }}>مسار جديد</Button>
@@ -73,12 +139,13 @@ function RoutesTab() {
             <div style={{ maxWidth: 'calc(100vw - 320px)' }}>
               <Space wrap size={[8, 8]} style={{ marginBottom: 8, width: '100%' }}>
                 {(r.pickup_points || []).map((p: any) => (
-                  <Tag key={p.id} closable onClose={async () => { await delPickup(p.id); message.success('تم الحذف') }}>
+                  <Tag key={p.id}>
                     {p.sequence}. {p.name}{p.center_display ? ` — ${p.center_display}` : ''}
                   </Tag>
                 ))}
+                {(r.pickup_points || []).length === 0 && <span style={{ color: '#94a3b8' }}>لا توجد نقاط بعد</span>}
               </Space>
-              <div><Button size="small" onClick={() => { pForm.resetFields(); setPickupFor(r) }}>+ نقطة التقاط</Button></div>
+              <div><Button size="small" type="primary" ghost icon={<PlusOutlined />} onClick={() => setEditPickupsFor(r)}>تعديل النقاط (جدول)</Button></div>
             </div>
           ),
         }}
@@ -112,20 +179,13 @@ function RoutesTab() {
           <Form.Item name="active" label="نشط" valuePropName="checked" initialValue={true}><Switch /></Form.Item>
         </Form>
       </Modal>
-      <Modal title={`نقطة التقاط — ${pickupFor?.name || ''}`} open={!!pickupFor} onOk={addPickup} onCancel={() => setPickupFor(null)}>
-        <Form form={pForm} layout="vertical">
-          <Form.Item name="name" label="الاسم" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="center" label="المركز">
-            <Select allowClear placeholder="اختر المركز" options={[
-              { value: 'shebin', label: 'شبين الكوم' },
-              { value: 'quesna', label: 'قويسنا' },
-              { value: 'bagour', label: 'الباجور' },
-              { value: 'benha', label: 'بنها' },
-            ]} />
-          </Form.Item>
-          <Form.Item name="sequence" label="الترتيب" initialValue={1}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
-        </Form>
-      </Modal>
+      {editPickupsFor && (
+        <PickupEditor
+          key={editPickupsFor.id}
+          route={(routes?.results || []).find((x: any) => x.id === editPickupsFor.id) || editPickupsFor}
+          onClose={() => setEditPickupsFor(null)}
+        />
+      )}
     </>
   )
 }
