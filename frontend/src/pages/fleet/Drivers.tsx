@@ -37,14 +37,18 @@ export default function Drivers() {
         columns={[
           { title: 'الاسم', dataIndex: 'full_name' },
           { title: 'الهاتف', dataIndex: 'phone', render: (v: any) => v || '—' },
+          { title: 'حساب الدخول', dataIndex: 'username', render: (v: any) => v ? <Tag color="blue">{v}</Tag> : <Tag color="red">بدون حساب</Tag> },
           { title: 'رقم الرخصة', dataIndex: 'license_number', render: (v: any) => v || '—' },
           { title: 'نوع الرخصة', dataIndex: 'license_type_display', render: (v: any) => v || '—' },
           { title: 'انتهاء الرخصة', dataIndex: 'license_expiry', render: (v: any) => v || '—' },
           { title: 'الحالة', dataIndex: 'status_display', render: (v: any, r: any) => <Tag color={COLOR[r.status]}>{v}</Tag> },
         ]}
+        editValues={(r) => ({ ...r, account_username: r.username || '', account_password: '' })}
         fields={[
           { name: 'full_name', label: 'الاسم', required: true },
           { name: 'phone', label: 'رقم الهاتف' },
+          { name: 'account_username', label: 'اسم المستخدم (حساب دخول السائق)' },
+          { name: 'account_password', label: 'كلمة المرور (اتركها فارغة لعدم التغيير)' },
           { name: 'license_number', label: 'رقم الرخصة' },
           { name: 'license_type', label: 'نوع الرخصة', type: 'select', options: LICENSE },
           { name: 'license_expiry', label: 'انتهاء الرخصة', type: 'date' },

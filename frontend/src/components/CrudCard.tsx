@@ -23,9 +23,10 @@ interface Props {
   canEdit?: boolean
   rowExtra?: (row: any) => React.ReactNode
   dateFields?: string[]
+  editValues?: (row: any) => any
 }
 
-export default function CrudCard({ title, rows, columns, fields, onSave, onDelete, rowName, loading, toolbar, addLabel = 'إضافة', canEdit = true, rowExtra, dateFields = ['date', 'license_expiry', 'travel_date', 'date_of_birth', 'effective_date', 'end_date'] }: Props) {
+export default function CrudCard({ title, rows, columns, fields, onSave, onDelete, rowName, loading, toolbar, addLabel = 'إضافة', canEdit = true, rowExtra, editValues, dateFields = ['date', 'license_expiry', 'travel_date', 'date_of_birth', 'effective_date', 'end_date'] }: Props) {
   const { message, modal } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
@@ -35,7 +36,7 @@ export default function CrudCard({ title, rows, columns, fields, onSave, onDelet
   const openModal = (row?: any) => {
     setEditing(row || null); form.resetFields()
     if (row) {
-      const v: any = { ...row }
+      const v: any = editValues ? editValues(row) : { ...row }
       dateFields.forEach((f) => { if (v[f]) v[f] = dayjs(v[f]) })
       form.setFieldsValue(v)
     } else {

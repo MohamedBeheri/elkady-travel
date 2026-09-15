@@ -57,11 +57,11 @@ export default function DriverPortal() {
       </div>
 
       <Segmented style={{ marginBottom: 16 }} value={tab} onChange={(v) => setTab(v as string)}
-        options={[{ value: 'today', label: 'رحلات اليوم' }, { value: 'expense', label: 'تسجيل مصروف' }, { value: 'mine', label: 'مصروفاتي' }]} />
+        options={[{ value: 'today', label: 'رحلاتي القادمة' }, { value: 'expense', label: 'تسجيل مصروف' }, { value: 'mine', label: 'مصروفاتي' }]} />
 
       {tab === 'today' && (
         <Row gutter={[16, 16]}>
-          {assignments.length === 0 && <Col span={24}><Empty description="لا توجد رحلات مسندة إليك اليوم" /></Col>}
+          {assignments.length === 0 && <Col span={24}><Empty description="لا توجد رحلات مسندة إليك حالياً" /></Col>}
           {assignments.map((a: any) => (
             <Col xs={24} md={12} key={a.id}>
               <Card style={{ borderTop: '4px solid #F07E1B' }}>
@@ -73,7 +73,10 @@ export default function DriverPortal() {
                       <div style={{ color: '#64748b', fontSize: 13 }}>{a.route_name || a.trip_label || '—'}</div>
                     </div>
                   </div>
-                  <Tag color={STATUS_COLOR[a.status]}>{a.status_display}</Tag>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <Tag color={STATUS_COLOR[a.status]} style={{ margin: 0 }}>{a.status_display}</Tag>
+                    <Tag color="blue" style={{ margin: 0 }}>{a.date}</Tag>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <Button icon={<TeamOutlined />} onClick={() => openManifest(a)}>كشف الركاب</Button>

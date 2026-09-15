@@ -21,14 +21,69 @@ class DriverSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     license_type_display = serializers.CharField(source='get_license_type_display', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
+    # Write-only login credentials — create/link a driver login account.
+    account_username = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    account_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Driver
         fields = [
-            'id', 'user', 'username', 'full_name', 'phone', 'license_number',
+            'id', 'user', 'username', 'account_username', 'account_password',
+            'full_name', 'phone', 'license_number',
             'license_type', 'license_type_display', 'license_expiry',
             'status', 'status_display', 'notes', 'created_at',
         ]
+        read_only_fields = ['user']
+
+    def _sync_account(self, driver, username, password):
+        """Create or update the driver's login account (role=driver) and link it."""
+        from apps.users.models import User
+        username = (username or '').strip()
+        if not username and not password:
+            return
+        user = driver.user
+        if user is None:
+            if not username:
+                return
+            clash = User.objects.filter(username__iexact=username).first()
+            if clash:
+                raise serializers.ValidationError(
+                    {'account_username': 'اسم المستخدم مستخدم بالفعل، اختر اسماً آخر.'})
+            user = User(username=username, role=User.Role.DRIVER, full_name=driver.full_name)
+            user.set_password(password or 'driver123')
+            user.save()
+            driver.user = user
+            driver.save(update_fields=['user'])
+        else:
+            changed = False
+            if username and user.username.lower() != username.lower():
+                if User.objects.filter(username__iexact=username).exclude(pk=user.pk).exists():
+                    raise serializers.ValidationError(
+                        {'account_username': 'اسم المستخدم مستخدم بالفعل، اختر اسماً آخر.'})
+                user.username = username
+                changed = True
+            if password:
+                user.set_password(password)
+                changed = True
+            if user.role != User.Role.DRIVER:
+                user.role = User.Role.DRIVER
+                changed = True
+            if changed:
+                user.save()
+
+    def create(self, validated_data):
+        au = validated_data.pop('account_username', None)
+        ap = validated_data.pop('account_password', None)
+        driver = super().create(validated_data)
+        self._sync_account(driver, au, ap)
+        return driver
+
+    def update(self, instance, validated_data):
+        au = validated_data.pop('account_username', None)
+        ap = validated_data.pop('account_password', None)
+        driver = super().update(instance, validated_data)
+        self._sync_account(driver, au, ap)
+        return driver
 
 
 class VehicleAssignmentSerializer(serializers.ModelSerializer):

@@ -145,11 +145,16 @@ class VehicleAssignmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='my-today')
     def my_today(self, request):
-        """Driver's assignments for today."""
+        """Driver's upcoming assignments (today onwards) — not just today.
+
+        Assignments are made against a trip date (often tomorrow), so limiting
+        to date==today hid them from the driver until the day itself.
+        """
         d = _driver_of(request.user)
         if not d:
             return Response([])
-        qs = self.queryset.filter(driver=d, date=timezone.localdate())
+        qs = (self.queryset.filter(driver=d, date__gte=timezone.localdate())
+              .exclude(status='cancelled').order_by('date', 'start_time'))
         return Response(VehicleAssignmentSerializer(qs, many=True).data)
 
     @action(detail=True, methods=['get'], url_path='manifest')
