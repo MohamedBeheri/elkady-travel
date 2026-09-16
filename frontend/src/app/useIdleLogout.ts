@@ -6,7 +6,7 @@ import { logout } from './authSlice'
 import { api } from './api'
 
 /** Minutes of inactivity before the session is force-logged-out. */
-const IDLE_MINUTES = 45
+const IDLE_MINUTES = 60
 const IDLE_MS = IDLE_MINUTES * 60 * 1000
 /** How often we persist the "last activity" timestamp (throttle writes). */
 const SAVE_EVERY_MS = 15 * 1000
@@ -34,7 +34,7 @@ export function useIdleLogout() {
       try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
       dispatch(logout())
       dispatch(api.util.resetApiState())
-      message.warning('تم تسجيل خروجك تلقائياً بعد ٤٥ دقيقة بدون نشاط.')
+      message.warning('تم تسجيل خروجك تلقائياً بعد ٦٠ دقيقة بدون نشاط.')
       navigate('/login', { replace: true })
     }
 
