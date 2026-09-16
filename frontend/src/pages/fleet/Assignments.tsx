@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import {
   useAssignmentsQuery, useSaveAssignmentMutation, useDeleteAssignmentMutation, useDriversQuery, useVehicles2Query, useRoutesQuery,
+  useTourismRequestsQuery,
 } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
 
@@ -21,12 +22,16 @@ export default function Assignments() {
   const { data: drivers } = useDriversQuery({ status: 'active' })
   const { data: vehicles } = useVehicles2Query({ active: true })
   const { data: routes } = useRoutesQuery({ active: true })
+  const { data: tourism } = useTourismRequestsQuery({ page_size: 500 })
   const [save] = useSaveAssignmentMutation()
   const [del] = useDeleteAssignmentMutation()
 
   const driverOpts = (drivers?.results || []).map((d: any) => ({ value: d.id, label: d.full_name }))
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: `${v.plate_number} (${v.brand} ${v.model})` }))
   const routeOpts = (routes?.results || []).map((r: any) => ({ value: r.id, label: r.name }))
+  const tourismOpts = (tourism?.results || [])
+    .filter((t: any) => t.status !== 'rejected' && t.status !== 'expired')
+    .map((t: any) => ({ value: t.id, label: `${t.origin} → ${t.destination} — ${t.full_name} (${t.travel_date})` }))
 
   const today = dayjs().format('YYYY-MM-DD')
   const rows = useMemo(() => {
@@ -57,6 +62,8 @@ export default function Assignments() {
         { title: 'التاريخ', dataIndex: 'date' },
         { title: 'السائق', dataIndex: 'driver_name' },
         { title: 'المركبة', dataIndex: 'vehicle_plate' },
+        { title: 'النوع', dataIndex: 'trip_kind', width: 90, render: (v: any) => v === 'tourism'
+          ? <Tag color="purple">سياحية</Tag> : <Tag color="cyan">طلبة</Tag> },
         { title: 'الرحلة', dataIndex: 'trip_label', render: (v: any, r: any) => v || r.route_name || '—' },
         { title: 'الحالة', dataIndex: 'status_display', render: (v: any, r: any) => <Tag color={COLOR[r.status]}>{v}</Tag> },
         { title: 'تحرّك؟', render: (_: any, r: any) => (
@@ -71,7 +78,8 @@ export default function Assignments() {
         { name: 'date', label: 'التاريخ', type: 'date', required: true, initial: dayjs() },
         { name: 'driver', label: 'السائق', type: 'select', required: true, options: driverOpts },
         { name: 'vehicle', label: 'المركبة', type: 'select', required: true, options: vehicleOpts },
-        { name: 'route', label: 'المسار', type: 'select', options: routeOpts },
+        { name: 'route', label: 'خط سير الطلبة (اختر واحداً فقط)', type: 'select', options: routeOpts },
+        { name: 'tourism_request', label: 'أو رحلة سياحية', type: 'select', options: tourismOpts },
         { name: 'status', label: 'الحالة', type: 'select', options: STATUS, initial: 'planned' },
         { name: 'notes', label: 'ملاحظات', type: 'textarea' },
       ]}

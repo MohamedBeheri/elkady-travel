@@ -86,6 +86,10 @@ class VehicleAssignment(models.Model):
         'config_app.Route', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='assignments', verbose_name=_('المسار'),
     )
+    tourism_request = models.ForeignKey(
+        'tourism.TourismRequest', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='assignments', verbose_name=_('رحلة سياحية'),
+    )
     start_time = models.DateTimeField(null=True, blank=True, verbose_name=_('بداية الرحلة'))
     end_time = models.DateTimeField(null=True, blank=True, verbose_name=_('نهاية الرحلة'))
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PLANNED, verbose_name=_('الحالة'))

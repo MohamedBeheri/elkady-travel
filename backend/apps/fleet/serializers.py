@@ -92,19 +92,33 @@ class VehicleAssignmentSerializer(serializers.ModelSerializer):
     route_name = serializers.CharField(source='route.name', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     trip_label = serializers.SerializerMethodField()
+    trip_kind = serializers.SerializerMethodField()
+    tourism_label = serializers.SerializerMethodField()
 
     class Meta:
         model = VehicleAssignment
         fields = [
             'id', 'date', 'driver', 'driver_name', 'vehicle', 'vehicle_plate',
-            'daily_trip', 'trip_label', 'route', 'route_name', 'start_time', 'end_time',
+            'daily_trip', 'trip_label', 'trip_kind', 'route', 'route_name',
+            'tourism_request', 'tourism_label', 'start_time', 'end_time',
             'status', 'status_display', 'notes', 'created_at',
         ]
 
+    def get_trip_kind(self, obj):
+        return 'tourism' if obj.tourism_request_id else 'student'
+
+    def get_tourism_label(self, obj):
+        t = obj.tourism_request
+        if not t:
+            return ''
+        return f'{t.origin} → {t.destination} — {t.full_name}'
+
     def get_trip_label(self, obj):
+        if obj.tourism_request_id:
+            return self.get_tourism_label(obj)
         if obj.daily_trip:
             return f'{obj.daily_trip.slot_label} - {obj.daily_trip.route.name}'
-        return ''
+        return obj.route.name if obj.route_id else ''
 
 
 class TripExpenseSerializer(serializers.ModelSerializer):

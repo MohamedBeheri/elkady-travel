@@ -79,7 +79,9 @@ export default function DriverPortal() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <Button icon={<TeamOutlined />} onClick={() => openManifest(a)}>كشف الركاب</Button>
+                  {a.trip_kind === 'tourism'
+                    ? <Tag color="purple" style={{ alignSelf: 'center' }}>رحلة سياحية</Tag>
+                    : <Button icon={<TeamOutlined />} onClick={() => openManifest(a)}>كشف الركاب</Button>}
                   {a.status === 'planned' && <Button type="primary" icon={<PlayCircleOutlined />} onClick={async () => { await startTrip(a.id).unwrap(); message.success('بدأت الرحلة') }}>بدء الرحلة</Button>}
                   {a.status === 'started' && <Button icon={<CheckCircleOutlined />} onClick={async () => { await completeTrip(a.id).unwrap(); message.success('اكتملت الرحلة') }}>إنهاء الرحلة</Button>}
                   {a.status === 'completed' && <Button type="primary" ghost icon={<DollarOutlined />} onClick={() => { setTab('expense'); form.setFieldsValue({ vehicle: a.vehicle }) }}>تسجيل مصروف</Button>}
