@@ -35,6 +35,20 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied('حجز الاشتراك الشهري مغلق حالياً من الإدارة')
             if stype.startswith('daily') and not cs.booking_daily_open:
                 raise PermissionDenied('الحجز اليومي مغلق حالياً من الإدارة')
+            # Prevent a student from stacking duplicate term/monthly subscriptions.
+            if stype in ('term', 'monthly'):
+                live = Subscription.objects.filter(
+                    student=request.user, subscription_type=stype,
+                    status__in=[
+                        Subscription.Status.PAYMENT_PENDING, Subscription.Status.PAYMENT_SUBMITTED,
+                        Subscription.Status.UNDER_REVIEW, Subscription.Status.CONFIRMED,
+                    ],
+                ).exists()
+                if live:
+                    label = 'ترم' if stype == 'term' else 'شهري'
+                    raise PermissionDenied(
+                        f'لديك اشتراك {label} قائم بالفعل — لا يمكن إنشاء اشتراك آخر من نفس النوع. '
+                        f'راجع «حجوزاتي» أو تواصل مع الإدارة.')
         return super().create(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
