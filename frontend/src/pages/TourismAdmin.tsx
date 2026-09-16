@@ -1,13 +1,41 @@
 import { Card, Table, Tag, Segmented, Button, Space, Modal, Form, InputNumber, Input, DatePicker, App as AntdApp, Descriptions } from 'antd'
+import { WhatsAppOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import {
   useTourismRequestsQuery, useCreateQuotationMutation, useSendQuotationMutation, useDeleteTourismRequestMutation,
+  useAcceptTourismMutation, useRejectTourismMutation,
 } from '../app/api'
 
 const STATUS_COLOR: Record<string, string> = {
   pending: 'orange', quoted: 'blue', accepted: 'green', rejected: 'red', expired: 'default',
 }
 const TRIP_LABEL: Record<string, string> = { seat: 'فردي', private: 'خاصة' }
+
+/** Normalise an Egyptian phone number to wa.me format (country code 20). */
+function waPhone(raw?: string) {
+  let d = (raw || '').replace(/[^\d]/g, '')
+  if (d.startsWith('20')) return d
+  if (d.startsWith('0')) return '20' + d.slice(1)
+  if (d.length === 10) return '20' + d
+  return d
+}
+
+/** Build the WhatsApp quote message for a tourism request (RTL-safe). */
+function buildQuoteMsg(r: any) {
+  const rlm = '‏'
+  const q = (r.quotations || []).filter((x: any) => x.status !== 'rejected').slice(-1)[0]
+  const L = (s: string) => rlm + s
+  const lines = [
+    L('عرض سعر رحلتك من القاضي — ELKADY TRAVEL'),
+    L(`الوجهة: ${r.origin} → ${r.destination}`),
+    L(`التاريخ: ${r.travel_date}`),
+    L(`عدد المسافرين: ${r.travelers}`),
+  ]
+  if (q) lines.push(L(`السعر: ${Number(q.price).toLocaleString()} ج.م`))
+  if (q?.notes) lines.push(L(`ملاحظات: ${q.notes}`))
+  lines.push(L('برجاء الرد بالموافقة لتأكيد الحجز.'))
+  return lines.join('\n')
+}
 
 export default function TourismAdmin() {
   const { message, modal } = AntdApp.useApp()
@@ -18,6 +46,12 @@ export default function TourismAdmin() {
   const [createQ] = useCreateQuotationMutation()
   const [sendQ] = useSendQuotationMutation()
   const [del] = useDeleteTourismRequestMutation()
+  const [acceptT] = useAcceptTourismMutation()
+  const [rejectT] = useRejectTourismMutation()
+
+  const sendWhatsApp = (r: any) => {
+    window.open(`https://wa.me/${waPhone(r.phone)}?text=${encodeURIComponent(buildQuoteMsg(r))}`, '_blank')
+  }
 
   const remove = (r: any) => {
     modal.confirm({
@@ -39,7 +73,10 @@ export default function TourismAdmin() {
     if (v.validity_date) v.validity_date = v.validity_date.format('YYYY-MM-DD')
     const q = await createQ({ ...v, request: quoteFor.id }).unwrap()
     await sendQ(q.id).unwrap()
-    message.success('تم إنشاء العرض وإرساله للعميل')
+    // Open WhatsApp to actually deliver the quote to the customer's phone.
+    const withQuote = { ...quoteFor, quotations: [...(quoteFor.quotations || []), { price: v.price, notes: v.notes, status: 'sent' }] }
+    window.open(`https://wa.me/${waPhone(quoteFor.phone)}?text=${encodeURIComponent(buildQuoteMsg(withQuote))}`, '_blank')
+    message.success('تم إنشاء العرض — افتح واتساب لإرساله للعميل')
     setQuoteFor(null); form.resetFields()
   }
 
@@ -68,6 +105,17 @@ export default function TourismAdmin() {
               <Space wrap>
                 <Button size="small" onClick={() => setDetail(r)}>تفاصيل</Button>
                 {r.status === 'pending' && <Button size="small" type="primary" onClick={() => { form.resetFields(); setQuoteFor(r) }}>عرض سعر</Button>}
+                {(r.status === 'quoted' || r.status === 'pending') && (
+                  <Button size="small" icon={<WhatsAppOutlined />} style={{ color: '#25D366' }} onClick={() => sendWhatsApp(r)}>واتساب</Button>
+                )}
+                {r.status === 'quoted' && (
+                  <>
+                    <Button size="small" type="primary" ghost icon={<CheckOutlined />}
+                      onClick={async () => { await acceptT(r.id).unwrap(); message.success('تم تأكيد قبول العميل') }}>تم القبول</Button>
+                    <Button size="small" danger ghost icon={<CloseOutlined />}
+                      onClick={async () => { await rejectT(r.id).unwrap(); message.success('تم الرفض') }}>رفض</Button>
+                  </>
+                )}
                 <Button size="small" danger onClick={() => remove(r)}>حذف</Button>
               </Space>
             ),
