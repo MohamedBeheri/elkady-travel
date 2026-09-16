@@ -38,28 +38,34 @@ def _slot_options_for_lock(lock):
     default slot only.
     """
     from apps.config_app.models import MorningSlot, ReturnSlot, PickupTime
+    is_return = lock.direction == 'return'
     pp = (lock.subscription.pickup_point if lock.subscription_id and lock.subscription.pickup_point_id
           else lock.student.pickup_point)
-    default_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
-    if not pp:
-        # No point → offer the default slot only.
-        slot = lock.return_slot if lock.direction == 'return' else lock.morning_slot
-        if not slot:
-            return [], default_id
-        return [{'id': slot.id, 'name': slot.name, 'time': '', 'is_default': True}], default_id
-    times = PickupTime.objects.filter(pickup_point=pp, direction=lock.direction).select_related(
-        'morning_slot', 'return_slot')
+    default_id = lock.return_slot_id if is_return else lock.morning_slot_id
+
+    # Per-point configured pickup/drop times (slot id → HH:MM), when available.
+    ptimes = {}
+    if pp:
+        for t in PickupTime.objects.filter(pickup_point=pp, direction=lock.direction).select_related(
+                'morning_slot', 'return_slot'):
+            s = t.return_slot if is_return else t.morning_slot
+            if s:
+                ptimes[s.id] = t.time.strftime('%H:%M')
+
+    # Show EVERY active slot for the direction — a slot must never disappear from
+    # the student's list just because its per-point time wasn't filled. The
+    # per-point time refines the display; the slot's own departure time is the
+    # fallback so each option always shows a time.
+    Model = ReturnSlot if is_return else MorningSlot
+    slots = list(Model.objects.filter(active=True))
+    default_obj = lock.return_slot if is_return else lock.morning_slot
+    if default_obj and default_obj.id not in {s.id for s in slots}:
+        slots.append(default_obj)  # keep the student's default even if deactivated
+
     opts = []
-    for t in times:
-        s = t.return_slot if lock.direction == 'return' else t.morning_slot
-        if s:
-            opts.append({'id': s.id, 'name': s.name, 'time': t.time.strftime('%H:%M'),
-                         'is_default': s.id == default_id})
-    # Ensure the default slot is always present even if it has no time yet.
-    if default_id and not any(o['id'] == default_id for o in opts):
-        s = lock.return_slot if lock.direction == 'return' else lock.morning_slot
-        if s:
-            opts.insert(0, {'id': s.id, 'name': s.name, 'time': '', 'is_default': True})
+    for s in slots:
+        time = ptimes.get(s.id) or (s.departure_time.strftime('%H:%M') if s.departure_time else '')
+        opts.append({'id': s.id, 'name': s.name, 'time': time, 'is_default': s.id == default_id})
     opts.sort(key=lambda o: o['time'] or '99:99')
     return opts, default_id
 
