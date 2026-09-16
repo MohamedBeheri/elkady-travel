@@ -10,65 +10,80 @@ const IDLE_MINUTES = 60
 const IDLE_MS = IDLE_MINUTES * 60 * 1000
 /** How often we persist the "last activity" timestamp (throttle writes). */
 const SAVE_EVERY_MS = 15 * 1000
+/** How often we check whether the idle limit has passed (wall-clock based). */
+const CHECK_EVERY_MS = 30 * 1000
 const STORAGE_KEY = 'lastActivityAt'
+
+function readTS(): number {
+  try { return Number(localStorage.getItem(STORAGE_KEY)) || 0 } catch { return 0 }
+}
+function writeTS(v: number) {
+  try { localStorage.setItem(STORAGE_KEY, String(v)) } catch { /* ignore */ }
+}
 
 /**
  * Auto-logout after IDLE_MINUTES of no user interaction.
  *
- * Uses a wall-clock timestamp in localStorage so the timeout survives tab
- * reloads and stays consistent across tabs — this also clears the stale RTK
- * Query cache that was causing issues after long idle periods.
+ * Reliability notes (this is why it's a wall-clock interval, not one long timer):
+ *   • A single 60-min setTimeout is throttled/dropped by mobile browsers when the
+ *     screen locks, so it often never fired — we poll every 30s instead.
+ *   • We DON'T reset the timestamp on mount; otherwise reopening the app (as
+ *     students do constantly on phones) restarted the idle clock forever.
+ *   • The timestamp lives in localStorage so it survives reloads and is shared
+ *     across tabs. On logout we also clear the RTK Query cache (fixes the stale
+ *     data after long idle periods).
  */
 export function useIdleLogout() {
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
   const { message } = AntdApp.useApp()
   const access = useAppSelector((s) => s.auth.access)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSave = useRef(0)
 
   useEffect(() => {
     if (!access) return
 
     const doLogout = () => {
-      try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
+      writeTS(0)
       dispatch(logout())
       dispatch(api.util.resetApiState())
       message.warning('تم تسجيل خروجك تلقائياً بعد ٦٠ دقيقة بدون نشاط.')
       navigate('/login', { replace: true })
     }
 
-    const arm = () => {
-      if (timer.current) clearTimeout(timer.current)
-      const last = Number(localStorage.getItem(STORAGE_KEY) || Date.now())
-      const remaining = IDLE_MS - (Date.now() - last)
-      if (remaining <= 0) { doLogout(); return }
-      timer.current = setTimeout(doLogout, remaining)
+    const expired = () => {
+      const last = readTS()
+      return last > 0 && Date.now() - last >= IDLE_MS
     }
+
+    // On mount: keep the existing clock. If already past the limit, log out now;
+    // if there's no timestamp yet (fresh login), start it.
+    const existing = readTS()
+    if (existing > 0) {
+      if (Date.now() - existing >= IDLE_MS) { doLogout(); return }
+    } else {
+      writeTS(Date.now())
+    }
+    lastSave.current = Date.now()
 
     const markActivity = () => {
       const now = Date.now()
       if (now - lastSave.current > SAVE_EVERY_MS) {
         lastSave.current = now
-        try { localStorage.setItem(STORAGE_KEY, String(now)) } catch { /* ignore */ }
-        arm()
+        writeTS(now)
       }
     }
 
-    // Seed the timestamp on mount so a fresh login starts the clock.
-    try { localStorage.setItem(STORAGE_KEY, String(Date.now())) } catch { /* ignore */ }
-    lastSave.current = Date.now()
-    arm()
+    const check = () => { if (expired()) doLogout() }
 
     const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click']
     events.forEach((e) => window.addEventListener(e, markActivity, { passive: true }))
-
-    // Re-check when the tab regains focus (covers sleep/long background).
-    const onVisible = () => { if (document.visibilityState === 'visible') arm() }
+    const onVisible = () => { if (document.visibilityState === 'visible') check() }
     document.addEventListener('visibilitychange', onVisible)
+    const iv = setInterval(check, CHECK_EVERY_MS)
 
     return () => {
-      if (timer.current) clearTimeout(timer.current)
+      clearInterval(iv)
       events.forEach((e) => window.removeEventListener(e, markActivity))
       document.removeEventListener('visibilitychange', onVisible)
     }
