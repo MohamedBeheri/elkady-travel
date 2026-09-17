@@ -158,7 +158,12 @@ export default function TripBoard() {
           { title: 'المسار', dataIndex: 'route_name' },
           { title: 'الوجهة', dataIndex: 'destination_name' },
           { title: 'السعة', dataIndex: 'total_seats' },
-          { title: 'مؤكد', dataIndex: 'confirmed_count', render: (v) => <Tag color="green">{v}</Tag> },
+          { title: 'مؤكد', dataIndex: 'confirmed_count', render: (v, r: any) => (
+            <Space size={4}>
+              <Tag color="green">{v}</Tag>
+              {r.held_count > 0 && <Tag color="gold">+{r.held_count} معلّق</Tag>}
+            </Space>
+          ) },
           { title: 'انتظار', dataIndex: 'waiting_count', render: (v) => <Tag color="orange">{v}</Tag> },
           {
             title: 'الإشغال', render: (_, r: any) => (

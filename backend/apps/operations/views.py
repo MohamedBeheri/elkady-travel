@@ -233,8 +233,9 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         data = DailyTripSerializer(trips, many=True).data
         # `confirmed_count` on the model only counts one-off SeatRequests, so a bus
         # full of TERM subscribers (fixed seat locks) showed مؤكد=0 / الإشغال=0%.
-        # Recompute occupancy the same way the seat map / manifest does — term
-        # locks + held + confirmed — so the board matches the passenger list.
+        # Count CONFIRMED only — term locks + confirmed one-offs — matching the
+        # passenger manifest exactly. Held (بانتظار الدفع) seats are shown separately
+        # so the board's مؤكد never disagrees with كشف الركاب.
         from apps.operations.services import build_seatmap
         by_id = {t.id: t for t in trips}
         for row in data:
@@ -242,9 +243,11 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             if not trip:
                 continue
             sm = build_seatmap(trip)
-            occ = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'held', 'term'))
-            row['confirmed_count'] = occ
-            row['available_seats'] = max((row.get('total_seats') or 0) - occ, 0)
+            confirmed = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'term'))
+            held = sum(1 for s in sm['seats'] if s['raw_state'] == 'held')
+            row['confirmed_count'] = confirmed
+            row['held_count'] = held
+            row['available_seats'] = max((row.get('total_seats') or 0) - confirmed - held, 0)
         return Response({'date': date, 'trips': data})
 
     @action(detail=True, methods=['get'], url_path='passengers')
