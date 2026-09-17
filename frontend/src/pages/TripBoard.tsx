@@ -1,5 +1,5 @@
 import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Modal, List } from 'antd'
-import { ThunderboltOutlined } from '@ant-design/icons'
+import { ThunderboltOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
@@ -55,14 +55,52 @@ function SeatManager({ trip }: { trip: any }) {
   )
 }
 
-function Passengers({ tripId }: { tripId: number }) {
-  const { data } = useTripPassengersQuery(tripId)
+function manifestPDF(trip: any, data: any) {
+  const sections = (data.groups || []).map((g: any) => {
+    const rows = (g.passengers || []).map((p: any, i: number) => `<tr>${[
+      i + 1, p.seat_number ?? '', p.student_name ?? '', p.university ?? '', p.student_phone ?? '', p.kind ?? '',
+    ].map((c) => `<td>${c ?? ''}</td>`).join('')}</tr>`).join('')
+    return `<tr class="grp"><td colspan="6">⏰ ${g.time || '—'} — ${g.pickup} (${(g.passengers || []).length} راكب)</td></tr>${rows}`
+  }).join('')
+  const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+    <title>كشف ركاب — ${trip.route_name || ''}</title><style>
+    body{font-family:'Cairo',Arial,sans-serif;padding:22px;color:#0f172a}
+    .hd{display:flex;align-items:center;gap:12px;border-bottom:3px solid #0B2E5E;padding-bottom:10px;margin-bottom:6px}
+    .hd img{width:52px;height:52px;border-radius:50%}
+    .hd .t{font-weight:800;font-size:20px;color:#0B2E5E}
+    .hd .s{font-size:12px;color:#EC6A16;font-weight:700;letter-spacing:1px}
+    .meta{color:#475569;font-size:13px;margin:8px 0 14px}
+    .meta b{color:#0B2E5E}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th,td{border:1px solid #cbd5e1;padding:6px 8px;text-align:center}
+    th{background:#0B2E5E;color:#fff}
+    tr.grp td{background:#fff6ee;color:#8a4b16;font-weight:800;text-align:right}
+    .ft{margin-top:22px;text-align:center;color:#94a3b8;font-size:11px;border-top:1px solid #e2e8f0;padding-top:10px}
+    .ft b{color:#EC6A16}
+    @media print{body{padding:0}}</style></head>
+    <body>
+    <div class="hd"><img src="/logo.png" onerror="this.style.display='none'"/>
+      <div><div class="t">القاضي — ELKADY TRAVEL</div><div class="s">كشف ركاب الرحلة</div></div></div>
+    <div class="meta">المسار: <b>${trip.route_name || ''}</b> · الموعد: <b>${trip.slot_name || ''}</b> · الوجهة: <b>${trip.destination_name || ''}</b> · التاريخ: <b>${trip.date || ''}</b> · إجمالي الركاب: <b>${data.total ?? 0}</b></div>
+    <table><thead><tr><th>#</th><th>مقعد</th><th>الطالب</th><th>الجامعة</th><th>الهاتف</th><th>النوع</th></tr></thead>
+    <tbody>${sections}</tbody></table>
+    <div class="ft">تصميم وتطوير <b>شركة كفو للبرمجيات</b> · Kaffo.co</div>
+    <script>window.onload=()=>{setTimeout(()=>window.print(),300)}</script></body></html>`
+  const w = window.open('', '_blank')
+  if (w) { w.document.write(html); w.document.close() }
+}
+
+function Passengers({ trip }: { trip: any }) {
+  const { data } = useTripPassengersQuery(trip.id)
   if (!data) return null
   return (
     <div>
-      {typeof data.total === 'number' && (
-        <div style={{ marginBottom: 12, color: '#64748b' }}>عدد الركاب المؤكدين: <b style={{ color: '#0B2E5E' }}>{data.total}</b></div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+        {typeof data.total === 'number'
+          ? <span style={{ color: '#64748b' }}>عدد الركاب المؤكدين: <b style={{ color: '#0B2E5E' }}>{data.total}</b></span>
+          : <span />}
+        <Button size="small" icon={<FilePdfOutlined />} onClick={() => manifestPDF(trip, data)}>تصدير PDF</Button>
+      </div>
       {(data.groups || []).length === 0 && <Empty description="لا يوجد ركاب مؤكدون" />}
       {(data.groups || []).map((g: any) => (
         <div key={g.pickup_id ?? g.pickup} style={{ marginBottom: 16 }}>
@@ -142,7 +180,7 @@ export default function TripBoard() {
         title={openTrip ? `ركاب: ${openTrip.slot_name} — ${openTrip.route_name}` : ''}
         open={!!openTrip} onClose={() => setOpenTrip(null)} width={560}
       >
-        {openTrip && <Passengers tripId={openTrip.id} />}
+        {openTrip && <Passengers trip={openTrip} />}
       </Drawer>
 
       <Drawer

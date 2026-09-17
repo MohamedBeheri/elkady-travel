@@ -231,6 +231,20 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         date = request.query_params.get('date') or timezone.localdate().isoformat()
         trips = self.get_queryset().filter(date=date, direction='go')
         data = DailyTripSerializer(trips, many=True).data
+        # `confirmed_count` on the model only counts one-off SeatRequests, so a bus
+        # full of TERM subscribers (fixed seat locks) showed مؤكد=0 / الإشغال=0%.
+        # Recompute occupancy the same way the seat map / manifest does — term
+        # locks + held + confirmed — so the board matches the passenger list.
+        from apps.operations.services import build_seatmap
+        by_id = {t.id: t for t in trips}
+        for row in data:
+            trip = by_id.get(row['id'])
+            if not trip:
+                continue
+            sm = build_seatmap(trip)
+            occ = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'held', 'term'))
+            row['confirmed_count'] = occ
+            row['available_seats'] = max((row.get('total_seats') or 0) - occ, 0)
         return Response({'date': date, 'trips': data})
 
     @action(detail=True, methods=['get'], url_path='passengers')
