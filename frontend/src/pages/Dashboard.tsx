@@ -101,6 +101,7 @@ export default function Dashboard() {
 
       <Section title="الطلاب">
         <Kpi title="إجمالي الطلاب" value={s?.total ?? 0} icon={<TeamOutlined />} color={NAVY} />
+        <Kpi title="مشتركون مؤكدون" value={s?.subscribed ?? 0} icon={<CheckCircleOutlined />} color={GREEN} />
         <Kpi title="مشتركو الترم" value={s?.term ?? 0} icon={<CheckCircleOutlined />} color={GREEN} />
         <Kpi title="مشتركو الشهري" value={s?.monthly ?? 0} icon={<CheckCircleOutlined />} color={ORANGE} />
         <Kpi title="قائمة الانتظار" value={s?.waiting ?? 0} icon={<ClockCircleOutlined />} color={GOLD} />

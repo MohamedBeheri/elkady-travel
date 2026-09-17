@@ -211,9 +211,12 @@ def dashboard_stats(request):
     confirmed = Subscription.objects.filter(status=Subscription.Status.CONFIRMED)
     students = {
         'total': User.objects.filter(role=User.Role.STUDENT).count(),
+        # Distinct students with ANY confirmed subscription — matches the
+        # «مشتركون مؤكدون» counter on the subscriptions page.
+        'subscribed': confirmed.values('student').distinct().count(),
         'term': confirmed.filter(subscription_type='term').values('student').distinct().count(),
         'monthly': confirmed.filter(subscription_type='monthly').values('student').distinct().count(),
-        'daily': confirmed.filter(subscription_type='daily').values('student').distinct().count(),
+        'daily': confirmed.filter(subscription_type__startswith='daily').values('student').distinct().count(),
         'waiting': SeatRequest.objects.filter(status=SeatRequest.Status.WAITING).count(),
     }
 

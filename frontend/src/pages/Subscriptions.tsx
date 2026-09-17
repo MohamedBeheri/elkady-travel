@@ -209,10 +209,17 @@ export default function Subscriptions() {
   const { data, isFetching } = useSubscriptionsQuery(params)
   const rows = data?.results || []
 
-  // Unfiltered subscriptions count → to compute who has none.
+  // Unfiltered subscriptions → reconcile counts with the dashboard.
   const { data: allSubsData } = useSubscriptionsQuery({ page_size: 5000 })
-  const studentsWithSubs = new Set<number>(
-    (allSubsData?.results || []).map((s: any) => s.student).filter(Boolean)
+  const allSubs = allSubsData?.results || []
+  const studentsWithSubs = new Set<number>(allSubs.map((s: any) => s.student).filter(Boolean))
+  // Confirmed subscribers = matches the dashboard "مشتركو الترم/الشهري" definition.
+  const confirmedStudents = new Set<number>(
+    allSubs.filter((s: any) => s.status === 'confirmed').map((s: any) => s.student).filter(Boolean)
+  )
+  const pendingStudents = new Set<number>(
+    allSubs.filter((s: any) => ['payment_pending', 'payment_submitted', 'under_review'].includes(s.status))
+      .map((s: any) => s.student).filter(Boolean)
   )
   const allStudents = allStudentsData?.results || []
   const orphanStudents = allStudents.filter((u: any) => !studentsWithSubs.has(u.id))
@@ -252,7 +259,10 @@ export default function Subscriptions() {
           طلاب مسجّلون: <b>{allStudents.length}</b>
         </Tag>
         <Tag color="green" style={{ margin: 0, fontSize: 13, padding: '2px 10px' }}>
-          لديهم اشتراك: <b>{studentsWithSubs.size}</b>
+          مشتركون مؤكدون: <b>{confirmedStudents.size}</b>
+        </Tag>
+        <Tag color="gold" style={{ margin: 0, fontSize: 13, padding: '2px 10px' }}>
+          قيد المراجعة: <b>{pendingStudents.size}</b>
         </Tag>
         <Tag color={orphanStudents.length ? 'orange' : 'default'} style={{ margin: 0, fontSize: 13, padding: '2px 10px' }}>
           بدون اشتراك: <b>{orphanStudents.length}</b>
