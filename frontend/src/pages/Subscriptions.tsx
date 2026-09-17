@@ -95,9 +95,18 @@ function exportPDF(rows: any[]) {
     <body><h2>القاضي — ELKADY TRAVEL · الطلاب والاشتراكات</h2>
     <div class="sub">${dayjs().format('YYYY-MM-DD HH:mm')} · العدد: ${rows.length}</div>
     <table><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${trs}</tbody></table>
-    <script>window.onload=()=>{window.print()}</script></body></html>`
-  const w = window.open('', '_blank')
-  if (w) { w.document.write(html); w.document.close() }
+    </body></html>`
+  // Hidden iframe instead of window.open → not blocked by popup blockers.
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentWindow?.document
+  if (!doc) { document.body.removeChild(iframe); return }
+  doc.open(); doc.write(html); doc.close()
+  setTimeout(() => {
+    try { iframe.contentWindow?.focus(); iframe.contentWindow?.print() }
+    finally { setTimeout(() => document.body.removeChild(iframe), 1500) }
+  }, 300)
 }
 
 /* ---------- Student profile preview + edit ---------- */

@@ -85,9 +85,21 @@ function manifestPDF(trip: any, data: any) {
     <table><thead><tr><th>#</th><th>مقعد</th><th>الطالب</th><th>الجامعة</th><th>الهاتف</th><th>النوع</th></tr></thead>
     <tbody>${sections}</tbody></table>
     <div class="ft">تصميم وتطوير <b>شركة كفو للبرمجيات</b> · Kaffo.co</div>
-    <script>window.onload=()=>{setTimeout(()=>window.print(),300)}</script></body></html>`
-  const w = window.open('', '_blank')
-  if (w) { w.document.write(html); w.document.close() }
+    </body></html>`
+  // Use a hidden iframe (not window.open) so popup blockers never break the export.
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentWindow?.document
+  if (!doc) { document.body.removeChild(iframe); return }
+  doc.open(); doc.write(html); doc.close()
+  const print = () => {
+    try { iframe.contentWindow?.focus(); iframe.contentWindow?.print() }
+    finally { setTimeout(() => document.body.removeChild(iframe), 1500) }
+  }
+  const img = doc.querySelector('img') as HTMLImageElement | null
+  if (img && !img.complete) { img.onload = print; img.onerror = print; setTimeout(print, 1500) }
+  else setTimeout(print, 300)
 }
 
 function Passengers({ trip }: { trip: any }) {
