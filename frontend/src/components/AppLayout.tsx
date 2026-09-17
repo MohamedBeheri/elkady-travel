@@ -3,7 +3,7 @@ import {
   DashboardOutlined, DollarOutlined, TeamOutlined, ClockCircleOutlined,
   CarOutlined, RollbackOutlined, SettingOutlined, CompassOutlined,
   UserOutlined, LogoutOutlined, BellOutlined, IdcardOutlined, MenuOutlined,
-  ToolOutlined, WarningOutlined, BarChartOutlined, AuditOutlined, ProfileOutlined,
+  ToolOutlined, WarningOutlined, BarChartOutlined, AuditOutlined, ProfileOutlined, SafetyOutlined,
   ApartmentOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -69,13 +69,16 @@ export default function AppLayout() {
 
   const role = user?.role || ''
   const isAdmin = role === 'admin'
-  const isFleet = ['admin', 'bus_supervisor', 'transport_manager', 'operations'].includes(role)
+  // Dynamic per-role screen permissions (admin sees everything).
+  const perms = user?.permissions || {}
+  const canView = (k: string) => isAdmin || !!perms[k]?.view
 
-  const items: any[] = [
+  // Full menu; leaves are filtered by view permission, empty groups dropped.
+  const rawItems: any[] = [
     { key: '/', icon: <DashboardOutlined />, label: 'لوحة التحكم' },
     {
       key: 'g-ops', icon: <CarOutlined />, label: 'التشغيل', children: [
-        ...(isFleet ? [{ key: '/operations', icon: <DashboardOutlined />, label: 'لوحة المشرف' }] : []),
+        { key: '/operations', icon: <DashboardOutlined />, label: 'لوحة المشرف' },
         { key: '/board', icon: <CarOutlined />, label: 'رحلات الغد' },
         { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
         { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
@@ -84,37 +87,45 @@ export default function AppLayout() {
         { key: '/tourism', icon: <CompassOutlined />, label: 'السياحة والرحلات' },
       ],
     },
-    ...(isFleet ? [{
+    {
       key: 'g-fleet', icon: <ApartmentOutlined />, label: 'الأسطول', children: [
         { key: '/fleet/vehicles', icon: <CarOutlined />, label: 'المركبات' },
         { key: '/fleet/drivers', icon: <IdcardOutlined />, label: 'السائقون' },
         { key: '/fleet/assignments', icon: <ProfileOutlined />, label: 'التعيينات اليومية' },
       ],
-    }, {
+    },
+    {
       key: 'g-exp', icon: <DollarOutlined />, label: 'المصروفات', children: [
         { key: '/fleet/expenses', icon: <DollarOutlined />, label: 'مصروفات الرحلات' },
         { key: '/fleet/maintenance', icon: <ToolOutlined />, label: 'الصيانة والورش' },
         { key: '/fleet/fines', icon: <WarningOutlined />, label: 'الغرامات المرورية' },
       ],
-    }, {
+    },
+    {
       key: 'g-rep', icon: <BarChartOutlined />, label: 'التقارير', children: [
         { key: '/reports/finance', icon: <DollarOutlined />, label: 'التقارير المالية' },
         { key: '/fleet/reports', icon: <BarChartOutlined />, label: 'مصروفات المركبات' },
         { key: '/fleet/trip-cost', icon: <DollarOutlined />, label: 'تكلفة الرحلات' },
       ],
-    }] : [{
-      key: 'g-rep', icon: <BarChartOutlined />, label: 'التقارير', children: [
-        { key: '/reports/finance', icon: <DollarOutlined />, label: 'التقارير المالية' },
-      ],
-    }]),
-    ...(isAdmin ? [{
+    },
+    {
       key: 'g-sys', icon: <SettingOutlined />, label: 'النظام', children: [
         { key: '/config', icon: <SettingOutlined />, label: 'الإعدادات والتهيئة' },
         { key: '/users', icon: <IdcardOutlined />, label: 'المستخدمون' },
         { key: '/fleet/audit', icon: <AuditOutlined />, label: 'سجل التدقيق' },
+        // Permissions management is admin-only (governs everyone else's access).
+        ...(isAdmin ? [{ key: '/permissions', icon: <SafetyOutlined />, label: 'صلاحيات الأدوار' }] : []),
       ],
-    }] : []),
+    },
   ]
+
+  const items = rawItems
+    .map((it) => {
+      if (!it.children) return canView(it.key) ? it : null
+      const kids = it.children.filter((c: any) => c.key === '/permissions' || canView(c.key))
+      return kids.length ? { ...it, children: kids } : null
+    })
+    .filter(Boolean) as any[]
 
   const allKeys = items.flatMap((i: any) => [i.key, ...(i.children || []).map((c: any) => c.key)]).filter((k: string) => k.startsWith('/'))
   const selectedKey = allKeys.filter((k: string) => k === '/' ? location.pathname === '/' : location.pathname.startsWith(k)).sort((a: string, b: string) => b.length - a.length)[0] || '/'

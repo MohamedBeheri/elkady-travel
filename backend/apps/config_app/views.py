@@ -217,3 +217,48 @@ def pickup_times_bulk(request):
         PickupTime.objects.update_or_create(**key, defaults={'time': t})
         saved += 1
     return Response({'saved': saved, 'removed': removed})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def permissions_matrix(request):
+    """Admin-only: read or update the dynamic role→screen permission matrix."""
+    if request.user.role != 'admin':
+        return Response({'detail': 'غير مصرح — للمدير العام فقط'}, status=403)
+    from .access import SCREENS, MANAGED_ROLES, default_flags_for
+    from .models import RoleScreenPermission
+
+    if request.method == 'GET':
+        stored = {(p.role, p.screen): p for p in RoleScreenPermission.objects.all()}
+        matrix = {}
+        for role, _label in MANAGED_ROLES:
+            matrix[role] = {}
+            for key, _sl, _g in SCREENS:
+                p = stored.get((role, key))
+                if p:
+                    matrix[role][key] = {'view': p.can_view, 'add': p.can_add,
+                                         'edit': p.can_edit, 'delete': p.can_delete}
+                else:
+                    d = default_flags_for(role, key)
+                    matrix[role][key] = {'view': d['can_view'], 'add': d['can_add'],
+                                         'edit': d['can_edit'], 'delete': d['can_delete']}
+        return Response({
+            'screens': [{'key': k, 'label': lbl, 'group': g} for k, lbl, g in SCREENS],
+            'roles': [{'key': r, 'label': lbl} for r, lbl in MANAGED_ROLES],
+            'matrix': matrix,
+        })
+
+    # POST: upsert a list of {role, screen, view, add, edit, delete}
+    items = request.data.get('items') or []
+    valid_roles = {r for r, _ in MANAGED_ROLES}
+    valid_screens = {k for k, _l, _g in SCREENS}
+    for it in items:
+        role, screen = it.get('role'), it.get('screen')
+        if role not in valid_roles or screen not in valid_screens:
+            continue
+        RoleScreenPermission.objects.update_or_create(
+            role=role, screen=screen, defaults={
+                'can_view': bool(it.get('view')), 'can_add': bool(it.get('add')),
+                'can_edit': bool(it.get('edit')), 'can_delete': bool(it.get('delete')),
+            })
+    return Response({'saved': len(items)})

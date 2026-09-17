@@ -23,6 +23,7 @@ export interface User {
   college_name?: string
   academic_year?: string
   year_display?: string
+  permissions?: Record<string, { view: boolean; add: boolean; edit: boolean; delete: boolean }>
 }
 
 interface AuthState {

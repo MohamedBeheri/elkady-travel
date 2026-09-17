@@ -2,6 +2,7 @@ import { Tag, Select } from 'antd'
 import { useState } from 'react'
 import { useVehicles2Query, useSaveVehicleMutation, useDeleteVehicleMutation } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
+import { usePerm } from '../../app/usePerms'
 
 const STATUS = [
   { value: 'available', label: 'متاحة' }, { value: 'in_trip', label: 'في رحلة' },
@@ -15,10 +16,12 @@ export default function Vehicles() {
   const { data, isFetching } = useVehicles2Query({ status, page_size: 1000 })
   const [save] = useSaveVehicleMutation()
   const [del] = useDeleteVehicleMutation()
+  const perm = usePerm('/fleet/vehicles')
 
   return (
     <CrudCard
       title="المركبات"
+      perm={perm}
       rows={data?.results || []}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}

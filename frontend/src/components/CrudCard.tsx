@@ -21,12 +21,17 @@ interface Props {
   toolbar?: React.ReactNode
   addLabel?: string
   canEdit?: boolean
+  perm?: { add?: boolean; edit?: boolean; delete?: boolean }
   rowExtra?: (row: any) => React.ReactNode
   dateFields?: string[]
   editValues?: (row: any) => any
 }
 
-export default function CrudCard({ title, rows, columns, fields, onSave, onDelete, rowName, loading, toolbar, addLabel = 'إضافة', canEdit = true, rowExtra, editValues, dateFields = ['date', 'license_expiry', 'travel_date', 'date_of_birth', 'effective_date', 'end_date'] }: Props) {
+export default function CrudCard({ title, rows, columns, fields, onSave, onDelete, rowName, loading, toolbar, addLabel = 'إضافة', canEdit = true, perm, rowExtra, editValues, dateFields = ['date', 'license_expiry', 'travel_date', 'date_of_birth', 'effective_date', 'end_date'] }: Props) {
+  // Action gating: if `perm` is given it wins; otherwise fall back to `canEdit`.
+  const canAdd = perm ? !!perm.add : canEdit
+  const canEditRow = perm ? !!perm.edit : canEdit
+  const canDeleteRow = perm ? !!perm.delete : true
   const { message, modal } = AntdApp.useApp()
   const [form] = Form.useForm()
   const [open, setOpen] = useState(false)
@@ -77,8 +82,8 @@ export default function CrudCard({ title, rows, columns, fields, onSave, onDelet
       title: '', key: '_a', render: (_: any, r: any) => (
         <Space>
           {rowExtra && rowExtra(r)}
-          {canEdit && <Button size="small" onClick={() => openModal(r)}>تعديل</Button>}
-          {onDelete && <Button size="small" danger onClick={() => remove(r)}>حذف</Button>}
+          {canEditRow && <Button size="small" onClick={() => openModal(r)}>تعديل</Button>}
+          {onDelete && canDeleteRow && <Button size="small" danger onClick={() => remove(r)}>حذف</Button>}
         </Space>
       ),
     },
@@ -87,7 +92,7 @@ export default function CrudCard({ title, rows, columns, fields, onSave, onDelet
   return (
     <Card
       title={<span style={{ fontWeight: 800 }}>{title}</span>}
-      extra={canEdit && <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>{addLabel}</Button>}
+      extra={canAdd && <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>{addLabel}</Button>}
     >
       {toolbar && <div style={{ marginBottom: 14, display: 'flex', gap: 10, flexWrap: 'wrap' }}>{toolbar}</div>}
       <Table rowKey="id" loading={loading} dataSource={rows} columns={cols} scroll={{ x: 'max-content' }} size="middle" />

@@ -26,6 +26,7 @@ export const api = createApi({
     'Subscription', 'DailyTrip', 'SeatRequest', 'ReturnBooking', 'SeatMap', 'Ticket', 'Attendance', 'PickupTime',
     'Tourism', 'Quotation', 'Vehicle', 'Notification', 'Dashboard',
     'FVehicle', 'FDriver', 'Assignment', 'Expense', 'Maintenance', 'Fine', 'Audit', 'FleetDash',
+    'Permissions',
   ],
   endpoints: (b) => ({
     // ---- auth ----
@@ -59,6 +60,11 @@ export const api = createApi({
     }),
     deleteUser: b.mutation<any, number>({
       query: (id) => ({ url: `auth/users/${id}/`, method: 'DELETE' }), invalidatesTags: ['User'],
+    }),
+    permissionsMatrix: b.query<any, void>({ query: () => 'config/permissions/', providesTags: ['Permissions'] }),
+    savePermissions: b.mutation<any, { items: any[] }>({
+      query: (body) => ({ url: 'config/permissions/', method: 'POST', body }),
+      invalidatesTags: ['Permissions', 'User'],
     }),
 
     // ---- dashboard ----
@@ -458,7 +464,7 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useRegisterMutation, usePasswordResetLookupMutation, useResetStudentPasswordMutation, useAdminResetUserPasswordMutation, useMeQuery, useUpdateProfileMutation,
-  useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
+  useUsersQuery, useSaveUserMutation, useDeleteUserMutation, usePermissionsMatrixQuery, useSavePermissionsMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
   usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation,
   useDestinationsQuery, useSaveDestinationMutation,

@@ -305,3 +305,21 @@ class CompanySettings(models.Model):
         if obj is None:
             obj = cls.objects.create()
         return obj
+
+
+class RoleScreenPermission(models.Model):
+    """Dynamic per-role, per-screen access with CRUD flags (admin bypasses this)."""
+    role = models.CharField(max_length=20, verbose_name=_('الدور'))
+    screen = models.CharField(max_length=40, verbose_name=_('الشاشة'))
+    can_view = models.BooleanField(default=False, verbose_name=_('عرض'))
+    can_add = models.BooleanField(default=False, verbose_name=_('إضافة'))
+    can_edit = models.BooleanField(default=False, verbose_name=_('تعديل'))
+    can_delete = models.BooleanField(default=False, verbose_name=_('حذف'))
+
+    class Meta:
+        verbose_name = _('صلاحية دور')
+        verbose_name_plural = _('صلاحيات الأدوار')
+        unique_together = ('role', 'screen')
+
+    def __str__(self):
+        return f'{self.role} · {self.screen}'

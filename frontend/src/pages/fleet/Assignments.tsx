@@ -6,6 +6,7 @@ import {
   useTourismRequestsQuery,
 } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
+import { usePerm } from '../../app/usePerms'
 
 const STATUS = [
   { value: 'planned', label: 'مخطط' }, { value: 'started', label: 'بدأت' },
@@ -25,6 +26,7 @@ export default function Assignments() {
   const { data: tourism } = useTourismRequestsQuery({ page_size: 500 })
   const [save] = useSaveAssignmentMutation()
   const [del] = useDeleteAssignmentMutation()
+  const perm = usePerm('/fleet/assignments')
 
   const driverOpts = (drivers?.results || []).map((d: any) => ({ value: d.id, label: d.full_name }))
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: `${v.plate_number} (${v.brand} ${v.model})` }))
@@ -45,6 +47,7 @@ export default function Assignments() {
   return (
     <CrudCard
       title="التعيينات اليومية (سائق ↔ مركبة)"
+      perm={perm}
       rows={rows}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}

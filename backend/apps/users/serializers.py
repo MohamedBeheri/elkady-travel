@@ -60,6 +60,7 @@ class UserSerializer(serializers.ModelSerializer):
     year_display = serializers.CharField(source='get_academic_year_display', read_only=True)
     center_display = serializers.CharField(source='get_center_display', read_only=True)
     pickup_name = serializers.CharField(source='pickup_point.name', read_only=True)
+    permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -69,8 +70,12 @@ class UserSerializer(serializers.ModelSerializer):
             'pickup_point', 'pickup_name', 'address',
             'date_of_birth', 'gender', 'gender_display',
             'university', 'university_name', 'college', 'college_name',
-            'academic_year', 'year_display', 'is_active',
+            'academic_year', 'year_display', 'is_active', 'permissions',
         ]
+
+    def get_permissions(self, obj):
+        from apps.config_app.access import effective_permissions
+        return effective_permissions(obj)
 
 
 class UserWriteSerializer(serializers.ModelSerializer):

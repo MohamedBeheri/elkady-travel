@@ -2,6 +2,7 @@ import { Tag, Select, Alert } from 'antd'
 import { useState } from 'react'
 import { useDriversQuery, useSaveDriverMutation, useDeleteDriverMutation, useDriverAlertsQuery } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
+import { usePerm } from '../../app/usePerms'
 
 const STATUS = [
   { value: 'active', label: 'نشط' }, { value: 'inactive', label: 'غير نشط' }, { value: 'suspended', label: 'موقوف' },
@@ -18,6 +19,7 @@ export default function Drivers() {
   const { data: alerts } = useDriverAlertsQuery()
   const [save] = useSaveDriverMutation()
   const [del] = useDeleteDriverMutation()
+  const perm = usePerm('/fleet/drivers')
 
   return (
     <div>
@@ -28,6 +30,7 @@ export default function Drivers() {
       )}
       <CrudCard
         title="السائقون"
+        perm={perm}
         rows={data?.results || []}
         loading={isFetching}
         onSave={(v) => save(v).unwrap()}

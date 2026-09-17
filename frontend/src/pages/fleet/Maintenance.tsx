@@ -1,17 +1,20 @@
 import { Tag } from 'antd'
 import { useMaintenanceQuery, useSaveMaintenanceMutation, useDeleteMaintenanceMutation, useVehicles2Query } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
+import { usePerm } from '../../app/usePerms'
 
 export default function Maintenance() {
   const { data, isFetching } = useMaintenanceQuery({ page_size: 1000 })
   const { data: vehicles } = useVehicles2Query({ active: true })
   const [save] = useSaveMaintenanceMutation()
   const [del] = useDeleteMaintenanceMutation()
+  const perm = usePerm('/fleet/maintenance')
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: v.plate_number }))
 
   return (
     <CrudCard
       title="الصيانة والورش"
+      perm={perm}
       rows={data?.results || []}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}

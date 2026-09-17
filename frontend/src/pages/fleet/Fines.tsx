@@ -1,6 +1,7 @@
 import { Tag } from 'antd'
 import { useFinesQuery, useSaveFineMutation, useDeleteFineMutation, useVehicles2Query, useDriversQuery } from '../../app/api'
 import CrudCard from '../../components/CrudCard'
+import { usePerm } from '../../app/usePerms'
 
 export default function Fines() {
   const { data, isFetching } = useFinesQuery({ page_size: 1000 })
@@ -8,12 +9,14 @@ export default function Fines() {
   const { data: drivers } = useDriversQuery({})
   const [save] = useSaveFineMutation()
   const [del] = useDeleteFineMutation()
+  const perm = usePerm('/fleet/fines')
   const vehicleOpts = (vehicles?.results || []).map((v: any) => ({ value: v.id, label: v.plate_number }))
   const driverOpts = (drivers?.results || []).map((d: any) => ({ value: d.id, label: d.full_name }))
 
   return (
     <CrudCard
       title="الغرامات المرورية"
+      perm={perm}
       rows={data?.results || []}
       loading={isFetching}
       onSave={(v) => save(v).unwrap()}
