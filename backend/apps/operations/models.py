@@ -71,8 +71,31 @@ class DailyTrip(models.Model):
         return self.seat_requests.filter(status=SeatRequest.Status.WAITING).count()
 
     @property
+    def _capacity_row(self):
+        """The live SeatCapacity config row governing this trip, if any.
+
+        Capacity is configured per (route, morning_slot). A going trip is keyed
+        directly on its morning_slot. A return trip has no morning_slot, so it
+        inherits the config of its paired going slot when one is set, otherwise
+        it keeps its own snapshot.
+        """
+        from apps.config_app.models import SeatCapacity
+        slot_id = self.morning_slot_id
+        if not slot_id:
+            return None
+        return SeatCapacity.objects.filter(route_id=self.route_id, morning_slot_id=slot_id).first()
+
+    @property
+    def effective_capacity(self):
+        """Live total-seat count: follows the admin config, falling back to the
+        snapshot stored on the trip when no config row exists (e.g. return trips).
+        """
+        cap = self._capacity_row
+        return cap.total_seats if cap else self.total_seats
+
+    @property
     def available_seats(self):
-        return max(self.total_seats - self.confirmed_count, 0)
+        return max(self.effective_capacity - self.confirmed_count, 0)
 
 
 class SeatRequest(models.Model):

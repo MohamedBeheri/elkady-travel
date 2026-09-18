@@ -33,6 +33,12 @@ class DailyTripSerializer(serializers.ModelSerializer):
     confirmed_count = serializers.IntegerField(read_only=True)
     waiting_count = serializers.IntegerField(read_only=True)
     available_seats = serializers.IntegerField(read_only=True)
+    # Capacity/layout follow the live admin config (SeatCapacity), not the
+    # snapshot stored when the trip was first created — so every screen shows
+    # the same numbers the admin set in الإعدادات.
+    total_seats = serializers.IntegerField(source='effective_capacity', read_only=True)
+    occupancy_percent = serializers.SerializerMethodField()
+    is_full = serializers.SerializerMethodField()
 
     class Meta:
         model = DailyTrip
@@ -41,7 +47,17 @@ class DailyTripSerializer(serializers.ModelSerializer):
             'direction', 'direction_display', 'morning_slot', 'return_slot',
             'slot_name', 'layout', 'total_seats',
             'confirmed_count', 'waiting_count', 'available_seats', 'allocated_at',
+            'occupancy_percent', 'is_full',
         ]
+
+    def get_occupancy_percent(self, obj):
+        cap = obj.effective_capacity or 0
+        if cap <= 0:
+            return 0
+        return round(obj.confirmed_count * 100 / cap)
+
+    def get_is_full(self, obj):
+        return obj.available_seats <= 0 and obj.effective_capacity > 0
 
 
 class ReturnBookingSerializer(serializers.ModelSerializer):

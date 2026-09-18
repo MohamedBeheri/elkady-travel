@@ -221,7 +221,9 @@ def dashboard_stats(request):
     }
 
     tomorrow_trips = DailyTrip.objects.filter(date=tomorrow, direction='go')
-    total_seats = tomorrow_trips.aggregate(s=Sum('total_seats'))['s'] or 0
+    # Sum the LIVE capacity (admin config) rather than the stored snapshot so the
+    # KPI matches الإعدادات and the operational board.
+    total_seats = sum(t.effective_capacity for t in tomorrow_trips)
     confirmed_seats = SeatRequest.objects.filter(
         daily_trip__date=tomorrow, daily_trip__direction='go',
         status=SeatRequest.Status.CONFIRMED).count()
@@ -272,14 +274,15 @@ def dashboard_charts(request):
     for t in trips:
         sm = build_seatmap(t)
         occupied = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'held', 'term'))
-        cap = t.total_seats or 1
+        eff_cap = t.effective_capacity
+        cap = eff_cap or 1
         trip_rows.append({
             'route': t.route.name, 'slot': t.slot_label, 'layout': t.layout,
-            'capacity': t.total_seats, 'occupied': occupied,
+            'capacity': eff_cap, 'occupied': occupied,
             'waiting': t.waiting_count,
             'occupancy': round(occupied / cap * 100),
         })
-        route_agg[t.route.name]['capacity'] += t.total_seats
+        route_agg[t.route.name]['capacity'] += eff_cap
         route_agg[t.route.name]['occupied'] += occupied
 
     routes = [{

@@ -376,7 +376,7 @@ def operations_dashboard(request):
         row = {
             'id': t.id, 'route': t.route.name, 'slot': t.slot_label,
             'destination': t.route.destination.name, 'passengers': confirmed,
-            'capacity': t.total_seats,
+            'capacity': t.effective_capacity,
             'vehicle': assigns[0].vehicle.plate_number if assigns else '',
             'driver': assigns[0].driver.full_name if assigns else '',
             'assigned': bool(assigns),

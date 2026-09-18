@@ -56,7 +56,7 @@ def allocate_trip(trip_id):
     )
     reqs.sort(key=_order_key)
 
-    capacity = trip.total_seats
+    capacity = trip.effective_capacity
     confirmed = 0
     for pos, req in enumerate(reqs, start=1):
         req.queue_position = pos

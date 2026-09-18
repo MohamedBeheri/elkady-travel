@@ -248,9 +248,13 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             sm = build_seatmap(trip)
             confirmed = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'term'))
             held = sum(1 for s in sm['seats'] if s['raw_state'] == 'held')
+            cap = row.get('total_seats') or 0
             row['confirmed_count'] = confirmed
             row['held_count'] = held
-            row['available_seats'] = max((row.get('total_seats') or 0) - confirmed - held, 0)
+            row['available_seats'] = max(cap - confirmed - held, 0)
+            # Keep الإشغال / ممتلئة consistent with the seat-map count above.
+            row['occupancy_percent'] = round((confirmed + held) * 100 / cap) if cap > 0 else 0
+            row['is_full'] = row['available_seats'] <= 0 and cap > 0
         return Response({'date': date, 'trips': data})
 
     @action(detail=True, methods=['get'], url_path='passengers')
