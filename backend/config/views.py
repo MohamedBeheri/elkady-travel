@@ -295,7 +295,7 @@ def dashboard_charts(request):
     sub_types = {
         'term': confirmed.filter(subscription_type='term').count(),
         'monthly': confirmed.filter(subscription_type='monthly').count(),
-        'daily': confirmed.filter(subscription_type='daily').count(),
+        'daily': confirmed.filter(subscription_type__startswith='daily').count(),
     }
     payments = {
         'verified': Subscription.objects.filter(status=Subscription.Status.CONFIRMED).count(),

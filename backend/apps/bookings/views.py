@@ -1,3 +1,4 @@
+import django_filters
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -11,12 +12,28 @@ from .models import Subscription
 from .serializers import SubscriptionCreateSerializer, SubscriptionSerializer
 
 
+class SubscriptionFilter(django_filters.FilterSet):
+    # Daily bookings are stored as daily_go / daily_return / daily_round, so a
+    # plain ?subscription_type=daily used to match nothing. Treat the bare value
+    # "daily" as the whole daily family so the «يومي» filter lists them all.
+    subscription_type = django_filters.CharFilter(method='filter_subscription_type')
+
+    class Meta:
+        model = Subscription
+        fields = ['status', 'subscription_type', 'route', 'university', 'student', 'pickup_point']
+
+    def filter_subscription_type(self, queryset, name, value):
+        if value == 'daily':
+            return queryset.filter(subscription_type__startswith='daily')
+        return queryset.filter(subscription_type=value)
+
+
 class SubscriptionViewSet(viewsets.ModelViewSet):
     queryset = Subscription.objects.select_related(
         'student', 'route', 'route__destination', 'university', 'pickup_point', 'payment_method',
     ).all()
     permission_classes = [IsAuthenticated]
-    filterset_fields = ['status', 'subscription_type', 'route', 'university', 'student', 'pickup_point']
+    filterset_class = SubscriptionFilter
     search_fields = ['student__full_name', 'student__national_id', 'student__phone']
     ordering_fields = ['student__full_name', 'created_at', 'amount']
 
