@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import {
   useTripBoardQuery, useRunAllocationMutation, useTripPassengersQuery,
   useSeatmapQuery, useReleaseSeatMutation, useSeatRequestsQuery, useConfirmSeatMutation,
+  useDeleteEmptyTripMutation,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
 import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
@@ -141,17 +142,30 @@ function Passengers({ trip }: { trip: any }) {
 }
 
 export default function TripBoard() {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const [date, setDate] = useState(dayjs().add(1, 'day'))
   const ds = date.format('YYYY-MM-DD')
   const { data, isFetching } = useTripBoardQuery({ date: ds }, { pollingInterval: 60000 })
   const [runAllocation, { isLoading }] = useRunAllocationMutation()
+  const [deleteEmptyTrip] = useDeleteEmptyTripMutation()
   const [openTrip, setOpenTrip] = useState<any>(null)
   const [seatTrip, setSeatTrip] = useState<any>(null)
 
   const doRun = async () => {
     try { const r = await runAllocation({ date: ds }).unwrap(); message.success(`تم تخصيص المقاعد لـ ${r.allocated_trips} رحلة`) }
     catch { message.error('خطأ في التخصيص') }
+  }
+
+  const removeEmpty = (r: any) => {
+    modal.confirm({
+      title: `حذف رحلة «${r.route_name} — ${r.slot_name}»؟`,
+      content: 'مفيش أي حجوزات مرتبطة بيها — الحذف نهائي ولا يمكن التراجع عنه.',
+      okText: 'حذف', okType: 'danger', cancelText: 'إلغاء',
+      onOk: async () => {
+        try { await deleteEmptyTrip(r.id).unwrap(); message.success('تم حذف الرحلة') }
+        catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحذف') }
+      },
+    })
   }
 
   return (
@@ -201,6 +215,11 @@ export default function TripBoard() {
               <Space>
                 <Button size="small" type="primary" ghost onClick={() => setSeatTrip(r)}>المقاعد</Button>
                 <Button size="small" onClick={() => setOpenTrip(r)}>كشف الركاب</Button>
+                {r.confirmed_count === 0 && r.held_count === 0 && r.waiting_count === 0 && (
+                  <Tooltip title="لا يوجد أي حجز مرتبط بهذه الرحلة">
+                    <Button size="small" danger onClick={() => removeEmpty(r)}>حذف</Button>
+                  </Tooltip>
+                )}
               </Space>
             ),
           },

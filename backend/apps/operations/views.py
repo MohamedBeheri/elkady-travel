@@ -261,6 +261,20 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             row['is_full'] = row['available_seats'] <= 0 and cap > 0
         return Response({'date': date, 'trips': data})
 
+    @action(detail=True, methods=['delete'], url_path='remove-if-empty')
+    def remove_if_empty(self, request, pk=None):
+        """Delete a stray operational trip — only when nothing was ever booked on
+        it (no seat requests at all, of any status). Cleans up rows created by
+        a route/slot combo that had no سعة المقاعد config before that was
+        enforced client-side (see the daily-booking slot picker fix)."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        trip = self.get_object()
+        if trip.seat_requests.exists():
+            return Response({'detail': 'لا يمكن حذف هذه الرحلة — يوجد طلبات مقاعد مرتبطة بها.'}, status=409)
+        trip.delete()
+        return Response(status=204)
+
     @action(detail=False, methods=['get'], url_path='day-manifest')
     def day_manifest(self, request):
         """Full-day passenger manifest across ALL subscriptions (term/monthly/daily)

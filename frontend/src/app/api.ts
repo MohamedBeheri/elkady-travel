@@ -274,6 +274,10 @@ export const api = createApi({
       query: (body) => ({ url: 'operations/daily-trips/run-allocation/', method: 'POST', body }),
       invalidatesTags: ['DailyTrip', 'SeatRequest', 'Dashboard'],
     }),
+    deleteEmptyTrip: b.mutation<any, number>({
+      query: (id) => ({ url: `operations/daily-trips/${id}/remove-if-empty/`, method: 'DELETE' }),
+      invalidatesTags: ['DailyTrip', 'SeatRequest'],
+    }),
     seatRequests: b.query<any, Record<string, any> | void>({
       query: (p) => `operations/seat-requests/${qs(p as any)}`, providesTags: ['SeatRequest'],
     }),
@@ -506,6 +510,7 @@ export const {
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
   useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation,
   useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useDayManifestQuery, useRunAllocationMutation,
+  useDeleteEmptyTripMutation,
   useSeatRequestsQuery, useBookSeatMutation, useCancelSeatMutation,
   useLayoutsQuery, useSeatmapForQuery, useSeatmapQuery, useBookSpecificSeatMutation, useBookDailyMutation,
   useRescheduleDailyMutation, useRescheduleEligibilityQuery, useDailyReschedulesQuery,
