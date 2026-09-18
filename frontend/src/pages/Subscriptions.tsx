@@ -198,6 +198,8 @@ function ProfileModal({ studentId, onClose }: { studentId: number | null; onClos
 
 export default function Subscriptions() {
   const [type, setType] = useState('all')
+  // For the daily family: filter by direction (ذهاب/عودة/ذهاب وعودة). 'all' = كل اليومي.
+  const [dailyDir, setDailyDir] = useState('all')
   const [route, setRoute] = useState<number>()
   const [university, setUniversity] = useState<number>()
   const [status, setStatus] = useState<string>()
@@ -214,7 +216,7 @@ export default function Subscriptions() {
   const [orphansOpen, setOrphansOpen] = useState(false)
 
   const params: any = { route, university, status, center, pickup_point: pickup, ordering, page_size: 1000 }
-  if (type !== 'all') params.subscription_type = type
+  if (type !== 'all') params.subscription_type = (type === 'daily' && dailyDir !== 'all') ? dailyDir : type
   const { data, isFetching } = useSubscriptionsQuery(params)
   const rows = data?.results || []
 
@@ -286,9 +288,14 @@ export default function Subscriptions() {
         </span>
       </div>
       <Space wrap style={{ marginBottom: 12 }}>
-        <Segmented value={type} onChange={(v) => setType(v as string)}
+        <Segmented value={type} onChange={(v) => { setType(v as string); if (v !== 'daily') setDailyDir('all') }}
           options={[{ value: 'all', label: 'الكل' }, { value: 'term', label: 'ترم' },
             { value: 'monthly', label: 'شهري' }, { value: 'daily', label: 'يومي' }]} />
+        {type === 'daily' && (
+          <Segmented value={dailyDir} onChange={(v) => setDailyDir(v as string)}
+            options={[{ value: 'all', label: 'كل اليومي' }, { value: 'daily_go', label: 'ذهاب فقط' },
+              { value: 'daily_return', label: 'عودة فقط' }, { value: 'daily_round', label: 'ذهاب وعودة' }]} />
+        )}
         <Select placeholder="الترتيب بالاسم" allowClear style={{ width: 160 }} value={ordering} onChange={setOrdering}
           options={[{ value: 'student__full_name', label: 'الاسم تصاعدي ↑' }, { value: '-student__full_name', label: 'الاسم تنازلي ↓' }]} />
         <Select placeholder="المركز" allowClear style={{ width: 140 }} value={center}
