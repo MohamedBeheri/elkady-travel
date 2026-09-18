@@ -12,7 +12,7 @@ import {
   usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
-  useCapacitiesQuery, useSaveCapacityMutation,
+  useCapacitiesQuery, useSaveCapacityMutation, useDeleteCapacityMutation,
   usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation, usePaymentMethodsQuery,
 } from '../app/api'
 
@@ -338,6 +338,7 @@ function SchedulesTab() {
   const [saveM] = useSaveMorningSlotMutation()
   const [saveR] = useSaveReturnSlotMutation()
   const [saveC, { isLoading: savingC }] = useSaveCapacityMutation()
+  const [delC] = useDeleteCapacityMutation()
   const [genderCap, setGenderCap] = useState<any>(null)
   const layout = genderCap && layouts ? layouts[genderCap.layout || 'bus50'] : null
   return (
@@ -353,7 +354,8 @@ function SchedulesTab() {
           fields={[{ name: 'code', label: 'الكود', required: true }, { name: 'name', label: 'الاسم', required: true }, { name: 'departure_time', label: 'الوقت', type: 'time', required: true }, { name: 'capacity', label: 'السعة', type: 'number', required: true }, { name: 'active', label: 'نشط', type: 'switch', initial: true }]} />
       </Card>
       <Card size="small" title="سعة المقاعد وتخصيص النوع (لكل مسار وموعد)">
-        <SimpleTab title="سعة" rows={caps?.results || caps || []} onSave={saveC}
+        <SimpleTab title="سعة" rows={caps?.results || caps || []} onSave={saveC} onDelete={delC}
+          rowLabel={(r: any) => `${r.route_name} — ${r.slot_name}`}
           columns={[
             { title: 'المسار', dataIndex: 'route_name' }, { title: 'الموعد', dataIndex: 'slot_name' },
             { title: 'المقاعد', dataIndex: 'total_seats' },

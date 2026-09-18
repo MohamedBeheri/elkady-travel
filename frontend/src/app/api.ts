@@ -170,6 +170,10 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: id ? `config/seat-capacities/${id}/` : 'config/seat-capacities/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['Capacity'],
     }),
+    deleteCapacity: b.mutation<any, number>({
+      query: (id) => ({ url: `config/seat-capacities/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Capacity'],
+    }),
     prices: b.query<any, Record<string, any> | void>({
       query: (p) => `config/prices/${qs(p as any)}`, providesTags: ['Price'],
     }),
@@ -481,7 +485,7 @@ export const {
   usePickupTimesMatrixQuery, useSavePickupTimesMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
-  useCapacitiesQuery, useSaveCapacityMutation,
+  useCapacitiesQuery, useSaveCapacityMutation, useDeleteCapacityMutation,
   usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
   usePaymentMethodsQuery, usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation,
   useCompanyQuery, useSaveCompanyMutation,
