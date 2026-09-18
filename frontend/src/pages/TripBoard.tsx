@@ -1,4 +1,4 @@
-import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Modal, List } from 'antd'
+import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Modal, List, Tooltip } from 'antd'
 import { ThunderboltOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
@@ -178,9 +178,19 @@ export default function TripBoard() {
           ) },
           { title: 'انتظار', dataIndex: 'waiting_count', render: (v) => <Tag color="orange">{v}</Tag> },
           {
-            title: 'الإشغال', render: (_, r: any) => (
-              <Progress percent={Math.round((r.confirmed_count / r.total_seats) * 100)} size="small" style={{ width: 120 }} strokeColor="#0e7490" />
-            ),
+            title: 'الإشغال', render: (_, r: any) => {
+              // occupancy from the server counts BOTH مؤكد and معلّق (held daily
+              // bookings awaiting payment approval) against the live capacity, so
+              // a seat reserved by a daily student is reflected here too.
+              const occ = r.occupancy_percent ?? Math.round(((r.confirmed_count + (r.held_count || 0)) / (r.total_seats || 1)) * 100)
+              return (
+                <Tooltip title={`مؤكد ${r.confirmed_count}${r.held_count ? ` + معلّق ${r.held_count}` : ''} من ${r.total_seats}`}>
+                  <Progress
+                    percent={Math.min(occ, 100)} format={() => `${occ}%`} size="small" style={{ width: 120 }}
+                    strokeColor={r.is_full ? '#dc2626' : occ >= 80 ? '#ea580c' : '#0e7490'} />
+                </Tooltip>
+              )
+            },
           },
           {
             title: '', render: (_, r: any) => (
