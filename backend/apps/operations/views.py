@@ -306,7 +306,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
                         'student_id': student.id,
                         'student_name': student.full_name or student.username,
                         'student_phone': student.phone or '',
-                        'university': '', 'pickup': '', 'subscription_type': '',
+                        'university': '', 'pickup': '', 'subscription_type': '', 'subscription_type_code': '',
                         'go': None, 'return': None,
                     }
                 return r
@@ -327,6 +327,8 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
                 r['pickup'] = r['pickup'] or (pp.name if pp else '')
                 r['subscription_type'] = (lock.subscription.get_subscription_type_display()
                                            if lock.subscription_id else 'اشتراك')
+                r['subscription_type_code'] = (lock.subscription.subscription_type
+                                                if lock.subscription_id else '').split('_')[0] or 'term'
                 r['return' if is_return else 'go'] = {'seat': lock.seat_number, 'time': slot.name if slot else ''}
 
             for req in daily_by_route.get(route.id, []):
@@ -335,6 +337,8 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
                 r['pickup'] = r['pickup'] or (req.pickup_point.name if req.pickup_point_id else '')
                 r['subscription_type'] = (req.subscription.get_subscription_type_display()
                                            if req.subscription_id else 'يومي')
+                r['subscription_type_code'] = (req.subscription.subscription_type
+                                                if req.subscription_id else 'daily').split('_')[0]
                 is_return = req.daily_trip.direction == 'return'
                 slot = req.daily_trip.return_slot if is_return else req.daily_trip.morning_slot
                 r['return' if is_return else 'go'] = {'seat': req.seat_number, 'time': slot.name if slot else ''}

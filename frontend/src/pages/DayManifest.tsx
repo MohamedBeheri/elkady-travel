@@ -1,12 +1,13 @@
-import { Card, DatePicker, Table, Tag, Space, Button, Collapse, Empty } from 'antd'
+import { Card, DatePicker, Table, Tag, Space, Button, Collapse, Empty, Select } from 'antd'
 import { FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { useDayManifestQuery } from '../app/api'
+import { useDayManifestQuery, useRoutesQuery, useUniversitiesQuery } from '../app/api'
 
 const CAT_LABEL: Record<string, string> = { go_only: 'ذهاب فقط', return_only: 'عودة فقط', round_trip: 'ذهاب وعودة' }
 const CAT_COLOR: Record<string, string> = { go_only: 'blue', return_only: 'purple', round_trip: 'green' }
 const CATS = ['go_only', 'return_only', 'round_trip'] as const
+const SUB_TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شهري', daily: 'يومي' }
 
 function legLabel(leg: any) {
   if (!leg) return '—'
@@ -120,8 +121,42 @@ export default function DayManifest() {
   const [date, setDate] = useState(dayjs().add(1, 'day'))
   const ds = date.format('YYYY-MM-DD')
   const { data, isFetching } = useDayManifestQuery({ date: ds })
-  const routes = data?.routes || []
-  const totals = data?.totals || { go_only: 0, return_only: 0, round_trip: 0, total: 0 }
+  const { data: routesData } = useRoutesQuery({ active: true })
+  const { data: unisData } = useUniversitiesQuery({ active: true })
+  const allRoutes = data?.routes || []
+
+  const [routeFilter, setRouteFilter] = useState<number>()
+  const [catFilter, setCatFilter] = useState<string>()
+  const [subTypeFilter, setSubTypeFilter] = useState<string>()
+  const [uniFilter, setUniFilter] = useState<string>()
+
+  const passes = (p: any) =>
+    (!subTypeFilter || p.subscription_type_code === subTypeFilter) &&
+    (!uniFilter || p.university === uniFilter)
+
+  const routes = useMemo(() => allRoutes
+    .filter((r: any) => !routeFilter || r.route_id === routeFilter)
+    .map((r: any) => {
+      const out: any = { route_id: r.route_id, route_name: r.route_name }
+      for (const cat of CATS) {
+        out[cat] = (!catFilter || catFilter === cat) ? (r[cat] || []).filter(passes) : []
+      }
+      out.totals = {
+        go_only: out.go_only.length, return_only: out.return_only.length, round_trip: out.round_trip.length,
+        total: out.go_only.length + out.return_only.length + out.round_trip.length,
+      }
+      return out
+    })
+    .filter((r: any) => r.totals.total > 0),
+  [allRoutes, routeFilter, catFilter, subTypeFilter, uniFilter])
+
+  const totals = useMemo(() => routes.reduce((acc: any, r: any) => ({
+    go_only: acc.go_only + r.totals.go_only, return_only: acc.return_only + r.totals.return_only,
+    round_trip: acc.round_trip + r.totals.round_trip, total: acc.total + r.totals.total,
+  }), { go_only: 0, return_only: 0, round_trip: 0, total: 0 }), [routes])
+
+  const routeOptions = (routesData?.results || []).map((r: any) => ({ value: r.id, label: r.name }))
+  const uniOptions = (unisData?.results || []).map((u: any) => ({ value: u.name, label: u.name }))
 
   return (
     <Card
@@ -134,6 +169,16 @@ export default function DayManifest() {
         </Space>
       }
     >
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Select placeholder="المسار" allowClear style={{ width: 180 }} value={routeFilter} onChange={setRouteFilter} options={routeOptions} />
+        <Select placeholder="نوع الرحلة" allowClear style={{ width: 150 }} value={catFilter} onChange={setCatFilter}
+          options={CATS.map((c) => ({ value: c, label: CAT_LABEL[c] }))} />
+        <Select placeholder="نوع الاشتراك" allowClear style={{ width: 140 }} value={subTypeFilter} onChange={setSubTypeFilter}
+          options={Object.entries(SUB_TYPE_LABEL).map(([value, label]) => ({ value, label }))} />
+        <Select placeholder="الجامعة" allowClear style={{ width: 200 }} value={uniFilter} onChange={setUniFilter}
+          showSearch optionFilterProp="label" options={uniOptions} />
+      </Space>
+
       <div style={{
         display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
         marginBottom: 16, padding: '8px 12px', background: '#f8fafc',
@@ -150,10 +195,11 @@ export default function DayManifest() {
         </Space>
       </div>
 
-      {!isFetching && routes.length === 0 && <Empty description="لا يوجد ركاب مسجّلون لهذا اليوم" />}
+      {!isFetching && routes.length === 0 && <Empty description="لا يوجد ركاب مطابقون لهذا الفلتر" />}
 
       {routes.length > 0 && (
         <Collapse
+          key={routes.map((r: any) => r.route_id).join(',')}
           defaultActiveKey={routes.map((r: any) => r.route_id)}
           items={routes.map((r: any) => ({
             key: r.route_id,
