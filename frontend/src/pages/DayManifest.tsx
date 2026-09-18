@@ -2,7 +2,7 @@ import { Card, DatePicker, Table, Tag, Space, Button, Collapse, Empty, Select } 
 import { FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { useDayManifestQuery, useRoutesQuery, useUniversitiesQuery } from '../app/api'
+import { useDayManifestQuery, useRoutesQuery, useUniversitiesQuery, useMorningSlotsQuery, useReturnSlotsQuery } from '../app/api'
 import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 const CAT_LABEL: Record<string, string> = { go_only: 'ذهاب فقط', return_only: 'عودة فقط', round_trip: 'ذهاب وعودة' }
@@ -124,16 +124,20 @@ export default function DayManifest() {
   const { data, isFetching } = useDayManifestQuery({ date: ds })
   const { data: routesData } = useRoutesQuery({ active: true })
   const { data: unisData } = useUniversitiesQuery({ active: true })
+  const { data: mSlotsData } = useMorningSlotsQuery()
+  const { data: rSlotsData } = useReturnSlotsQuery()
   const allRoutes = data?.routes || []
 
   const [routeFilter, setRouteFilter] = useState<number>()
   const [catFilter, setCatFilter] = useState<string>()
   const [subTypeFilter, setSubTypeFilter] = useState<string>()
   const [uniFilter, setUniFilter] = useState<string>()
+  const [slotFilter, setSlotFilter] = useState<string>()
 
   const passes = (p: any) =>
     (!subTypeFilter || p.subscription_type_code === subTypeFilter) &&
-    (!uniFilter || p.university === uniFilter)
+    (!uniFilter || p.university === uniFilter) &&
+    (!slotFilter || p.go?.time === slotFilter || p.return?.time === slotFilter)
 
   const routes = useMemo(() => allRoutes
     .filter((r: any) => !routeFilter || r.route_id === routeFilter)
@@ -149,7 +153,7 @@ export default function DayManifest() {
       return out
     })
     .filter((r: any) => r.totals.total > 0),
-  [allRoutes, routeFilter, catFilter, subTypeFilter, uniFilter])
+  [allRoutes, routeFilter, catFilter, subTypeFilter, uniFilter, slotFilter])
 
   const totals = useMemo(() => routes.reduce((acc: any, r: any) => ({
     go_only: acc.go_only + r.totals.go_only, return_only: acc.return_only + r.totals.return_only,
@@ -158,6 +162,16 @@ export default function DayManifest() {
 
   const routeOptions = (routesData?.results || []).map((r: any) => ({ value: r.id, label: r.name }))
   const uniOptions = (unisData?.results || []).map((u: any) => ({ value: u.name, label: u.name }))
+
+  // The موعد options depend on which trip-direction filter is active right now —
+  // go slots only for "ذهاب فقط", return slots only for "عودة فقط", both otherwise.
+  const mSlots = (mSlotsData?.results || mSlotsData || [])
+  const rSlots = (rSlotsData?.results || rSlotsData || [])
+  const slotNames = catFilter === 'go_only' ? mSlots
+    : catFilter === 'return_only' ? rSlots
+    : [...mSlots, ...rSlots]
+  const slotOptions = Array.from(new Set(slotNames.map((s: any) => s.name)))
+    .map((name) => ({ value: name, label: name as string }))
 
   return (
     <Card
@@ -172,8 +186,11 @@ export default function DayManifest() {
     >
       <Space wrap style={{ marginBottom: 12 }}>
         <Select placeholder="المسار" allowClear style={{ width: 180 }} value={routeFilter} onChange={setRouteFilter} options={routeOptions} />
-        <Select placeholder="نوع الرحلة" allowClear style={{ width: 150 }} value={catFilter} onChange={setCatFilter}
+        <Select placeholder="نوع الرحلة" allowClear style={{ width: 150 }} value={catFilter}
+          onChange={(v) => { setCatFilter(v); setSlotFilter(undefined) }}
           options={CATS.map((c) => ({ value: c, label: CAT_LABEL[c] }))} />
+        <Select placeholder="الموعد" allowClear style={{ width: 170 }} value={slotFilter} onChange={setSlotFilter}
+          options={slotOptions} />
         <Select placeholder="نوع الاشتراك" allowClear style={{ width: 140 }} value={subTypeFilter} onChange={setSubTypeFilter}
           options={Object.entries(SUB_TYPE_LABEL).map(([value, label]) => ({ value, label }))} />
         <Select placeholder="الجامعة" allowClear style={{ width: 200 }} value={uniFilter} onChange={setUniFilter}
