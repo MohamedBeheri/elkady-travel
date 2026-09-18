@@ -121,7 +121,9 @@ function exportPDF(routes: any[], date: string, totals: any) {
 export default function DayManifest() {
   const [date, setDate] = useState(dayjs().add(1, 'day'))
   const ds = date.format('YYYY-MM-DD')
-  const { data, isFetching } = useDayManifestQuery({ date: ds })
+  // Polls so admin-decisions elsewhere (a student's own attendance change, or the
+  // scheduled auto-lock/auto-allocation cron) show up here without a manual reload.
+  const { data, isFetching } = useDayManifestQuery({ date: ds }, { pollingInterval: 60000 })
   const { data: routesData } = useRoutesQuery({ active: true })
   const { data: unisData } = useUniversitiesQuery({ active: true })
   const { data: mSlotsData } = useMorningSlotsQuery()

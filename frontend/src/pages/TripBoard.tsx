@@ -105,7 +105,9 @@ function manifestPDF(trip: any, data: any) {
 }
 
 function Passengers({ trip }: { trip: any }) {
-  const { data } = useTripPassengersQuery(trip.id)
+  // Polls so a student's own attendance change (or the scheduled auto-lock/
+  // auto-allocation cron) shows up while the admin has this drawer open.
+  const { data } = useTripPassengersQuery(trip.id, { pollingInterval: 60000 })
   if (!data) return null
   return (
     <div>
@@ -142,7 +144,7 @@ export default function TripBoard() {
   const { message } = AntdApp.useApp()
   const [date, setDate] = useState(dayjs().add(1, 'day'))
   const ds = date.format('YYYY-MM-DD')
-  const { data, isFetching } = useTripBoardQuery({ date: ds })
+  const { data, isFetching } = useTripBoardQuery({ date: ds }, { pollingInterval: 60000 })
   const [runAllocation, { isLoading }] = useRunAllocationMutation()
   const [openTrip, setOpenTrip] = useState<any>(null)
   const [seatTrip, setSeatTrip] = useState<any>(null)

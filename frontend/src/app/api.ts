@@ -327,7 +327,10 @@ export const api = createApi({
     }),
     setAttendance: b.mutation<any, { lock_id: number; date: string; attending: boolean; slot_id?: number }>({
       query: (body) => ({ url: 'operations/attendance/set/', method: 'POST', body }),
-      invalidatesTags: ['Attendance', 'SeatMap', 'Ticket'],
+      // Also busts DailyTrip/SeatRequest so admin screens reading term/monthly
+      // presence off SeatAbsence (كشف اليوم الشامل، رحلات الغد، كشف الركاب) pick
+      // up the change immediately instead of showing stale cached data.
+      invalidatesTags: ['Attendance', 'SeatMap', 'Ticket', 'SeatRequest', 'DailyTrip'],
     }),
     returnAvailability: b.query<any, { date?: string } | void>({
       query: (p) => `operations/return-bookings/availability/${qs(p as any)}`, providesTags: ['ReturnBooking'],
