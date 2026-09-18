@@ -3,6 +3,7 @@ import { FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { useDayManifestQuery, useRoutesQuery, useUniversitiesQuery } from '../app/api'
+import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 const CAT_LABEL: Record<string, string> = { go_only: 'ذهاب فقط', return_only: 'عودة فقط', round_trip: 'ذهاب وعودة' }
 const CAT_COLOR: Record<string, string> = { go_only: 'blue', return_only: 'purple', round_trip: 'green' }
@@ -11,7 +12,7 @@ const SUB_TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شه�
 
 function legLabel(leg: any) {
   if (!leg) return '—'
-  return `${leg.time || '—'}${leg.seat ? ` · مقعد ${leg.seat}` : ''}`
+  return `${leg.time || '—'}${SHOW_SEAT_NUMBERS && leg.seat ? ` · مقعد ${leg.seat}` : ''}`
 }
 
 function passengerColumns() {
@@ -50,10 +51,10 @@ function flattenRows(routes: any[]) {
 function downloadCSV(routes: any[], date: string) {
   const rows = flattenRows(routes)
   const head = ['المسار', 'الفئة', 'الطالب', 'الهاتف', 'الجامعة', 'نقطة الالتقاط', 'نوع الاشتراك',
-    'موعد الذهاب', 'مقعد الذهاب', 'موعد العودة', 'مقعد العودة']
+    'موعد الذهاب', ...(SHOW_SEAT_NUMBERS ? ['مقعد الذهاب'] : []), 'موعد العودة', ...(SHOW_SEAT_NUMBERS ? ['مقعد العودة'] : [])]
   const body = rows.map((r) => [
     r.route, r.category, r.student_name, r.student_phone, r.university, r.pickup, r.subscription_type,
-    r.go_time, r.go_seat, r.return_time, r.return_seat,
+    r.go_time, ...(SHOW_SEAT_NUMBERS ? [r.go_seat] : []), r.return_time, ...(SHOW_SEAT_NUMBERS ? [r.return_seat] : []),
   ])
   const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const csv = '﻿' + [head, ...body].map((row) => row.map(esc).join(',')).join('\r\n')

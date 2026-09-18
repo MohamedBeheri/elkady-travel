@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   useMyTodayQuery, useLazyDriverManifestQuery, useStartTripMutation, useCompleteTripMutation, useExpensesQuery, useCreateExpenseMutation,
 } from '../app/api'
+import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 const STATUS_COLOR: Record<string, string> = { planned: 'blue', started: 'orange', completed: 'green', cancelled: 'default' }
 const KIND = [
@@ -143,7 +144,7 @@ export default function DriverPortal() {
                 <Table rowKey={(r: any) => `${r.student_name}-${r.seat_number}`} size="small" pagination={false}
                   dataSource={g.passengers}
                   columns={[
-                    { title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center', render: (v) => <b>{v}</b> },
+                    ...(SHOW_SEAT_NUMBERS ? [{ title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center' as const, render: (v: any) => <b>{v}</b> }] : []),
                     { title: 'الاسم', dataIndex: 'student_name' },
                     { title: 'الجامعة', dataIndex: 'university', render: (v) => v || '—' },
                     { title: 'النوع', dataIndex: 'kind', render: (v) => <Tag>{v}</Tag> },

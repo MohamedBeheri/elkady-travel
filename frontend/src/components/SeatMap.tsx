@@ -1,4 +1,5 @@
 import { Tooltip } from 'antd'
+import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 export type SeatState = 'empty' | 'held' | 'booked' | 'term' | 'mine' | 'selected'
 
@@ -55,22 +56,23 @@ function Seat({ cell, selected, onSelect, staff, viewerGender }: {
       onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
       onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
     >
-      {state === 'term' ? '🔒' : cell.number}
+      {state === 'term' ? '🔒' : (SHOW_SEAT_NUMBERS ? cell.number : (state === 'mine' ? '✓' : ''))}
       {isEmpty && g && !selected && (
         <span style={{ position: 'absolute', top: -6, insetInlineEnd: -4, fontSize: 12, color: GENDER[g].border }}>{GENDER[g].icon}</span>
       )}
-      {state === 'term' && <span style={{ position: 'absolute', bottom: -2, fontSize: 9 }}>{cell.number}</span>}
+      {SHOW_SEAT_NUMBERS && state === 'term' && <span style={{ position: 'absolute', bottom: -2, fontSize: 9 }}>{cell.number}</span>}
     </div>
   )
   const genderTxt = g === 'female' ? ' — مقعد إناث' : g === 'male' ? ' — مقعد ذكور' : ''
+  const seatWord = SHOW_SEAT_NUMBERS ? `مقعد ${cell.number}` : 'هذا المقعد'
   const label = staff && cell.student
-    ? `مقعد ${cell.number} — ${cell.student}${genderTxt}`
-    : cell.state === 'term' ? `مقعد ${cell.number} — محجوز بالترم`
-    : cell.state === 'booked' ? `مقعد ${cell.number} — محجوز`
-    : cell.state === 'held' ? `مقعد ${cell.number} — معلق`
-    : cell.state === 'mine' ? `مقعد ${cell.number} — مقعدك`
-    : genderBlocked ? `مقعد ${cell.number}${genderTxt} (غير متاح لك)`
-    : `مقعد ${cell.number} — متاح${genderTxt}`
+    ? `${seatWord} — ${cell.student}${genderTxt}`
+    : cell.state === 'term' ? `${seatWord} — محجوز بالترم`
+    : cell.state === 'booked' ? `${seatWord} — محجوز`
+    : cell.state === 'held' ? `${seatWord} — معلق`
+    : cell.state === 'mine' ? `${seatWord} — مقعدك`
+    : genderBlocked ? `${seatWord}${genderTxt} (غير متاح لك)`
+    : `${seatWord} — متاح${genderTxt}`
   return <Tooltip title={label}>{seat}</Tooltip>
 }
 

@@ -3,6 +3,7 @@ import { CarOutlined, RollbackOutlined, CheckCircleFilled, CloseCircleFilled, Cl
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import { useAttendanceQuery, useSetAttendanceMutation } from '../app/api'
+import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 export default function Attendance() {
   const { message } = AntdApp.useApp()
@@ -76,7 +77,7 @@ function SeatCard({ s, isLoading, confirm, decline }: any) {
         <div style={{ color: '#475569', marginBottom: 4 }}>الخط: {s.route}</div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
           <span>نقطتك: <b>{s.pickup_name || '—'}</b></span>
-          <span>المقعد: <b style={{ color: '#0B2E5E' }}>{s.seat_number}</b></span>
+          {SHOW_SEAT_NUMBERS && <span>المقعد: <b style={{ color: '#0B2E5E' }}>{s.seat_number}</b></span>}
         </div>
         <div style={{ marginBottom: 10 }}>
           <div style={{ marginBottom: 6, color: '#475569' }}>الميعاد لهذا اليوم:</div>

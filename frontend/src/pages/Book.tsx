@@ -18,6 +18,7 @@ import {
 import SeatMap, { SeatLegend } from '../components/SeatMap'
 import TourismRequest from './TourismRequest'
 import { useAppSelector } from '../app/store'
+import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 import { dedupePickups } from '../app/validators'
 
 const CENTERS = [
@@ -287,7 +288,7 @@ function DailyFlow({ unis }: any) {
               <div style={{ textAlign: 'center' }}>
                 <SeatMap layout={goMap.layout} seats={goMap.seats} selected={goSeat} onSelect={setGoSeat} viewerGender={gender} />
                 <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
-                {goSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد الذهاب المختار: {goSeat}</Tag>}
+                {goSeat && <Tag color="green" style={{ marginTop: 8 }}>{SHOW_SEAT_NUMBERS ? `مقعد الذهاب المختار: ${goSeat}` : 'تم اختيار مقعد الذهاب'}</Tag>}
               </div>
             ))}
         </Card>
@@ -320,7 +321,7 @@ function DailyFlow({ unis }: any) {
               <div style={{ textAlign: 'center' }}>
                 <SeatMap layout={retMap.layout} seats={retMap.seats} selected={retSeat} onSelect={setRetSeat} viewerGender={gender} />
                 <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
-                {retSeat && <Tag color="green" style={{ marginTop: 8 }}>مقعد العودة المختار: {retSeat}</Tag>}
+                {retSeat && <Tag color="green" style={{ marginTop: 8 }}>{SHOW_SEAT_NUMBERS ? `مقعد العودة المختار: ${retSeat}` : 'تم اختيار مقعد العودة'}</Tag>}
               </div>
             ))}
         </Card>
@@ -331,11 +332,13 @@ function DailyFlow({ unis }: any) {
         <Descriptions size="small" column={1} bordered style={{ marginBottom: 12 }}>
           {tripType === 'round'
             ? <Descriptions.Item label="ذهاب وعودة (سعر مجمّع)">
-                {roundPrice.toLocaleString()} ج.م {goSeat ? `· مقعد ذهاب ${goSeat}` : ''}{retSeat ? ` · مقعد عودة ${retSeat}` : ''}
+                {roundPrice.toLocaleString()} ج.م
+                {SHOW_SEAT_NUMBERS && goSeat ? ` · مقعد ذهاب ${goSeat}` : ''}
+                {SHOW_SEAT_NUMBERS && retSeat ? ` · مقعد عودة ${retSeat}` : ''}
               </Descriptions.Item>
             : <>
-                {wantGo && <Descriptions.Item label="رحلة الذهاب">{goPrice.toLocaleString()} ج.م {goSeat ? `· مقعد ${goSeat}` : ''}</Descriptions.Item>}
-                {wantRet && <Descriptions.Item label="رحلة العودة">{returnPrice.toLocaleString()} ج.م {retSeat ? `· مقعد ${retSeat}` : ''}</Descriptions.Item>}
+                {wantGo && <Descriptions.Item label="رحلة الذهاب">{goPrice.toLocaleString()} ج.م {SHOW_SEAT_NUMBERS && goSeat ? `· مقعد ${goSeat}` : ''}</Descriptions.Item>}
+                {wantRet && <Descriptions.Item label="رحلة العودة">{returnPrice.toLocaleString()} ج.م {SHOW_SEAT_NUMBERS && retSeat ? `· مقعد ${retSeat}` : ''}</Descriptions.Item>}
               </>}
         </Descriptions>
         <Statistic title="الإجمالي المطلوب" value={total} suffix="ج.م" valueStyle={{ color: '#0B2E5E', fontWeight: 800 }} />

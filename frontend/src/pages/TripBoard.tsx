@@ -7,6 +7,7 @@ import {
   useSeatmapQuery, useReleaseSeatMutation, useSeatRequestsQuery, useConfirmSeatMutation,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
+import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 function SeatManager({ trip }: { trip: any }) {
   const { modal, message } = AntdApp.useApp()
@@ -19,7 +20,7 @@ function SeatManager({ trip }: { trip: any }) {
     const seat = data?.seats?.find((s: any) => s.number === n)
     if (!seat || seat.state === 'empty') return
     modal.confirm({
-      title: `فحت المقعد رقم ${n}؟`,
+      title: SHOW_SEAT_NUMBERS ? `فحت المقعد رقم ${n}؟` : 'فحت هذا المقعد؟',
       content: seat.state === 'term'
         ? `المقعد محجوز بالترم (${seat.student}). سيتم تحريره لهذا اليوم فقط (غياب).`
         : `المقعد (${seat.student || ''}) سيتم تحريره وإتاحته لطالب آخر.`,
@@ -38,7 +39,7 @@ function SeatManager({ trip }: { trip: any }) {
               <List.Item actions={[
                 <Button key="c" size="small" type="primary" onClick={async () => { await confirm(r.id); message.success('تم تأكيد الدفع') }}>تأكيد الدفع</Button>,
               ]}>
-                <List.Item.Meta title={`${r.student_name} — مقعد ${r.seat_number}`} description={r.university_name} />
+                <List.Item.Meta title={SHOW_SEAT_NUMBERS ? `${r.student_name} — مقعد ${r.seat_number}` : r.student_name} description={r.university_name} />
               </List.Item>
             )}
           />
@@ -56,11 +57,12 @@ function SeatManager({ trip }: { trip: any }) {
 }
 
 function manifestPDF(trip: any, data: any) {
+  const cols = SHOW_SEAT_NUMBERS ? 6 : 5
   const sections = (data.groups || []).map((g: any) => {
     const rows = (g.passengers || []).map((p: any, i: number) => `<tr>${[
-      i + 1, p.seat_number ?? '', p.student_name ?? '', p.university ?? '', p.student_phone ?? '', p.kind ?? '',
+      i + 1, ...(SHOW_SEAT_NUMBERS ? [p.seat_number ?? ''] : []), p.student_name ?? '', p.university ?? '', p.student_phone ?? '', p.kind ?? '',
     ].map((c) => `<td>${c ?? ''}</td>`).join('')}</tr>`).join('')
-    return `<tr class="grp"><td colspan="6">⏰ ${g.time || '—'} — ${g.pickup} (${(g.passengers || []).length} راكب)</td></tr>${rows}`
+    return `<tr class="grp"><td colspan="${cols}">⏰ ${g.time || '—'} — ${g.pickup} (${(g.passengers || []).length} راكب)</td></tr>${rows}`
   }).join('')
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>كشف ركاب — ${trip.route_name || ''}</title><style>
@@ -82,7 +84,7 @@ function manifestPDF(trip: any, data: any) {
     <div class="hd"><img src="/logo.png" onerror="this.style.display='none'"/>
       <div><div class="t">القاضي — ELKADY TRAVEL</div><div class="s">كشف ركاب الرحلة</div></div></div>
     <div class="meta">المسار: <b>${trip.route_name || ''}</b> · الموعد: <b>${trip.slot_name || ''}</b> · الوجهة: <b>${trip.destination_name || ''}</b> · التاريخ: <b>${trip.date || ''}</b> · إجمالي الركاب: <b>${data.total ?? 0}</b></div>
-    <table><thead><tr><th>#</th><th>مقعد</th><th>الطالب</th><th>الجامعة</th><th>الهاتف</th><th>النوع</th></tr></thead>
+    <table><thead><tr><th>#</th>${SHOW_SEAT_NUMBERS ? '<th>مقعد</th>' : ''}<th>الطالب</th><th>الجامعة</th><th>الهاتف</th><th>النوع</th></tr></thead>
     <tbody>${sections}</tbody></table>
     <div class="ft">تصميم وتطوير <b>شركة كفو للبرمجيات</b> · Kaffo.co</div>
     </body></html>`
@@ -123,7 +125,7 @@ function Passengers({ trip }: { trip: any }) {
           <Table
             size="small" rowKey={(r: any) => `${r.student_name}-${r.seat_number}`} pagination={false} dataSource={g.passengers}
             columns={[
-              { title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center', render: (v) => <b>{v}</b> },
+              ...(SHOW_SEAT_NUMBERS ? [{ title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center' as const, render: (v: any) => <b>{v}</b> }] : []),
               { title: 'الطالب', dataIndex: 'student_name' },
               { title: 'الجامعة', dataIndex: 'university' },
               { title: 'الهاتف', dataIndex: 'student_phone' },

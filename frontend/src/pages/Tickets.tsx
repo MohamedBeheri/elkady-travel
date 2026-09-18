@@ -1,6 +1,7 @@
 import { Card, Row, Col, Tag, Empty, Descriptions } from 'antd'
 import { useMyTicketsQuery } from '../app/api'
 import KaffoCredit from '../components/KaffoCredit'
+import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 const STATUS_COLOR: Record<string, string> = { confirmed: 'green', held: 'orange', absent: 'red' }
 
@@ -20,10 +21,12 @@ export default function Tickets() {
                   <div style={{ fontWeight: 800, fontSize: 15 }}>القاضي — ELKADY TRAVEL</div>
                   <div style={{ fontSize: 12, opacity: 0.9 }}>{t.kind === 'term' ? 'تذكرة ترم' : 'تذكرة يومية'}</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 11, opacity: 0.85 }}>المقعد</div>
-                  <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{t.seat_number}</div>
-                </div>
+                {SHOW_SEAT_NUMBERS && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 11, opacity: 0.85 }}>المقعد</div>
+                    <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{t.seat_number}</div>
+                  </div>
+                )}
               </div>
               <div style={{ padding: 16, textAlign: 'center' }}>
                 {t.qr ? (
