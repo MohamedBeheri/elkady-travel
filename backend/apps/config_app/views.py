@@ -120,7 +120,11 @@ class ReturnSlotViewSet(viewsets.ModelViewSet):
 class SeatCapacityViewSet(viewsets.ModelViewSet):
     queryset = SeatCapacity.objects.select_related('route', 'morning_slot').all()
     serializer_class = SeatCapacitySerializer
-    permission_classes = [IsStaff]
+    # Students need read access too — the booking screens use this to only offer
+    # morning slots actually configured for the chosen route (never the full
+    # global slot list), so a route+slot combo with no capacity row can't be
+    # booked into existence. Writes stay staff-only.
+    permission_classes = [ReadOnlyOrStaff]
     filterset_fields = ['route', 'morning_slot']
 
 

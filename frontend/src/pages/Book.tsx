@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
   useMorningSlotsQuery, useReturnSlotsQuery, useUniversitiesQuery,
-  usePublicPickupPointsQuery, usePricesQuery,
+  usePublicPickupPointsQuery, usePricesQuery, useCapacitiesQuery,
   useSeatmapForQuery, useBookDailyMutation,
   useCreateSubscriptionMutation, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
   useCompanyQuery,
@@ -123,6 +123,7 @@ function DailyFlow({ unis }: any) {
   const { data: mSlots } = useMorningSlotsQuery()
   const { data: rSlots } = useReturnSlotsQuery()
   const { data: prices } = usePricesQuery({ active: true })
+  const { data: caps } = useCapacitiesQuery()
   const [bookDaily, { isLoading }] = useBookDailyMutation()
 
   const selUni = unis.find((u: any) => u.id === university)
@@ -130,6 +131,12 @@ function DailyFlow({ unis }: any) {
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const seatSelection = selPickup ? selPickup.seat_selection !== false : true
+  // Only offer morning slots actually configured (سعة المقاعد) for this route —
+  // never the full global slot list, so booking can't create a phantom trip
+  // at a route/slot combo the admin never set up.
+  const goSlotIds = new Set((caps?.results || caps || [])
+    .filter((c: any) => c.route === routeId).map((c: any) => c.morning_slot))
+  const availGoSlots = (mSlots?.results || mSlots || []).filter((s: any) => !routeId || goSlotIds.has(s.id))
 
   // Re-align the saved pickup ID to the row for the CURRENT university's
   // destination — the saved ID may live on the other-destination copy.
@@ -247,7 +254,7 @@ function DailyFlow({ unis }: any) {
             </Form.Item>
             <Form.Item label={pointFieldLabel} required style={{ marginBottom: 8 }}>
               <Select placeholder={center ? `اختر ${pointFieldLabel}` : 'اختر المركز أولاً'} disabled={!center}
-                value={pickupId} onChange={setPickupId} showSearch optionFilterProp="label"
+                value={pickupId} onChange={(v) => { setPickupId(v); setGoSlot(undefined) }} showSearch optionFilterProp="label"
                 options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
             </Form.Item>
             <Form.Item label="تاريخ الرحلة" required style={{ marginBottom: 8 }}>
@@ -272,7 +279,7 @@ function DailyFlow({ unis }: any) {
           <Form layout="vertical">
             <Form.Item label="موعد الذهاب" required style={{ maxWidth: 260 }}>
               <Select placeholder="اختر الموعد" value={goSlot} onChange={setGoSlot} disabled={!routeId}
-                options={(mSlots?.results || mSlots || []).map((s: any) => ({
+                options={availGoSlots.map((s: any) => ({
                   value: s.id,
                   label: selPickup?.go_times?.[s.id] ? `${s.name} — التقاطك ${selPickup.go_times[s.id]}` : s.name,
                 }))} />

@@ -12,18 +12,20 @@ from rest_framework.response import Response
 from config.permissions import STAFF_ROLES
 from apps.bookings.models import Subscription
 from apps.bookings.serializers import SubscriptionSerializer
-from apps.config_app.models import CompanySettings, MorningSlot, PricingRule, Route, ReturnSlot, SeatCapacity
+from apps.config_app.models import CompanySettings, MorningSlot, PricingRule, Route, ReturnSlot
 from apps.notifications.models import notify
-from .layouts import LAYOUTS, layout_capacity
+from .layouts import LAYOUTS
 from .models import (
-    AttendanceConfirmation, DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock,
+    AttendanceConfirmation, DailyReschedule, DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence,
+    SeatRequest, TermSeatLock,
 )
 from .serializers import (
-    DailyTripSerializer, ReturnBookingSerializer, SeatRequestSerializer,
+    DailyRescheduleSerializer, DailyTripSerializer, ReturnBookingSerializer, SeatRequestSerializer,
 )
 from .services import (
-    allocate_trip, book_specific_seat, build_seatmap, cancel_seat,
-    confirm_seat_payment, make_qr, release_seat, request_seat, run_daily_allocation,
+    allocate_trip, book_specific_seat, build_seatmap, cancel_seat, confirm_seat_payment,
+    make_qr, release_seat, request_seat, run_daily_allocation, reschedule_daily_booking,
+    reschedule_lead_hours_left, DAILY_RESCHEDULE_LEAD_HOURS, _get_or_create_trip,
 )
 
 
@@ -192,36 +194,6 @@ def set_attendance(request):
     else:
         DailySlotChoice.objects.filter(term_lock=lock, date=date).delete()
     return Response({'attending': True, 'chosen_slot_id': int(slot_id) if slot_id else default_id})
-
-
-def _get_or_create_trip(date, route, *, morning_slot=None, return_slot=None, direction='go'):
-    """Fetch (or lazily create) the operational trip, seeding capacity/layout from config.
-
-    ``direction='go'`` keys on ``morning_slot``; ``direction='return'`` keys on
-    ``return_slot`` (reverse leg, same route) and inherits the route's vehicle layout.
-    """
-    if direction == 'return':
-        trip = DailyTrip.objects.filter(
-            date=date, route=route, return_slot=return_slot, direction='return').first()
-        if trip:
-            return trip
-        cap = SeatCapacity.objects.filter(route=route).first()
-        layout = cap.layout if cap else 'bus50'
-        total = cap.total_seats if cap else layout_capacity(layout)
-        return DailyTrip.objects.create(
-            date=date, route=route, return_slot=return_slot, direction='return',
-            layout=layout, total_seats=total)
-
-    trip = DailyTrip.objects.filter(
-        date=date, route=route, morning_slot=morning_slot, direction='go').first()
-    if trip:
-        return trip
-    cap = SeatCapacity.objects.filter(route=route, morning_slot=morning_slot).first()
-    layout = cap.layout if cap else 'bus50'
-    total = cap.total_seats if cap else layout_capacity(layout)
-    return DailyTrip.objects.create(
-        date=date, route=route, morning_slot=morning_slot, direction='go',
-        layout=layout, total_seats=total)
 
 
 def _pickup_time_of(pickup_point_id, direction, slot_id):
@@ -662,6 +634,56 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             return Response({'detail': str(e)}, status=409)
         return Response({'subscription': SubscriptionSerializer(sub).data, 'seats': seats}, status=201)
 
+    @action(detail=False, methods=['post'], url_path='reschedule-daily')
+    def reschedule_daily(self, request):
+        """Self-service: move a student's own confirmed daily booking to a
+        different date/route/slot(s). No admin approval — see
+        services.reschedule_daily_booking for the eligibility rule (server-clock
+        lead time) and services.DAILY_RESCHEDULE_LEAD_HOURS for the cutoff.
+        """
+        user = request.user
+        d = request.data
+        try:
+            sub = Subscription.objects.get(
+                pk=d.get('subscription'), student=user, status=Subscription.Status.CONFIRMED,
+                subscription_type__startswith='daily')
+        except Subscription.DoesNotExist:
+            return Response({'detail': 'الاشتراك غير موجود أو غير مؤكد'}, status=404)
+        new_date = d.get('date')
+        route_id = d.get('route')
+        if not (new_date and route_id):
+            return Response({'detail': 'البيانات ناقصة'}, status=400)
+        route = Route.objects.get(pk=route_id)
+        go_slot = MorningSlot.objects.get(pk=d['morning_slot']) if d.get('morning_slot') else None
+        ret_slot = ReturnSlot.objects.get(pk=d['return_slot']) if d.get('return_slot') else None
+        try:
+            reschedule_daily_booking(
+                subscription=sub, new_date=new_date, new_route=route,
+                new_morning_slot=go_slot, new_return_slot=ret_slot,
+                new_pickup_point_id=d.get('pickup_point'))
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=409)
+        return Response({'subscription': SubscriptionSerializer(sub).data})
+
+    @action(detail=False, methods=['get'], url_path='reschedule-eligibility')
+    def reschedule_eligibility(self, request):
+        """Hours left (server clock) before the student can no longer reschedule
+        this subscription's booking — used by the UI to show/hide the button."""
+        try:
+            sub = Subscription.objects.get(
+                pk=request.query_params.get('subscription'), student=request.user,
+                status=Subscription.Status.CONFIRMED, subscription_type__startswith='daily')
+        except Subscription.DoesNotExist:
+            return Response({'detail': 'غير موجود'}, status=404)
+        reqs = list(SeatRequest.objects.filter(
+            subscription=sub, status=SeatRequest.Status.CONFIRMED,
+        ).select_related('daily_trip', 'daily_trip__morning_slot', 'daily_trip__return_slot'))
+        hours_left = reschedule_lead_hours_left(reqs)
+        return Response({
+            'hours_left': hours_left,
+            'eligible': hours_left is None or hours_left > DAILY_RESCHEDULE_LEAD_HOURS,
+        })
+
     @action(detail=False, methods=['post'], url_path='book-seat')
     def book_seat(self, request):
         """Student picks a specific seat on the seat map (going or return leg)."""
@@ -878,3 +900,18 @@ class ReturnBookingViewSet(viewsets.ModelViewSet):
             by_uni[b.university.name].append(ReturnBookingSerializer(b).data)
         groups = [{'university': k, 'passengers': v} for k, v in by_uni.items()]
         return Response({'date': date, 'groups': groups})
+
+
+class DailyRescheduleViewSet(viewsets.ReadOnlyModelViewSet):
+    """Admin-visible log of self-service daily-booking reschedules (§ تأجيل)."""
+    queryset = DailyReschedule.objects.select_related(
+        'student', 'old_trip', 'old_trip__route', 'old_trip__morning_slot', 'old_trip__return_slot',
+        'new_trip', 'new_trip__route', 'new_trip__morning_slot', 'new_trip__return_slot',
+    ).all()
+    serializer_class = DailyRescheduleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.role not in STAFF_ROLES:
+            return DailyReschedule.objects.none()
+        return super().get_queryset()

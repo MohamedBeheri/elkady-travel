@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import DailyTrip, ReturnBooking, SeatRequest
+from .models import DailyReschedule, DailyTrip, ReturnBooking, SeatRequest
 
 
 class SeatRequestSerializer(serializers.ModelSerializer):
@@ -81,3 +81,29 @@ class ReturnBookingSerializer(serializers.ModelSerializer):
         if obj.route:
             return f'{obj.route.destination.name} ← {obj.route.origin_label}'
         return ''
+
+
+class DailyRescheduleSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source='student.full_name', read_only=True)
+    student_phone = serializers.CharField(source='student.phone', read_only=True)
+    old_trip_label = serializers.SerializerMethodField()
+    new_trip_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DailyReschedule
+        fields = [
+            'id', 'student', 'student_name', 'student_phone', 'subscription',
+            'old_trip_label', 'new_trip_label', 'created_at',
+        ]
+
+    def _label(self, trip):
+        if not trip:
+            return '—'
+        slot = trip.return_slot if trip.direction == 'return' else trip.morning_slot
+        return f'{trip.route.name} — {slot.name if slot else "—"} — {trip.date} ({trip.get_direction_display()})'
+
+    def get_old_trip_label(self, obj):
+        return self._label(obj.old_trip)
+
+    def get_new_trip_label(self, obj):
+        return self._label(obj.new_trip)

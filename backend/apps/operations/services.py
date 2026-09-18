@@ -10,12 +10,15 @@ Core operational rules preserved here:
 import base64
 import io
 import uuid
+from datetime import datetime, timedelta
 
 from django.db import transaction
 from django.utils import timezone
 
-from .layouts import LAYOUTS, DEFAULT_LAYOUT, seat_set
-from .models import AttendanceConfirmation, DailyTrip, SeatAbsence, SeatRequest, TermSeatLock, PRIORITY_RANK
+from .layouts import LAYOUTS, DEFAULT_LAYOUT, layout_capacity, seat_set
+from .models import (
+    AttendanceConfirmation, DailyReschedule, DailyTrip, SeatAbsence, SeatRequest, TermSeatLock, PRIORITY_RANK,
+)
 
 
 def make_qr(text):
@@ -314,6 +317,54 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
     return 'seat', req, msg
 
 
+def leg_departure_at(trip):
+    """Timezone-aware datetime the given trip actually departs, or None if the
+    slot has no configured time."""
+    slot = trip.return_slot if trip.direction == 'return' else trip.morning_slot
+    t = slot.departure_time if slot else None
+    if not t:
+        return None
+    naive = datetime.combine(trip.date, t)
+    return naive if timezone.is_aware(naive) else timezone.make_aware(naive)
+
+
+def reschedule_lead_hours_left(reqs):
+    """Hours remaining (server clock) before the EARLIEST leg among these
+    confirmed SeatRequests departs, or None if none of them have a known time."""
+    times = [leg_departure_at(r.daily_trip) for r in reqs]
+    times = [t for t in times if t]
+    if not times:
+        return None
+    return (min(times) - timezone.now()).total_seconds() / 3600
+
+
+@transaction.atomic
+def reschedule_seat(*, trip, student, university_id, subscription, pickup_point_id=None):
+    """Move an already-PAID daily booking onto a different trip, confirmed
+    immediately — no HELD/payment step, since the student already paid for
+    this subscription. Raises ValueError if the target trip has no room.
+    """
+    trip = DailyTrip.objects.select_for_update().get(pk=trip.pk)
+    seat_number = _first_free_seat_on_trip(trip, student)
+    if not seat_number:
+        raise ValueError('لا توجد مقاعد متاحة في هذا الميعاد، برجاء اختيار ميعاد آخر.')
+    req, _ = SeatRequest.objects.get_or_create(
+        daily_trip=trip, student=student,
+        defaults={'university_id': university_id, 'priority_type': 'daily', 'subscription': subscription},
+    )
+    req.seat_number = seat_number
+    req.university_id = university_id
+    req.priority_type = 'daily'
+    req.subscription = subscription
+    if pickup_point_id:
+        req.pickup_point_id = pickup_point_id
+    req.status = SeatRequest.Status.CONFIRMED
+    if not req.qr_token:
+        req.qr_token = new_token()
+    req.save()
+    return req
+
+
 @transaction.atomic
 def confirm_seat_payment(seat_request):
     """Admin marks a HELD daily booking as paid → CONFIRMED + QR ticket."""
@@ -444,3 +495,107 @@ def auto_close_attendance(date):
         [SeatAbsence(term_lock=lock, date=date) for lock in silent])
     run_daily_allocation(date)
     return len(made_absent)
+
+
+def _get_or_create_trip(date, route, *, morning_slot=None, return_slot=None, direction='go'):
+    """Fetch (or lazily create) the operational trip, seeding capacity/layout from config.
+
+    ``direction='go'`` keys on ``morning_slot``; ``direction='return'`` keys on
+    ``return_slot`` (reverse leg, same route) and inherits the route's vehicle layout.
+    """
+    from apps.config_app.models import SeatCapacity
+    if direction == 'return':
+        trip = DailyTrip.objects.filter(
+            date=date, route=route, return_slot=return_slot, direction='return').first()
+        if trip:
+            return trip
+        cap = SeatCapacity.objects.filter(route=route).first()
+        layout = cap.layout if cap else 'bus50'
+        total = cap.total_seats if cap else layout_capacity(layout)
+        return DailyTrip.objects.create(
+            date=date, route=route, return_slot=return_slot, direction='return',
+            layout=layout, total_seats=total)
+
+    trip = DailyTrip.objects.filter(
+        date=date, route=route, morning_slot=morning_slot, direction='go').first()
+    if trip:
+        return trip
+    cap = SeatCapacity.objects.filter(route=route, morning_slot=morning_slot).first()
+    layout = cap.layout if cap else 'bus50'
+    total = cap.total_seats if cap else layout_capacity(layout)
+    return DailyTrip.objects.create(
+        date=date, route=route, morning_slot=morning_slot, direction='go',
+        layout=layout, total_seats=total)
+
+
+DAILY_RESCHEDULE_LEAD_HOURS = 8
+
+
+@transaction.atomic
+def reschedule_daily_booking(*, subscription, new_date, new_route, new_morning_slot=None,
+                              new_return_slot=None, new_pickup_point_id=None):
+    """Move a confirmed daily subscription's booking to a different date/route/slot(s).
+
+    Self-service, no admin approval — allowed only while more than
+    DAILY_RESCHEDULE_LEAD_HOURS remain before the EARLIEST currently-booked leg
+    departs (server clock only, never trusts the client). Keeps the same
+    trip_type (go/return/round) the subscription already has. Raises ValueError
+    on any failure (too late, no capacity, bad input) — nothing is changed.
+    """
+    student = subscription.student
+    old_reqs = list(
+        SeatRequest.objects.select_for_update()
+        .filter(subscription=subscription, status=SeatRequest.Status.CONFIRMED)
+        .select_related('daily_trip', 'daily_trip__morning_slot', 'daily_trip__return_slot')
+    )
+    if not old_reqs:
+        raise ValueError('لا يوجد حجز مؤكد لهذا الاشتراك حالياً.')
+
+    hours_left = reschedule_lead_hours_left(old_reqs)
+    if hours_left is not None and hours_left <= DAILY_RESCHEDULE_LEAD_HOURS:
+        raise ValueError(
+            f'تجاوزت مهلة التأجيل — لازم يتبقى أكثر من {DAILY_RESCHEDULE_LEAD_HOURS} ساعات قبل ميعاد رحلتك الحالية.')
+
+    want_go = any(r.daily_trip.direction == 'go' for r in old_reqs)
+    want_ret = any(r.daily_trip.direction == 'return' for r in old_reqs)
+    if want_go and not new_morning_slot:
+        raise ValueError('اختر موعد الذهاب الجديد.')
+    if want_ret and not new_return_slot:
+        raise ValueError('اختر موعد العودة الجديد.')
+
+    pickup_point_id = new_pickup_point_id or old_reqs[0].pickup_point_id
+    old_trip_id_by_direction = {r.daily_trip.direction: r.daily_trip_id for r in old_reqs}
+
+    # Book the new leg(s) FIRST — if either fails (no capacity), nothing below
+    # runs and the atomic transaction rolls back, leaving the old seats intact.
+    new_by_direction = {}
+    if want_go:
+        trip = _get_or_create_trip(new_date, new_route, morning_slot=new_morning_slot)
+        if trip.id == old_trip_id_by_direction.get('go'):
+            raise ValueError('اختر تاريخاً أو موعداً مختلفاً عن حجزك الحالي.')
+        new_by_direction['go'] = reschedule_seat(
+            trip=trip, student=student, university_id=subscription.university_id,
+            subscription=subscription, pickup_point_id=pickup_point_id)
+    if want_ret:
+        trip = _get_or_create_trip(new_date, new_route, return_slot=new_return_slot, direction='return')
+        if trip.id == old_trip_id_by_direction.get('return'):
+            raise ValueError('اختر تاريخاً أو موعداً مختلفاً عن حجزك الحالي.')
+        new_by_direction['return'] = reschedule_seat(
+            trip=trip, student=student, university_id=subscription.university_id,
+            subscription=subscription, pickup_point_id=pickup_point_id)
+
+    for old_req in old_reqs:
+        new_leg = new_by_direction[old_req.daily_trip.direction]
+        old_trip = old_req.daily_trip
+        cancel_seat(old_req)
+        DailyReschedule.objects.create(
+            student=student, subscription=subscription,
+            old_trip=old_trip, new_trip=new_leg.daily_trip)
+
+    subscription.route = new_route
+    subscription.morning_slot = new_morning_slot
+    subscription.return_slot = new_return_slot
+    if new_pickup_point_id:
+        subscription.pickup_point_id = new_pickup_point_id
+    subscription.save(update_fields=['route', 'morning_slot', 'return_slot', 'pickup_point'])
+    return list(new_by_direction.values())

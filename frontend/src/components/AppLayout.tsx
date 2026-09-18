@@ -4,7 +4,7 @@ import {
   CarOutlined, RollbackOutlined, SettingOutlined, CompassOutlined,
   UserOutlined, LogoutOutlined, BellOutlined, IdcardOutlined, MenuOutlined,
   ToolOutlined, WarningOutlined, BarChartOutlined, AuditOutlined, ProfileOutlined, SafetyOutlined,
-  ApartmentOutlined,
+  ApartmentOutlined, SwapOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
@@ -81,6 +81,7 @@ export default function AppLayout() {
         { key: '/operations', icon: <DashboardOutlined />, label: 'لوحة المشرف' },
         { key: '/board', icon: <CarOutlined />, label: 'رحلات الغد' },
         { key: '/day-manifest', icon: <ProfileOutlined />, label: 'كشف اليوم الشامل' },
+        { key: '/reschedules', icon: <SwapOutlined />, label: 'طلبات التأجيل' },
         { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
         { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
         { key: '/returns', icon: <RollbackOutlined />, label: 'رحلات العودة' },

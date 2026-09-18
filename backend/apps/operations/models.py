@@ -330,3 +330,38 @@ class ReturnBooking(models.Model):
 
     def __str__(self):
         return f'{self.student} - {self.date} {self.return_slot}'
+
+
+class DailyReschedule(models.Model):
+    """Log entry: a daily-booking rider moved one confirmed leg to a different trip.
+
+    Self-service (no admin approval) — allowed only while the configured lead
+    time before the ORIGINAL leg's departure hasn't elapsed (checked against the
+    server clock in services.reschedule_daily_leg). Purely a record for admin
+    visibility; it doesn't gate anything itself.
+    """
+    student = models.ForeignKey(
+        'users.User', on_delete=models.CASCADE, related_name='daily_reschedules',
+        verbose_name=_('الطالب'),
+    )
+    subscription = models.ForeignKey(
+        'bookings.Subscription', on_delete=models.CASCADE, related_name='reschedules',
+        verbose_name=_('الاشتراك'),
+    )
+    old_trip = models.ForeignKey(
+        DailyTrip, on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+        verbose_name=_('الرحلة القديمة'),
+    )
+    new_trip = models.ForeignKey(
+        DailyTrip, on_delete=models.CASCADE, related_name='+',
+        verbose_name=_('الرحلة الجديدة'),
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('وقت التأجيل'))
+
+    class Meta:
+        verbose_name = _('تأجيل حجز يومي')
+        verbose_name_plural = _('تأجيلات الحجز اليومي')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.student} — {self.old_trip} ← {self.new_trip}'

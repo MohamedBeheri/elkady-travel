@@ -20,6 +20,7 @@ import Subscriptions from './pages/Subscriptions'
 import WaitingLists from './pages/WaitingLists'
 import TripBoard from './pages/TripBoard'
 import DayManifest from './pages/DayManifest'
+import RescheduleLog from './pages/RescheduleLog'
 import ReturnLists from './pages/ReturnLists'
 import Config from './pages/Config'
 import TourismAdmin from './pages/TourismAdmin'
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="/waiting" element={<WaitingLists />} />
           <Route path="/board" element={<TripBoard />} />
           <Route path="/day-manifest" element={<DayManifest />} />
+          <Route path="/reschedules" element={<RescheduleLog />} />
           <Route path="/returns" element={<ReturnLists />} />
           <Route path="/config" element={<Config />} />
           <Route path="/tourism" element={<TourismAdmin />} />

@@ -1,8 +1,10 @@
-import { Card, Table, Tag, Button, Modal, Select, Input, Upload, App as AntdApp, Descriptions, Alert } from 'antd'
+import { Card, Table, Tag, Button, Modal, Select, Input, Upload, App as AntdApp, Descriptions, Alert, DatePicker } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
+import dayjs from 'dayjs'
 import {
   useSubscriptionsQuery, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
+  useRoutesQuery, useMorningSlotsQuery, useReturnSlotsQuery, useRescheduleDailyMutation, useCapacitiesQuery,
 } from '../app/api'
 
 const STATUS_COLOR: Record<string, string> = {
@@ -10,6 +12,76 @@ const STATUS_COLOR: Record<string, string> = {
   confirmed: 'green', rejected: 'red', cancelled: 'default', expired: 'default',
 }
 const TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شهري', daily: 'يومي' }
+
+function RescheduleModal({ sub, onClose }: { sub: any; onClose: () => void }) {
+  const { message } = AntdApp.useApp()
+  const { data: routes } = useRoutesQuery({ active: true })
+  const { data: mSlots } = useMorningSlotsQuery()
+  const { data: rSlots } = useReturnSlotsQuery()
+  const { data: caps } = useCapacitiesQuery()
+  const [reschedule, { isLoading }] = useRescheduleDailyMutation()
+  const [date, setDate] = useState<any>(dayjs().add(1, 'day'))
+  const [routeId, setRouteId] = useState<number>()
+  const [goSlot, setGoSlot] = useState<number>()
+  const [retSlot, setRetSlot] = useState<number>()
+
+  const wantGo = sub.subscription_type === 'daily_go' || sub.subscription_type === 'daily_round' || sub.subscription_type === 'daily'
+  const wantRet = sub.subscription_type === 'daily_return' || sub.subscription_type === 'daily_round'
+  // Only offer morning slots actually configured (سعة المقاعد) for the chosen
+  // route — same reasoning as the daily booking flow.
+  const goSlotIds = new Set((caps?.results || caps || [])
+    .filter((c: any) => c.route === routeId).map((c: any) => c.morning_slot))
+  const availGoSlots = (mSlots?.results || mSlots || []).filter((s: any) => !routeId || goSlotIds.has(s.id))
+
+  const submit = async () => {
+    if (!routeId) { message.error('اختر المسار'); return }
+    if (wantGo && !goSlot) { message.error('اختر موعد الذهاب'); return }
+    if (wantRet && !retSlot) { message.error('اختر موعد العودة'); return }
+    try {
+      await reschedule({
+        subscription: sub.id, date: date.format('YYYY-MM-DD'), route: routeId,
+        morning_slot: wantGo ? goSlot : undefined, return_slot: wantRet ? retSlot : undefined,
+      }).unwrap()
+      message.success('تم تأجيل حجزك إلى الميعاد الجديد بنجاح')
+      onClose()
+    } catch (e: any) {
+      message.error(e?.data?.detail || 'تعذر التأجيل')
+    }
+  }
+
+  return (
+    <Modal title="تأجيل الحجز إلى ميعاد آخر" open onCancel={onClose} onOk={submit}
+      confirmLoading={isLoading} okText="تأكيد التأجيل" cancelText="إلغاء">
+      <Alert type="info" showIcon style={{ marginBottom: 12 }}
+        message="التأجيل متاح فقط قبل ميعاد رحلتك الحالية بأكثر من ٨ ساعات — حسب توقيت السيرفر، لا توقيت جهازك." />
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: 4, color: '#475569' }}>التاريخ الجديد</div>
+        <DatePicker style={{ width: '100%' }} value={date} onChange={(d) => d && setDate(d)}
+          disabledDate={(d) => d && d < dayjs().startOf('day')} allowClear={false} />
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: 4, color: '#475569' }}>المسار</div>
+        <Select style={{ width: '100%' }} placeholder="اختر المسار" value={routeId}
+          onChange={(v) => { setRouteId(v); setGoSlot(undefined) }}
+          options={(routes?.results || []).map((r: any) => ({ value: r.id, label: r.name }))} />
+      </div>
+      {wantGo && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 4, color: '#475569' }}>موعد الذهاب</div>
+          <Select style={{ width: '100%' }} placeholder="اختر الموعد" value={goSlot} onChange={setGoSlot} disabled={!routeId}
+            options={availGoSlots.map((s: any) => ({ value: s.id, label: s.name }))} />
+        </div>
+      )}
+      {wantRet && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 4, color: '#475569' }}>موعد العودة</div>
+          <Select style={{ width: '100%' }} placeholder="اختر الموعد" value={retSlot} onChange={setRetSlot}
+            options={(rSlots?.results || rSlots || []).map((s: any) => ({ value: s.id, label: s.name }))} />
+        </div>
+      )}
+    </Modal>
+  )
+}
 
 export default function MyBookings() {
   const { message } = AntdApp.useApp()
@@ -23,6 +95,7 @@ export default function MyBookings() {
   const [methodId, setMethodId] = useState<number>()
   const [reference, setReference] = useState('')
   const [file, setFile] = useState<any>(null)
+  const [rescheduling, setRescheduling] = useState<any>(null)
 
   const accountList = (accounts?.results || accounts || []).filter((a: any) => a.active !== false)
   const activeMethodIds = new Set(accountList.map((a: any) => a.method))
@@ -70,11 +143,15 @@ export default function MyBookings() {
               ['payment_pending', 'rejected'].includes(r.status)
                 ? <Button size="small" type="primary" onClick={() => openPay(r)}>ادفع الآن</Button>
                 : r.status === 'payment_submitted' ? <span style={{ color: '#64748b' }}>بانتظار المراجعة</span>
+                : r.status === 'confirmed' && r.subscription_type?.startsWith('daily')
+                ? <Button size="small" onClick={() => setRescheduling(r)}>تأجيل</Button>
                 : r.rejection_reason ? <span style={{ color: '#ef4444' }}>{r.rejection_reason}</span> : '—'
             ),
           },
         ]}
       />
+
+      {rescheduling && <RescheduleModal sub={rescheduling} onClose={() => setRescheduling(null)} />}
 
       <Modal title="دفع الاشتراك" open={open} onOk={submit} confirmLoading={isLoading} onCancel={() => setOpen(false)} okText="إرسال إثبات الدفع">
         <Alert type="warning" style={{ marginBottom: 12 }}

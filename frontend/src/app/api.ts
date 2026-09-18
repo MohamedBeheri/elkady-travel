@@ -301,6 +301,16 @@ export const api = createApi({
       query: (body) => ({ url: 'operations/seat-requests/book-daily/', method: 'POST', body }),
       invalidatesTags: ['SeatMap', 'SeatRequest', 'DailyTrip', 'Ticket', 'Subscription'],
     }),
+    rescheduleDaily: b.mutation<any, any>({
+      query: (body) => ({ url: 'operations/seat-requests/reschedule-daily/', method: 'POST', body }),
+      invalidatesTags: ['SeatMap', 'SeatRequest', 'DailyTrip', 'Ticket', 'Subscription'],
+    }),
+    rescheduleEligibility: b.query<any, number>({
+      query: (subscription) => `operations/seat-requests/reschedule-eligibility/?subscription=${subscription}`,
+    }),
+    dailyReschedules: b.query<any, void>({
+      query: () => 'operations/daily-reschedules/',
+    }),
     confirmSeat: b.mutation<any, number>({
       query: (id) => ({ url: `operations/seat-requests/${id}/confirm/`, method: 'POST' }),
       invalidatesTags: ['SeatMap', 'SeatRequest', 'DailyTrip'],
@@ -495,6 +505,7 @@ export const {
   useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useDayManifestQuery, useRunAllocationMutation,
   useSeatRequestsQuery, useBookSeatMutation, useCancelSeatMutation,
   useLayoutsQuery, useSeatmapForQuery, useSeatmapQuery, useBookSpecificSeatMutation, useBookDailyMutation,
+  useRescheduleDailyMutation, useRescheduleEligibilityQuery, useDailyReschedulesQuery,
   useConfirmSeatMutation, useReleaseSeatMutation, useMyTicketsQuery,
   useAttendanceQuery, useSetAttendanceMutation,
   useReturnAvailabilityQuery, useReturnBookingsQuery, useBookReturnMutation,
