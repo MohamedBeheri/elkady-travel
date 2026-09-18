@@ -291,6 +291,10 @@ class CompanySettings(models.Model):
     booking_term_open = models.BooleanField(default=True, verbose_name=_('حجز الترم مفتوح'))
     booking_monthly_open = models.BooleanField(default=True, verbose_name=_('حجز الشهري مفتوح'))
     booking_daily_open = models.BooleanField(default=True, verbose_name=_('الحجز اليومي مفتوح'))
+    daily_booking_cutoff_time = models.TimeField(
+        null=True, blank=True, verbose_name=_('وقت إغلاق الحجز اليومي تلقائياً'),
+        help_text=_('بعد هذا الوقت يُغلق الحجز اليومي تلقائياً حتى منتصف الليل، ثم يُفتح تلقائياً. اتركه فارغاً لتعطيل الإغلاق التلقائي بالوقت (يبقى الإغلاق اليدوي فقط).'),
+    )
 
     class Meta:
         verbose_name = _('إعدادات الشركة')

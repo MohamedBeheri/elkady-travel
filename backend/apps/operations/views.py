@@ -558,8 +558,14 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         The ticket (QR) is issued only after the admin verifies the payment."""
         user = request.user
         cs = CompanySettings.load()
-        if user.role not in STAFF_ROLES and not cs.booking_daily_open:
-            return Response({'detail': 'الحجز اليومي مغلق حالياً من الإدارة'}, status=403)
+        if user.role not in STAFF_ROLES:
+            if not cs.booking_daily_open:
+                return Response({'detail': 'الحجز اليومي مغلق حالياً من الإدارة'}, status=403)
+            cutoff = cs.daily_booking_cutoff_time
+            if cutoff and timezone.localtime().time() >= cutoff:
+                return Response({
+                    'detail': f'الحجز اليومي مغلق الآن (بعد الساعة {cutoff.strftime("%H:%M")}) — يُفتح تلقائياً بعد منتصف الليل.',
+                }, status=403)
         d = request.data
         date = d.get('date')
         route_id = d.get('route')

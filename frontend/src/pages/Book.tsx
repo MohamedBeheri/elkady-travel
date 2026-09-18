@@ -515,9 +515,9 @@ function SubscriptionBooking({ unis, termOpen = true, monthlyOpen = true }: any)
 }
 
 /* ================= Unified booking home ================= */
-const Closed = ({ what }: { what: string }) => (
+const Closed = ({ what, description }: { what: string; description?: string }) => (
   <Alert type="warning" showIcon message={`${what} مغلق حالياً`}
-    description="سيُفتح فور رفع القفل من إدارة المنصة. حاول لاحقاً أو تواصل مع الإدارة." />
+    description={description || 'سيُفتح فور رفع القفل من إدارة المنصة. حاول لاحقاً أو تواصل مع الإدارة.'} />
 )
 
 export default function Book() {
@@ -525,7 +525,9 @@ export default function Book() {
   const { data: unisQ } = useUniversitiesQuery({ active: true })
   const { data: company } = useCompanyQuery()
   const unis = unisQ?.results || []
-  const dailyOpen = company?.booking_daily_open !== false
+  const cutoff = company?.daily_booking_cutoff_time
+  const pastCutoff = !!cutoff && dayjs().format('HH:mm:ss') >= cutoff
+  const dailyOpen = company?.booking_daily_open !== false && !pastCutoff
   const termOpen = company?.booking_term_open !== false
   const monthlyOpen = company?.booking_monthly_open !== false
   const subOpen = termOpen || monthlyOpen
@@ -534,7 +536,11 @@ export default function Book() {
     <Card title={<span style={{ fontWeight: 800, fontSize: 18 }}>احجز رحلتك</span>}>
       <Tabs activeKey={tab} onChange={setTab} size="large"
         items={[
-          { key: 'daily', label: '🚌 حجز يومي', children: dailyOpen ? <DailyFlow unis={unis} /> : <Closed what="الحجز اليومي" /> },
+          { key: 'daily', label: '🚌 حجز يومي', children: dailyOpen ? <DailyFlow unis={unis} /> : (
+            <Closed what="الحجز اليومي" description={pastCutoff
+              ? `الحجز اليومي مغلق تلقائياً بعد الساعة ${dayjs(cutoff, 'HH:mm:ss').format('HH:mm')} — يُفتح تلقائياً بعد منتصف الليل.`
+              : undefined} />
+          ) },
           { key: 'sub', label: '🎫 حجز ترم / شهري', children: subOpen ? <SubscriptionBooking unis={unis} termOpen={termOpen} monthlyOpen={monthlyOpen} /> : <Closed what="حجز الترم والشهري" /> },
           { key: 'tourism', label: '🏖️ رحلات سياحية', children: <TourismRequest /> },
         ]} />

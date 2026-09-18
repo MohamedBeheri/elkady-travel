@@ -1,4 +1,5 @@
-import { Card, Col, Row, Progress, Table, Tag, Switch, Space, App as AntdApp } from 'antd'
+import { Card, Col, Row, Progress, Table, Tag, Switch, Space, TimePicker, App as AntdApp } from 'antd'
+import dayjs from 'dayjs'
 import {
   TeamOutlined, ClockCircleOutlined, DollarOutlined, CarOutlined,
   CompassOutlined, CheckCircleOutlined, WalletOutlined, RiseOutlined,
@@ -27,6 +28,14 @@ function BookingTogglesCard() {
     ['booking_monthly_open', 'الحجز الشهري', company?.booking_monthly_open !== false],
     ['booking_daily_open', 'الحجز اليومي', company?.booking_daily_open !== false],
   ]
+  const cutoff = company?.daily_booking_cutoff_time
+  const cutoffValue = cutoff ? dayjs(cutoff, 'HH:mm:ss') : null
+  const saveCutoff = async (t: dayjs.Dayjs | null) => {
+    try {
+      await save({ daily_booking_cutoff_time: t ? t.format('HH:mm:ss') : null }).unwrap()
+      message.success(t ? `الحجز اليومي هيتقفل تلقائياً الساعة ${t.format('HH:mm')}` : 'تم إلغاء الإغلاق التلقائي بالوقت')
+    } catch { message.error('تعذّر الحفظ') }
+  }
   return (
     <Card size="small" style={{ marginBottom: 14 }}
       title={<span><LockOutlined /> <b>فتح / إغلاق الحجز للجميع</b></span>}
@@ -40,6 +49,16 @@ function BookingTogglesCard() {
           </Space>
         ))}
       </Space>
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 600 }}>إغلاق الحجز اليومي تلقائياً بعد الساعة:</span>
+        <TimePicker value={cutoffValue} onChange={saveCutoff} format="HH:mm" allowClear
+          placeholder="بدون حد أقصى" style={{ width: 130 }} />
+        <span style={{ color: '#64748b', fontSize: 12 }}>
+          {cutoffValue
+            ? `يُغلق الحجز اليومي تلقائياً من الساعة ${cutoffValue.format('HH:mm')} حتى منتصف الليل، ويُفتح تلقائياً بعدها.`
+            : 'اتركه فارغاً لتعطيل الإغلاق التلقائي بالوقت (يظل الحجز مفتوحاً طوال اليوم ما دام مفتوحاً بالمفتاح أعلاه).'}
+        </span>
+      </div>
     </Card>
   )
 }
