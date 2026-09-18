@@ -11,7 +11,7 @@ import dayjs from 'dayjs'
 import {
   useMorningSlotsQuery, useReturnSlotsQuery, useUniversitiesQuery,
   usePublicPickupPointsQuery, usePricesQuery,
-  useSeatmapForQuery, useBookSpecificSeatMutation,
+  useSeatmapForQuery, useBookDailyMutation,
   useCreateSubscriptionMutation, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
   useCompanyQuery,
 } from '../app/api'
@@ -30,6 +30,71 @@ const SUB_TYPES = [
   { value: 'term', label: 'اشتراك ترم' },
   { value: 'monthly', label: 'اشتراك شهري' },
 ]
+
+/* ================= Shared payment panel (upload receipt → admin review) ================= */
+function PaymentPanel({ sub, title, onBack, onPaid }: any) {
+  const { message } = AntdApp.useApp()
+  const { data: methods } = usePaymentMethodsQuery()
+  const { data: accounts } = usePaymentAccountsQuery()
+  const [submitPayment, { isLoading: paying }] = useSubmitPaymentMutation()
+  const [methodId, setMethodId] = useState<number>()
+  const [reference, setReference] = useState('')
+  const [file, setFile] = useState<any>(null)
+
+  const accountList = (accounts?.results || accounts || []).filter((a: any) => a.active !== false)
+  const activeMethodIds = new Set(accountList.map((a: any) => a.method))
+  const availableMethods = (methods?.results || methods || []).filter((m: any) => activeMethodIds.has(m.id))
+  const account = accountList.find((a: any) => a.method === methodId)
+  useEffect(() => { if (!methodId && availableMethods.length === 1) setMethodId(availableMethods[0].id) }, [availableMethods.length, methodId])
+
+  const pay = async () => {
+    if (!methodId) { message.error('اختر وسيلة الدفع'); return }
+    if (!file) { message.error('ارفع صورة إثبات الدفع'); return }
+    const fd = new FormData(); fd.append('payment_method', String(methodId)); fd.append('payment_reference', reference); fd.append('payment_proof', file)
+    try { await submitPayment({ id: sub.id, body: fd }).unwrap(); onPaid() } catch { message.error('تعذر الإرسال') }
+  }
+
+  return (
+    <Card title={title} style={{ maxWidth: 520 }}>
+      <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="حوّل المبلغ إلى الحساب الظاهر ثم ارفع صورة الإيصال. لا يُعتمد الحجز إلا بعد مراجعة الإدارة." />
+      <Statistic title="المبلغ المطلوب" value={Number(sub.amount)} suffix="ج.م" style={{ marginBottom: 14 }} />
+      <div style={{ marginBottom: 8 }}>وسيلة الدفع:</div>
+      {availableMethods.length === 0
+        ? <Alert type="error" showIcon style={{ marginBottom: 12 }} message="لم تُهيَّأ حسابات استلام بعد. تواصل مع الإدارة." />
+        : <Select style={{ width: '100%', marginBottom: 12 }} placeholder="اختر وسيلة الدفع" value={methodId} onChange={setMethodId}
+            options={availableMethods.map((m: any) => ({ value: m.id, label: m.name }))} />}
+      {account && (
+        <>
+          <Descriptions size="small" bordered column={1} style={{ marginBottom: 12 }}>
+            <Descriptions.Item label="اسم الحساب">{account.holder_name}</Descriptions.Item>
+            <Descriptions.Item label="الرقم">
+              <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>{account.number}</span>{' '}
+              <Button size="small" onClick={() => { navigator.clipboard?.writeText(account.number); message.success('تم النسخ') }}>نسخ</Button>
+            </Descriptions.Item>
+            {account.transfer_link && (
+              <Descriptions.Item label="لينك التحويل"><a href={account.transfer_link} target="_blank" rel="noreferrer">افتح رابط التحويل</a></Descriptions.Item>
+            )}
+            {account.instructions && <Descriptions.Item label="تعليمات">{account.instructions}</Descriptions.Item>}
+          </Descriptions>
+          {account.qr_image && (
+            <div style={{ textAlign: 'center', marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>امسح الكود بتطبيق الدفع</div>
+              <img src={account.qr_image} alt="qr" style={{ maxWidth: 220, width: '100%', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+            </div>
+          )}
+        </>
+      )}
+      <Input placeholder="مرجع التحويل (اختياري)" value={reference} onChange={(e) => setReference(e.target.value)} style={{ marginBottom: 12 }} />
+      <Upload beforeUpload={(f) => { setFile(f); return false }} maxCount={1} fileList={file ? [file] : []} onRemove={() => setFile(null)} accept="image/*,application/pdf">
+        <Button icon={<UploadOutlined />}>رفع صورة الإيصال</Button>
+      </Upload>
+      <div style={{ marginTop: 16 }}>
+        <Button type="primary" loading={paying} onClick={pay}>إرسال إثبات الدفع</Button>
+        {onBack && <Button style={{ marginInlineStart: 8 }} onClick={onBack}>رجوع</Button>}
+      </div>
+    </Card>
+  )
+}
 
 /* ================= Daily booking: university → trip type → center → pickup → slot(s) → seat(s) ================= */
 function DailyFlow({ unis }: any) {
@@ -50,13 +115,14 @@ function DailyFlow({ unis }: any) {
   const [goSeat, setGoSeat] = useState<number | null>(null)
   const [retSlot, setRetSlot] = useState<number>()
   const [retSeat, setRetSeat] = useState<number | null>(null)
-  const [done, setDone] = useState<any>(null)
+  const [created, setCreated] = useState<any>(null)
+  const [paid, setPaid] = useState(false)
 
   const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
   const { data: mSlots } = useMorningSlotsQuery()
   const { data: rSlots } = useReturnSlotsQuery()
   const { data: prices } = usePricesQuery({ active: true })
-  const [bookSeat, { isLoading }] = useBookSpecificSeatMutation()
+  const [bookDaily, { isLoading }] = useBookDailyMutation()
 
   const selUni = unis.find((u: any) => u.id === university)
   const availPickups = dedupePickups((pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination))
@@ -112,34 +178,38 @@ function DailyFlow({ unis }: any) {
 
   const confirm = async () => {
     try {
-      let g = goSeat, r = retSeat
-      if (wantGo) {
-        const res = await bookSeat({ date: dateStr, route: routeId, direction: 'go', morning_slot: goSlot, seat_number: seatSelection ? goSeat : undefined, university, pickup_point: pickupId }).unwrap()
-        g = res?.seat_number ?? goSeat
-      }
-      if (wantRet) {
-        const res = await bookSeat({ date: dateStr, route: routeId, direction: 'return', return_slot: retSlot, seat_number: seatSelection ? retSeat : undefined, university, pickup_point: pickupId }).unwrap()
-        r = res?.seat_number ?? retSeat
-      }
-      setDone({ total, goSeat: g, retSeat: r })
+      const res = await bookDaily({
+        date: dateStr, route: routeId, university, pickup_point: pickupId,
+        trip_type: tripType,
+        morning_slot: wantGo ? goSlot : undefined,
+        return_slot: wantRet ? retSlot : undefined,
+        go_seat: wantGo && seatSelection ? goSeat : undefined,
+        ret_seat: wantRet && seatSelection ? retSeat : undefined,
+      }).unwrap()
+      setCreated(res.subscription)
     } catch (e: any) { message.error(e?.data?.detail || 'تعذر إتمام الحجز') }
   }
 
   const reset = () => {
-    setDone(null); setGoSeat(null); setRetSeat(null); setGoSlot(undefined); setRetSlot(undefined)
+    setCreated(null); setPaid(false); setGoSeat(null); setRetSeat(null); setGoSlot(undefined); setRetSlot(undefined)
   }
 
-  if (done) {
+  if (paid) {
     return (
       <Result status="success"
-        title="تم تسجيل حجزك بنجاح"
-        subTitle={`${wantGo ? `مقعد الذهاب رقم ${done.goSeat}` : ''}${wantGo && wantRet ? ' · ' : ''}${wantRet ? `مقعد العودة رقم ${done.retSeat}` : ''} — بانتظار تأكيد الدفع من الإدارة. تابع تذكرتك ورمز QR بعد التأكيد.`}
+        title="تم إرسال إثبات الدفع للمراجعة"
+        subTitle="حُجز مقعدك مؤقتاً. بعد تأكيد الإدارة للدفع تظهر لك التذكرة ورمز QR. تابع الحالة من «حجوزاتي والدفع»."
         extra={[
           <Button type="primary" key="t" onClick={() => navigate('/tickets')}>عرض تذاكري</Button>,
-          <Button key="b" onClick={() => navigate('/my-bookings')}>الدفع ومتابعة الحجز</Button>,
+          <Button key="b" onClick={() => navigate('/my-bookings')}>حجوزاتي والدفع</Button>,
           <Button key="n" type="dashed" onClick={reset}>حجز آخر</Button>,
         ]} />
     )
+  }
+
+  if (created) {
+    return <PaymentPanel sub={created} title="دفع الحجز اليومي — رفع الإيصال"
+      onBack={() => setCreated(null)} onPaid={() => setPaid(true)} />
   }
 
   const noPickups = center && selUni && availPickups.length === 0

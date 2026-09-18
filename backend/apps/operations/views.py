@@ -1,5 +1,7 @@
 from collections import defaultdict
+from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import viewsets
@@ -9,7 +11,8 @@ from rest_framework.response import Response
 
 from config.permissions import STAFF_ROLES
 from apps.bookings.models import Subscription
-from apps.config_app.models import CompanySettings, MorningSlot, Route, ReturnSlot, SeatCapacity
+from apps.bookings.serializers import SubscriptionSerializer
+from apps.config_app.models import CompanySettings, MorningSlot, PricingRule, Route, ReturnSlot, SeatCapacity
 from apps.notifications.models import notify
 from .layouts import LAYOUTS, layout_capacity
 from .models import DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
@@ -435,6 +438,79 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             pickup_point_id=pickup_id,
         )
         return Response(SeatRequestSerializer(req).data, status=201)
+
+    @action(detail=False, methods=['post'], url_path='book-daily')
+    def book_daily(self, request):
+        """Daily booking → creates a payment_pending Subscription + HELD seat(s)
+        linked to it, so the student uploads a receipt (like term/monthly).
+        The ticket (QR) is issued only after the admin verifies the payment."""
+        user = request.user
+        cs = CompanySettings.load()
+        if user.role not in STAFF_ROLES and not cs.booking_daily_open:
+            return Response({'detail': 'الحجز اليومي مغلق حالياً من الإدارة'}, status=403)
+        d = request.data
+        date = d.get('date')
+        route_id = d.get('route')
+        university_id = d.get('university') or user.university_id
+        pickup_id = d.get('pickup_point') or None
+        trip_type = d.get('trip_type', 'go')  # go | return | round
+        if not (date and route_id and university_id):
+            return Response({'detail': 'البيانات ناقصة'}, status=400)
+        want_go = trip_type in ('go', 'round')
+        want_ret = trip_type in ('return', 'round')
+        go_slot_id = d.get('morning_slot')
+        ret_slot_id = d.get('return_slot')
+        if want_go and not go_slot_id:
+            return Response({'detail': 'اختر موعد الذهاب'}, status=400)
+        if want_ret and not ret_slot_id:
+            return Response({'detail': 'اختر موعد العودة'}, status=400)
+        route = Route.objects.get(pk=route_id)
+
+        # Price is computed server-side (never trust the client) from PricingRule.
+        def price_of(t):
+            row = (PricingRule.objects.filter(route_id=route_id, subscription_type=t, active=True)
+                   .order_by('-effective_date').first())
+            return Decimal(row.price) if row else None
+        legacy = price_of('daily') or Decimal('0')
+        go_price = price_of('daily_go') or legacy
+        ret_price = price_of('daily_return') or legacy
+        if trip_type == 'round':
+            amount = price_of('daily_round') or (go_price + ret_price)
+            sub_type = 'daily_round'
+        elif trip_type == 'return':
+            amount = ret_price
+            sub_type = 'daily_return'
+        else:
+            amount = go_price
+            sub_type = 'daily_go'
+
+        try:
+            with transaction.atomic():
+                sub = Subscription.objects.create(
+                    student=user, subscription_type=sub_type, route=route,
+                    university_id=university_id, pickup_point_id=pickup_id,
+                    morning_slot_id=go_slot_id if want_go else None,
+                    return_slot_id=ret_slot_id if want_ret else None,
+                    amount=amount, status=Subscription.Status.PAYMENT_PENDING,
+                )
+                seats = {}
+                if want_go:
+                    trip = _get_or_create_trip(date, route, morning_slot=MorningSlot.objects.get(pk=go_slot_id))
+                    _, obj, _ = book_specific_seat(
+                        trip=trip, student=user, seat_number=d.get('go_seat'),
+                        university_id=university_id, priority_type='daily',
+                        subscription=sub, pickup_point_id=pickup_id)
+                    seats['go'] = getattr(obj, 'seat_number', None)
+                if want_ret:
+                    trip = _get_or_create_trip(date, route, return_slot=ReturnSlot.objects.get(pk=ret_slot_id), direction='return')
+                    _, obj, _ = book_specific_seat(
+                        trip=trip, student=user, seat_number=d.get('ret_seat'),
+                        university_id=university_id, priority_type='daily',
+                        subscription=sub, pickup_point_id=pickup_id)
+                    seats['return'] = getattr(obj, 'seat_number', None)
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=409)
+        return Response({'subscription': SubscriptionSerializer(sub).data, 'seats': seats}, status=201)
 
     @action(detail=False, methods=['post'], url_path='book-seat')
     def book_seat(self, request):

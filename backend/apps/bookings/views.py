@@ -108,6 +108,15 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             if created.get('return'):
                 parts.append(f"عودة مقعد {created['return'].seat_number}")
             seat_msg = (' — ' + '، '.join(parts)) if parts else ''
+        elif sub.subscription_type.startswith('daily'):
+            # Daily: the seat(s) were HELD at booking — confirm them + issue QR.
+            from apps.operations.models import SeatRequest as _SR
+            from apps.operations.services import confirm_seat_payment
+            parts = []
+            for req in sub.seat_requests.filter(status=_SR.Status.HELD):
+                confirm_seat_payment(req)
+                parts.append(f"مقعد {req.seat_number}")
+            seat_msg = (' — ' + '، '.join(parts)) if parts else ''
 
         notify(sub.student, 'تم تأكيد اشتراكك',
                f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}{seat_msg}',
@@ -121,6 +130,10 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         sub = self.get_object()
         reason = request.data.get('rejection_reason', '')
         sub.reject(request.user, reason)
+        # Daily: free the seats that were HELD for this rejected booking.
+        if sub.subscription_type.startswith('daily'):
+            from apps.operations.models import SeatRequest as _SR
+            sub.seat_requests.filter(status=_SR.Status.HELD).update(status=_SR.Status.CANCELLED)
         notify(sub.student, 'تم رفض إثبات الدفع', reason or 'يرجى إعادة رفع إثبات دفع صحيح',
                link='/bookings', severity='error')
         return Response(SubscriptionSerializer(sub).data)
