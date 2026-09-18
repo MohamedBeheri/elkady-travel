@@ -19,6 +19,7 @@ SCREENS = [
     ('/', 'لوحة التحكم', 'عام'),
     ('/operations', 'لوحة المشرف', 'التشغيل'),
     ('/board', 'رحلات الغد', 'التشغيل'),
+    ('/day-manifest', 'كشف اليوم الشامل', 'التشغيل'),
     ('/subscriptions', 'الطلاب والاشتراكات', 'التشغيل'),
     ('/waiting', 'قوائم الانتظار', 'التشغيل'),
     ('/returns', 'رحلات العودة', 'التشغيل'),
@@ -41,7 +42,7 @@ SCREEN_KEYS = [s[0] for s in SCREENS]
 
 # Default access per role, mirroring the previous hardcoded sidebar gating so
 # nothing breaks on first deploy. Admin-only screens stay off for everyone else.
-_OPS = ['/', '/board', '/subscriptions', '/waiting', '/returns', '/payments', '/tourism']
+_OPS = ['/', '/board', '/day-manifest', '/subscriptions', '/waiting', '/returns', '/payments', '/tourism']
 _FLEET = ['/operations', '/fleet/vehicles', '/fleet/drivers', '/fleet/assignments',
           '/fleet/expenses', '/fleet/maintenance', '/fleet/fines',
           '/reports/finance', '/fleet/reports', '/fleet/trip-cost']

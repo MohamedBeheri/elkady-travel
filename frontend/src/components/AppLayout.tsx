@@ -80,6 +80,7 @@ export default function AppLayout() {
       key: 'g-ops', icon: <CarOutlined />, label: 'التشغيل', children: [
         { key: '/operations', icon: <DashboardOutlined />, label: 'لوحة المشرف' },
         { key: '/board', icon: <CarOutlined />, label: 'رحلات الغد' },
+        { key: '/day-manifest', icon: <ProfileOutlined />, label: 'كشف اليوم الشامل' },
         { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
         { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
         { key: '/returns', icon: <RollbackOutlined />, label: 'رحلات العودة' },

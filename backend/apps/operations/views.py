@@ -257,6 +257,110 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             row['is_full'] = row['available_seats'] <= 0 and cap > 0
         return Response({'date': date, 'trips': data})
 
+    @action(detail=False, methods=['get'], url_path='day-manifest')
+    def day_manifest(self, request):
+        """Full-day passenger manifest across ALL subscriptions (term/monthly/daily)
+        combined, grouped by route then by direction pattern for that date:
+        ذهاب فقط (go only) / عودة فقط (return only) / ذهاب وعودة (round trip).
+
+        Unlike `passengers` (one specific trip/slot), this reads term/monthly
+        seat locks directly — they hold a seat every day regardless of whether a
+        DailyTrip row has been lazily created yet for this date — plus any
+        one-off daily bookings confirmed for this date.
+        """
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        date = request.query_params.get('date') or timezone.localdate().isoformat()
+
+        absent_ids = set(SeatAbsence.objects.filter(date=date).values_list('term_lock_id', flat=True))
+        choice_by_lock = {
+            c.term_lock_id: c for c in
+            DailySlotChoice.objects.filter(date=date).select_related('morning_slot', 'return_slot')
+        }
+        daily_by_route = defaultdict(list)
+        daily_reqs = (
+            SeatRequest.objects
+            .filter(status=SeatRequest.Status.CONFIRMED, daily_trip__date=date)
+            .select_related('student', 'subscription', 'university', 'pickup_point',
+                             'daily_trip', 'daily_trip__morning_slot', 'daily_trip__return_slot')
+        )
+        for req in daily_reqs:
+            daily_by_route[req.daily_trip.route_id].append(req)
+
+        locks_by_route = defaultdict(list)
+        for lock in TermSeatLock.objects.filter(active=True).select_related(
+            'student', 'student__pickup_point', 'subscription', 'subscription__university',
+            'subscription__pickup_point', 'morning_slot', 'return_slot',
+        ):
+            locks_by_route[lock.route_id].append(lock)
+
+        route_ids = set(daily_by_route) | set(locks_by_route)
+        routes_out = []
+        for route in Route.objects.filter(id__in=route_ids).order_by('origin_label', 'name'):
+            by_student: dict = {}
+
+            def rec_for(student):
+                r = by_student.get(student.id)
+                if not r:
+                    r = by_student[student.id] = {
+                        'student_id': student.id,
+                        'student_name': student.full_name or student.username,
+                        'student_phone': student.phone or '',
+                        'university': '', 'pickup': '', 'subscription_type': '',
+                        'go': None, 'return': None,
+                    }
+                return r
+
+            for lock in locks_by_route.get(route.id, []):
+                if lock.id in absent_ids:
+                    continue
+                choice = choice_by_lock.get(lock.id)
+                is_return = lock.direction == 'return'
+                slot = (choice.return_slot if (is_return and choice and choice.return_slot_id) else
+                        choice.morning_slot if (not is_return and choice and choice.morning_slot_id) else
+                        (lock.return_slot if is_return else lock.morning_slot))
+                r = rec_for(lock.student)
+                uni = lock.subscription.university.name if (lock.subscription_id and lock.subscription.university_id) else ''
+                pp = (lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id)
+                      else lock.student.pickup_point)
+                r['university'] = r['university'] or uni
+                r['pickup'] = r['pickup'] or (pp.name if pp else '')
+                r['subscription_type'] = (lock.subscription.get_subscription_type_display()
+                                           if lock.subscription_id else 'اشتراك')
+                r['return' if is_return else 'go'] = {'seat': lock.seat_number, 'time': slot.name if slot else ''}
+
+            for req in daily_by_route.get(route.id, []):
+                r = rec_for(req.student)
+                r['university'] = r['university'] or (req.university.name if req.university_id else '')
+                r['pickup'] = r['pickup'] or (req.pickup_point.name if req.pickup_point_id else '')
+                r['subscription_type'] = (req.subscription.get_subscription_type_display()
+                                           if req.subscription_id else 'يومي')
+                is_return = req.daily_trip.direction == 'return'
+                slot = req.daily_trip.return_slot if is_return else req.daily_trip.morning_slot
+                r['return' if is_return else 'go'] = {'seat': req.seat_number, 'time': slot.name if slot else ''}
+
+            go_only, return_only, round_trip = [], [], []
+            for r in by_student.values():
+                bucket = round_trip if (r['go'] and r['return']) else go_only if r['go'] else return_only
+                bucket.append(r)
+            for bucket in (go_only, return_only, round_trip):
+                bucket.sort(key=lambda x: x['student_name'])
+
+            if go_only or return_only or round_trip:
+                routes_out.append({
+                    'route_id': route.id, 'route_name': route.name,
+                    'go_only': go_only, 'return_only': return_only, 'round_trip': round_trip,
+                    'totals': {
+                        'go_only': len(go_only), 'return_only': len(return_only), 'round_trip': len(round_trip),
+                        'total': len(go_only) + len(return_only) + len(round_trip),
+                    },
+                })
+
+        totals = {
+            k: sum(r['totals'][k] for r in routes_out) for k in ('go_only', 'return_only', 'round_trip', 'total')
+        }
+        return Response({'date': date, 'routes': routes_out, 'totals': totals})
+
     @action(detail=True, methods=['get'], url_path='passengers')
     def passengers(self, request, pk=None):
         """Passenger list for one trip, grouped by pickup point ordered by pickup time.

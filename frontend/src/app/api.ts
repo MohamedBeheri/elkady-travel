@@ -263,6 +263,9 @@ export const api = createApi({
     tripPassengers: b.query<any, number>({
       query: (id) => `operations/daily-trips/${id}/passengers/`, providesTags: ['SeatRequest'],
     }),
+    dayManifest: b.query<any, { date?: string } | void>({
+      query: (p) => `operations/daily-trips/day-manifest/${qs(p as any)}`, providesTags: ['SeatRequest', 'DailyTrip'],
+    }),
     runAllocation: b.mutation<any, { date: string }>({
       query: (body) => ({ url: 'operations/daily-trips/run-allocation/', method: 'POST', body }),
       invalidatesTags: ['DailyTrip', 'SeatRequest', 'Dashboard'],
@@ -485,7 +488,7 @@ export const {
   useSubscriptionsQuery, useCreateSubscriptionMutation, useDeleteSubscriptionMutation, useSubmitPaymentMutation,
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
   useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation,
-  useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useRunAllocationMutation,
+  useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useDayManifestQuery, useRunAllocationMutation,
   useSeatRequestsQuery, useBookSeatMutation, useCancelSeatMutation,
   useLayoutsQuery, useSeatmapForQuery, useSeatmapQuery, useBookSpecificSeatMutation, useBookDailyMutation,
   useConfirmSeatMutation, useReleaseSeatMutation, useMyTicketsQuery,

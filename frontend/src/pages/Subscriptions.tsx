@@ -313,27 +313,30 @@ export default function Subscriptions() {
       </Space>
 
       <Table
-        rowKey="id" loading={isFetching} scroll={{ x: 1100 }} dataSource={rows}
+        rowKey="id" loading={isFetching} scroll={{ x: 1550 }} dataSource={rows} tableLayout="fixed"
         pagination={{ pageSize: 20, showSizeChanger: true }}
         rowClassName={(r: any) => (r.whatsapp_notified_at ? 'sub-row-notified' : '')}
         columns={[
-          { title: 'الطالب', dataIndex: 'student_name', width: 200,
+          { title: 'الطالب', dataIndex: 'student_name', width: 180,
             sorter: (a: any, b: any) => (a.student_name || '').localeCompare(b.student_name || '', 'ar'), defaultSortOrder: undefined,
             render: (v, r: any) => (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-                <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{v}</span>
-                {r.whatsapp_notified_at && <Tag color="green" style={{ margin: 0 }}>✓ تم الإرسال</Tag>}
+                <span style={{ fontWeight: 600 }}>{v}</span>
+                {r.whatsapp_notified_at && <Tag color="green" style={{ margin: 0, whiteSpace: 'normal' }}>✓ تم الإرسال</Tag>}
               </div>
             ),
           },
-          { title: 'الهاتف', dataIndex: 'student_phone' },
-          { title: 'النوع', dataIndex: 'type_display', render: (v) => <Tag color="cyan">{v}</Tag> },
-          { title: 'المسار', dataIndex: 'route_name' },
-          { title: 'المركز', dataIndex: 'pickup_center_display', render: (v) => v || '—' },
-          { title: 'نقطة الالتقاط', dataIndex: 'pickup_name', render: (v) => v || '—' },
-          { title: 'المبلغ', dataIndex: 'amount', align: 'center', sorter: (a: any, b: any) => Number(a.amount) - Number(b.amount), render: (v) => `${Number(v || 0).toLocaleString()} ج.م` },
-          { title: 'طريقة الدفع', dataIndex: 'method_name', render: (v) => v || '—' },
-          { title: 'الحالة', dataIndex: 'status_display', render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
+          { title: 'الهاتف', dataIndex: 'student_phone', width: 130 },
+          { title: 'النوع', dataIndex: 'type_display', width: 160,
+            render: (v) => <Tag color="cyan" style={{ whiteSpace: 'normal', display: 'inline-block' }}>{v}</Tag> },
+          { title: 'المسار', dataIndex: 'route_name', width: 190,
+            render: (v) => <span style={{ wordBreak: 'break-word' }}>{v}</span> },
+          { title: 'المركز', dataIndex: 'pickup_center_display', width: 120, render: (v) => v || '—' },
+          { title: 'نقطة الالتقاط', dataIndex: 'pickup_name', width: 150, render: (v) => v || '—' },
+          { title: 'المبلغ', dataIndex: 'amount', width: 120, align: 'center', sorter: (a: any, b: any) => Number(a.amount) - Number(b.amount), render: (v) => `${Number(v || 0).toLocaleString()} ج.م` },
+          { title: 'طريقة الدفع', dataIndex: 'method_name', width: 130, render: (v) => v || '—' },
+          { title: 'الحالة', dataIndex: 'status_display', width: 140,
+            render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]} style={{ whiteSpace: 'normal', display: 'inline-block' }}>{v}</Tag> },
           {
             title: 'إجراءات', fixed: 'right', width: 200, render: (_, r: any) => (
               <Space>
