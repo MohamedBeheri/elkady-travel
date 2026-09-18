@@ -63,6 +63,36 @@ function BookingTogglesCard() {
   )
 }
 
+function AttendanceLockCard() {
+  const { message } = AntdApp.useApp()
+  const { data: company } = useCompanyQuery()
+  const [save, { isLoading }] = useSaveCompanyMutation()
+  const cutoff = company?.attendance_lock_time
+  const cutoffValue = cutoff ? dayjs(cutoff, 'HH:mm:ss') : null
+  const saveCutoff = async (t: dayjs.Dayjs | null) => {
+    try {
+      await save({ attendance_lock_time: t ? t.format('HH:mm:ss') : null }).unwrap()
+      message.success(t ? `تأكيدات رحلة الغد هتتقفل تلقائياً الساعة ${t.format('HH:mm')}` : 'تم إلغاء القفل التلقائي')
+    } catch { message.error('تعذّر الحفظ') }
+  }
+  return (
+    <Card size="small" style={{ marginBottom: 14 }}
+      title={<span><ClockCircleOutlined /> <b>قفل تأكيدات الترم/الشهري وتشغيل التخصيص تلقائياً</b></span>}
+      extra={<Tag color="orange">تشغيل يومي تلقائي</Tag>}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 600 }}>قفل تأكيدات حضور رحلة الغد بعد الساعة:</span>
+        <TimePicker value={cutoffValue} onChange={saveCutoff} format="HH:mm" allowClear disabled={isLoading}
+          placeholder="بدون قفل تلقائي" style={{ width: 130 }} />
+      </div>
+      <div style={{ color: '#64748b', fontSize: 12, marginTop: 8 }}>
+        {cutoffValue
+          ? `من الساعة ${cutoffValue.format('HH:mm')}: أي مشترك ترم/شهري لم يؤكد حضوره ولم يعتذر صراحةً يُعتبر غائباً لرحلة الغد فقط ويُحرَّر مقعده، ثم يُشغَّل التخصيص تلقائياً فوراً لتوزيع المقاعد المحررة على قائمة انتظار اليومي — بدون أي إجراء يدوي منك.`
+          : 'اتركه فارغاً لتعطيل هذا الإجراء التلقائي — يبقى زر «تشغيل التخصيص» في صفحة رحلات الغد يدوياً كما هو.'}
+      </div>
+    </Card>
+  )
+}
+
 function Section({ title, children }: any) {
   return <div style={{ marginBottom: 20 }}>
     <div className="sec-head">{title}</div>
@@ -117,6 +147,7 @@ export default function Dashboard() {
       </div>
 
       <BookingTogglesCard />
+      <AttendanceLockCard />
 
       <Section title="الطلاب">
         <Kpi title="إجمالي الطلاب" value={s?.total ?? 0} icon={<TeamOutlined />} color={NAVY} />

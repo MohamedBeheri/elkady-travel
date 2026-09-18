@@ -13,18 +13,19 @@ export default function Attendance() {
   const [setAttendance, { isLoading }] = useSetAttendanceMutation()
 
   const seats = data?.seats || []
+  const locked = !!data?.locked
 
   const confirm = async (lock_id: number, slot_id: number) => {
     try {
       await setAttendance({ lock_id, date: dateStr, attending: true, slot_id }).unwrap()
       message.success('تم تأكيد حضورك للرحلة المختارة')
-    } catch { message.error('تعذر تحديث الحالة') }
+    } catch (e: any) { message.error(e?.data?.detail || 'تعذر تحديث الحالة') }
   }
   const decline = async (lock_id: number) => {
     try {
       await setAttendance({ lock_id, date: dateStr, attending: false }).unwrap()
       message.success('تم إخلاء مقعدك لهذا اليوم')
-    } catch { message.error('تعذر تحديث الحالة') }
+    } catch (e: any) { message.error(e?.data?.detail || 'تعذر تحديث الحالة') }
   }
 
   return (
@@ -45,11 +46,17 @@ export default function Attendance() {
           disabledDate={(d) => d && d < dayjs().startOf('day')} allowClear={false} />
       </Card>
 
+      {locked && (
+        <Alert type="warning" showIcon style={{ marginBottom: 16 }}
+          message="تأكيدات هذا اليوم مُقفلة الآن"
+          description={`الوقت انتهى (بعد الساعة ${data?.lock_time}) — تم حسم من يحضر بكرة تلقائياً، ولا يمكن تعديل قرارك بعد الآن.`} />
+      )}
+
       {isFetching ? <Spin /> : seats.length === 0 ? (
         <Empty description="لا يوجد لديك اشتراك ترم/شهري بمقعد ثابت. احجز اشتراكاً أولاً." />
       ) : (
         <Row gutter={[16, 16]}>
-          {seats.map((s: any) => <SeatCard key={s.lock_id} s={s} isLoading={isLoading} confirm={confirm} decline={decline} />)}
+          {seats.map((s: any) => <SeatCard key={s.lock_id} s={s} isLoading={isLoading} locked={locked} confirm={confirm} decline={decline} />)}
         </Row>
       )}
 
@@ -59,7 +66,7 @@ export default function Attendance() {
   )
 }
 
-function SeatCard({ s, isLoading, confirm, decline }: any) {
+function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
   // Local editable slot before hitting Confirm — defaults to the current pick.
   const [pending, setPending] = useState<number>(s.chosen_slot_id)
   const chosen = s.available_slots.find((x: any) => x.id === pending) || s.available_slots.find((x: any) => x.id === s.chosen_slot_id)
@@ -81,7 +88,7 @@ function SeatCard({ s, isLoading, confirm, decline }: any) {
         </div>
         <div style={{ marginBottom: 10 }}>
           <div style={{ marginBottom: 6, color: '#475569' }}>الميعاد لهذا اليوم:</div>
-          <Select style={{ width: '100%' }} value={pending} onChange={setPending}
+          <Select style={{ width: '100%' }} value={pending} onChange={setPending} disabled={locked}
             options={(s.available_slots || []).map((o: any) => ({
               value: o.id,
               label: `${o.name}${o.time ? ` — ⏰ ${o.time}` : ''}${o.is_default ? ' (افتراضي)' : ''}`,
@@ -94,10 +101,10 @@ function SeatCard({ s, isLoading, confirm, decline }: any) {
           {differsFromDefault && <Tag color="orange" style={{ marginTop: 8 }}>ميعاد مختلف عن الافتراضي</Tag>}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Button type="primary" loading={isLoading} onClick={() => confirm(s.lock_id, pending)}>
+          <Button type="primary" loading={isLoading} disabled={locked} onClick={() => confirm(s.lock_id, pending)}>
             {s.attending && pending === s.chosen_slot_id ? 'تحديث الاختيار' : 'سأحضر على هذا الميعاد'}
           </Button>
-          {s.attending && <Button danger loading={isLoading} onClick={() => decline(s.lock_id)}>لن أحضر هذا اليوم</Button>}
+          {s.attending && <Button danger loading={isLoading} disabled={locked} onClick={() => decline(s.lock_id)}>لن أحضر هذا اليوم</Button>}
         </div>
       </Card>
     </Col>

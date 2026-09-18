@@ -236,6 +236,31 @@ class SeatAbsence(models.Model):
         return f'{self.term_lock} غائب {self.date}'
 
 
+class AttendanceConfirmation(models.Model):
+    """Explicit 'I will attend' declared by a term/monthly rider for one date.
+
+    Distinguishes a student who actively confirmed from one who never opened
+    the attendance page at all — used only once the daily attendance lock time
+    (CompanySettings.attendance_lock_time) has passed, at which point silence
+    is treated as absent (a SeatAbsence is auto-created) so the freed seat can
+    go to the daily waiting list. See services.auto_close_attendance.
+    """
+    term_lock = models.ForeignKey(
+        TermSeatLock, on_delete=models.CASCADE, related_name='confirmations',
+        verbose_name=_('مقعد الترم'),
+    )
+    date = models.DateField(verbose_name=_('التاريخ'))
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _('تأكيد حضور')
+        verbose_name_plural = _('تأكيدات الحضور')
+        unique_together = [('term_lock', 'date')]
+
+    def __str__(self):
+        return f'{self.term_lock} أكّد حضوره {self.date}'
+
+
 class DailySlotChoice(models.Model):
     """Per-day slot pick for a subscriber whose lock is on a different (default) slot.
 

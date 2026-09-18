@@ -108,5 +108,5 @@ class CompanySettingsSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'tagline', 'phone', 'logo',
             'booking_term_open', 'booking_monthly_open', 'booking_daily_open',
-            'daily_booking_cutoff_time',
+            'daily_booking_cutoff_time', 'attendance_lock_time',
         ]

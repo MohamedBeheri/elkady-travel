@@ -15,7 +15,9 @@ from apps.bookings.serializers import SubscriptionSerializer
 from apps.config_app.models import CompanySettings, MorningSlot, PricingRule, Route, ReturnSlot, SeatCapacity
 from apps.notifications.models import notify
 from .layouts import LAYOUTS, layout_capacity
-from .models import DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock
+from .models import (
+    AttendanceConfirmation, DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence, SeatRequest, TermSeatLock,
+)
 from .serializers import (
     DailyTripSerializer, ReturnBookingSerializer, SeatRequestSerializer,
 )
@@ -121,7 +123,25 @@ def attendance(request):
             'subscription_type': lock.subscription.subscription_type if lock.subscription_id else '',
             'attending': lock.id not in absences,
         })
-    return Response({'date': date, 'seats': out})
+    cutoff = _attendance_lock_cutoff(date)
+    locked = bool(cutoff and timezone.localtime().time() >= cutoff)
+    return Response({
+        'date': date, 'seats': out,
+        'lock_time': cutoff.strftime('%H:%M') if cutoff else None,
+        'locked': locked,
+    })
+
+
+def _attendance_lock_cutoff(date):
+    """The configured cutoff time if it applies to this date (tomorrow only), else None."""
+    cs = CompanySettings.load()
+    cutoff = cs.attendance_lock_time
+    if not cutoff:
+        return None
+    tomorrow = (timezone.localdate() + timezone.timedelta(days=1)).isoformat()
+    if str(date) != tomorrow:
+        return None
+    return cutoff
 
 
 @api_view(['POST'])
@@ -131,8 +151,13 @@ def set_attendance(request):
 
     Body: {lock_id, date, attending (bool), slot_id? (int)}
       - attending=false → create SeatAbsence, clear any DailySlotChoice
-      - attending=true, slot_id == default → clear absence + clear choice (use default)
-      - attending=true, slot_id != default → clear absence, upsert DailySlotChoice
+      - attending=true, slot_id == default → clear absence + clear choice (use default),
+        record an explicit AttendanceConfirmation
+      - attending=true, slot_id != default → clear absence, upsert DailySlotChoice,
+        record an explicit AttendanceConfirmation
+
+    Once CompanySettings.attendance_lock_time has passed for tomorrow's date, no more
+    changes are accepted here — see services.auto_close_attendance for what happens next.
     """
     user = request.user
     lock_id = request.data.get('lock_id')
@@ -141,6 +166,11 @@ def set_attendance(request):
     slot_id = request.data.get('slot_id')
     if lock_id is None or not date:
         return Response({'detail': 'البيانات ناقصة'}, status=400)
+    cutoff = _attendance_lock_cutoff(date)
+    if cutoff and timezone.localtime().time() >= cutoff:
+        return Response({
+            'detail': f'تأكيدات حضور رحلة الغد مُقفلة الآن (بعد الساعة {cutoff.strftime("%H:%M")}).',
+        }, status=403)
     try:
         lock = TermSeatLock.objects.get(pk=lock_id, student=user, active=True)
     except TermSeatLock.DoesNotExist:
@@ -149,9 +179,11 @@ def set_attendance(request):
     if declining:
         SeatAbsence.objects.get_or_create(term_lock=lock, date=date, defaults={'created_by': user})
         DailySlotChoice.objects.filter(term_lock=lock, date=date).delete()
+        AttendanceConfirmation.objects.filter(term_lock=lock, date=date).delete()
         return Response({'attending': False})
 
     SeatAbsence.objects.filter(term_lock=lock, date=date).delete()
+    AttendanceConfirmation.objects.get_or_create(term_lock=lock, date=date)
     default_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
     if slot_id and int(slot_id) != default_id:
         # Save the per-day slot pick.

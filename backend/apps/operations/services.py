@@ -15,7 +15,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .layouts import LAYOUTS, DEFAULT_LAYOUT, seat_set
-from .models import DailyTrip, SeatAbsence, SeatRequest, TermSeatLock, PRIORITY_RANK
+from .models import AttendanceConfirmation, DailyTrip, SeatAbsence, SeatRequest, TermSeatLock, PRIORITY_RANK
 
 
 def make_qr(text):
@@ -427,3 +427,20 @@ def run_daily_allocation(date):
         DailyTrip.objects.filter(pk=trip.pk).update(allocated_at=now)
         count += 1
     return count
+
+
+def auto_close_attendance(date):
+    """Lock tomorrow's term/monthly attendance: anyone who neither confirmed nor
+    declined is treated as absent for this date only (their seat is freed), then
+    the normal allocation runs so the daily waiting list can claim freed seats.
+
+    Idempotent — calling it again after it already ran for `date` is a no-op for
+    the locks it already processed (they now have a SeatAbsence row).
+    """
+    confirmed_ids = set(AttendanceConfirmation.objects.filter(date=date).values_list('term_lock_id', flat=True))
+    absent_ids = set(SeatAbsence.objects.filter(date=date).values_list('term_lock_id', flat=True))
+    silent = TermSeatLock.objects.filter(active=True).exclude(pk__in=confirmed_ids | absent_ids)
+    made_absent = SeatAbsence.objects.bulk_create(
+        [SeatAbsence(term_lock=lock, date=date) for lock in silent])
+    run_daily_allocation(date)
+    return len(made_absent)
