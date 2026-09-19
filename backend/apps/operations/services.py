@@ -557,10 +557,19 @@ def reschedule_daily_booking(*, subscription, new_date, new_route, new_morning_s
     changed.
     """
     student = subscription.student
+    # NOTE: select_related is limited to 'daily_trip' only (not its nullable
+    # morning_slot/return_slot) — Postgres rejects SELECT ... FOR UPDATE over
+    # a query with an outer join on the nullable side ("FOR UPDATE cannot be
+    # applied to the nullable side of an outer join"), which every SeatRequest
+    # here hits since exactly one of those two FKs is null depending on
+    # direction. SQLite doesn't enforce this, which is why it only ever
+    # surfaced in production. leg_departure_at() below still works fine —
+    # accessing trip.morning_slot/return_slot just issues a plain (non-locked)
+    # follow-up query instead of being part of the locked join.
     old_reqs = list(
         SeatRequest.objects.select_for_update()
         .filter(subscription=subscription, status=SeatRequest.Status.CONFIRMED)
-        .select_related('daily_trip', 'daily_trip__morning_slot', 'daily_trip__return_slot')
+        .select_related('daily_trip')
     )
     if not old_reqs:
         raise ValueError('لا يوجد حجز مؤكد لهذا الاشتراك حالياً.')
