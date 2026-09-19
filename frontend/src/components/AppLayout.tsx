@@ -7,7 +7,7 @@ import {
   ApartmentOutlined, SwapOutlined,
 } from '@ant-design/icons'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../app/store'
 import { logout } from '../app/authSlice'
 import { useUnreadNotificationsQuery, useMarkAllReadMutation, usePendingCountsQuery, useCompanyQuery } from '../app/api'
@@ -55,12 +55,43 @@ function Bell() {
   )
 }
 
+/** Live clock in the header showing the SERVER's date/time — the one every
+ * cutoff/deadline in the system (booking windows, reschedule lead time,
+ * attendance lock) is actually enforced against, which can differ from
+ * whatever a staff member's own device shows. Resyncs from `serverTime`
+ * (refetched periodically) and ticks locally every second in between. */
+function ServerClock({ serverTime }: { serverTime?: string }) {
+  const offsetRef = useRef(0)
+  const [, forceTick] = useState(0)
+
+  useEffect(() => {
+    if (serverTime) offsetRef.current = new Date(serverTime).getTime() - Date.now()
+  }, [serverTime])
+
+  useEffect(() => {
+    const id = setInterval(() => forceTick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (!serverTime) return null
+  const now = new Date(Date.now() + offsetRef.current)
+  const dateStr = now.toLocaleDateString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+  return (
+    <span style={{ fontSize: 13, color: '#cbd5e1', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <ClockCircleOutlined />
+      {dateStr} — {timeStr}
+    </span>
+  )
+}
+
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const dispatch = useAppDispatch()
   const user = useAppSelector((s) => s.auth.user)
-  const { data: company } = useCompanyQuery()
+  const { data: company } = useCompanyQuery(undefined, { pollingInterval: 60000 })
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.lg
   const [collapsed, setCollapsed] = useState(false)
@@ -200,6 +231,7 @@ export default function AppLayout() {
             <span style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{isStaff ? 'بوابة الإدارة' : 'بوابة الطالب'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            {screens.sm && <ServerClock serverTime={company?.server_time} />}
             <Bell />
             <Dropdown
               menu={{ items: [

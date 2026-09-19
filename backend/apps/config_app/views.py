@@ -160,7 +160,11 @@ def company_settings(request):
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(ser.data)
-    return Response(CompanySettingsSerializer(obj).data)
+    from django.utils import timezone
+    # Exposed so the admin header can show the SERVER clock — the one every
+    # cutoff/deadline rule in the system is actually enforced against, which
+    # can differ from whatever time a staff member's own device shows.
+    return Response({**CompanySettingsSerializer(obj).data, 'server_time': timezone.localtime().isoformat()})
 
 
 @api_view(['GET'])
