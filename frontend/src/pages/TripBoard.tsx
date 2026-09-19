@@ -8,6 +8,7 @@ import {
   useDeleteEmptyTripMutation,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
+import { StudentLink } from '../components/StudentProfileModal'
 import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 function SeatManager({ trip }: { trip: any }) {
@@ -44,10 +45,14 @@ function SeatManager({ trip }: { trip: any }) {
 function manifestPDF(trip: any, data: any) {
   const cols = SHOW_SEAT_NUMBERS ? 6 : 5
   const sections = (data.groups || []).map((g: any) => {
-    const rows = (g.passengers || []).map((p: any, i: number) => `<tr>${[
+    // Only confirmed riders belong on the printed driver roster — a held
+    // (unpaid) booking might never actually show up.
+    const confirmed = (g.passengers || []).filter((p: any) => p.status !== 'held')
+    if (!confirmed.length) return ''
+    const rows = confirmed.map((p: any, i: number) => `<tr>${[
       i + 1, ...(SHOW_SEAT_NUMBERS ? [p.seat_number ?? ''] : []), p.student_name ?? '', p.university ?? '', p.student_phone ?? '', p.kind ?? '',
     ].map((c) => `<td>${c ?? ''}</td>`).join('')}</tr>`).join('')
-    return `<tr class="grp"><td colspan="${cols}">⏰ ${g.time || '—'} — ${g.pickup} (${(g.passengers || []).length} راكب)</td></tr>${rows}`
+    return `<tr class="grp"><td colspan="${cols}">⏰ ${g.time || '—'} — ${g.pickup} (${confirmed.length} راكب)</td></tr>${rows}`
   }).join('')
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>كشف ركاب — ${trip.route_name || ''}</title><style>
@@ -114,11 +119,17 @@ function Passengers({ trip }: { trip: any }) {
             columns={[
               ...(SHOW_SEAT_NUMBERS ? [{ title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center' as const, render: (v: any) => <b>{v}</b> }] : []),
               { title: 'الطالب', dataIndex: 'student_name', render: (v: string, r: any) => (
-                <span>{v}{r.rescheduled && <Tag color="gold" style={{ marginInlineStart: 6 }}>مؤجل</Tag>}</span>
+                <span>
+                  <StudentLink id={r.student_id} name={v} />
+                  {r.rescheduled && <Tag color="gold" style={{ marginInlineStart: 6 }}>مؤجل</Tag>}
+                </span>
               ) },
               { title: 'الجامعة', dataIndex: 'university' },
               { title: 'الهاتف', dataIndex: 'student_phone' },
               { title: 'النوع', dataIndex: 'kind', render: (v) => <Tag>{v}</Tag> },
+              { title: 'الحالة', dataIndex: 'status_display', render: (v: string, r: any) => (
+                <Tag color={r.status === 'held' ? 'gold' : 'green'}>{v}</Tag>
+              ) },
             ]}
           />
         </div>

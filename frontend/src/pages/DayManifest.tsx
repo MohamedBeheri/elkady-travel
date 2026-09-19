@@ -6,6 +6,7 @@ import {
   useDayManifestQuery, useRoutesQuery, useUniversitiesQuery, useMorningSlotsQuery, useReturnSlotsQuery,
   useDestinationsQuery,
 } from '../app/api'
+import { StudentLink } from '../components/StudentProfileModal'
 import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 const CAT_LABEL: Record<string, string> = { go_only: 'ذهاب فقط', return_only: 'عودة فقط', round_trip: 'ذهاب وعودة' }
@@ -20,7 +21,7 @@ function legLabel(leg: any) {
 
 function passengerColumns() {
   return [
-    { title: 'الطالب', dataIndex: 'student_name', width: 170 },
+    { title: 'الطالب', dataIndex: 'student_name', width: 170, render: (v: string, r: any) => <StudentLink id={r.student_id} name={v} /> },
     { title: 'الهاتف', dataIndex: 'student_phone', width: 120 },
     { title: 'الجامعة', dataIndex: 'university', render: (v: string) => v || '—' },
     { title: 'نقطة الالتقاط', dataIndex: 'pickup', render: (v: string) => v || '—' },

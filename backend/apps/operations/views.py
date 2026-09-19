@@ -438,9 +438,11 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         locks = list((base_qs | override_qs).distinct().select_related(
             'student', 'subscription', 'subscription__university', 'subscription__pickup_point',
             'student__pickup_point'))
-        # One-off (daily) confirmed seat bookings for this trip.
-        reqs = trip.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).select_related(
-            'student', 'university', 'pickup_point')
+        # One-off (daily) bookings for this trip — confirmed AND held (still
+        # awaiting payment approval), so the admin can see who's pending too.
+        reqs = trip.seat_requests.filter(
+            status__in=[SeatRequest.Status.CONFIRMED, SeatRequest.Status.HELD],
+        ).select_related('student', 'university', 'pickup_point')
         # Riders who reached THIS trip via self-service reschedule (not their
         # original booking) — flagged so the driver/admin sees it's a change.
         rescheduled_student_ids = set(
@@ -448,7 +450,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Bucket passengers by pickup point (id/name), each with the point's time.
         buckets: dict = {}  # pp_id -> {name, time, sequence, passengers[]}
-        def add(pp, student, university_name, seat_number, kind_label, rescheduled=False):
+        def add(pp, student, university_name, seat_number, kind_label, status='confirmed', rescheduled=False):
             pp_id = pp.id if pp else 0
             b = buckets.get(pp_id)
             if not b:
@@ -458,10 +460,13 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
                     'sequence': pp.sequence if pp else 9999, 'time': t, 'passengers': [],
                 }
             b['passengers'].append({
+                'student_id': student.id,
                 'student_name': student.full_name or student.username,
                 'student_phone': student.phone or '',
                 'university': university_name or '',
-                'seat_number': seat_number, 'kind': kind_label, 'rescheduled': rescheduled,
+                'seat_number': seat_number, 'kind': kind_label,
+                'status': status, 'status_display': 'معلّق (بانتظار الدفع)' if status == 'held' else 'مؤكد',
+                'rescheduled': rescheduled,
             })
         for lock in locks:
             pp = lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id) else lock.student.pickup_point
@@ -470,6 +475,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             add(pp, lock.student, uni_name, lock.seat_number, sub_label)
         for r in reqs:
             add(r.pickup_point, r.student, r.university.name if r.university_id else '', r.seat_number, 'يومي',
+                status='held' if r.status == SeatRequest.Status.HELD else 'confirmed',
                 rescheduled=r.student_id in rescheduled_student_ids)
 
         # Sort: first by the point's time (empty last), then by sequence.
@@ -479,7 +485,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             g['passengers'].sort(key=lambda p: (p['university'], p['student_name']))
         return Response({
             'trip': DailyTripSerializer(trip).data,
-            'total': sum(len(g['passengers']) for g in groups),
+            'total': sum(1 for g in groups for p in g['passengers'] if p['status'] == 'confirmed'),
             'groups': groups,
         })
 
