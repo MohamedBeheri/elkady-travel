@@ -1,4 +1,4 @@
-import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Tooltip, Row, Col } from 'antd'
+import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Tooltip } from 'antd'
 import { ThunderboltOutlined, FilePdfOutlined, CarOutlined, RollbackOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
@@ -222,32 +222,30 @@ export default function TripBoard() {
         </Space>
       }
     >
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={12}>
-          <Card
-            size="small" type="inner"
-            title={<Space><CarOutlined style={{ color: '#0B2E5E' }} />رحلات الذهاب ({goTrips.length})</Space>}
-          >
-            <Table
-              rowKey="id" loading={isFetching} dataSource={goTrips} scroll={{ x: 640 }} pagination={false}
-              locale={{ emptyText: <Empty description="لا توجد رحلات ذهاب لهذا اليوم بعد" /> }}
-              columns={columns}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card
-            size="small" type="inner"
-            title={<Space><RollbackOutlined style={{ color: '#EC6A16' }} />رحلات العودة ({returnTrips.length})</Space>}
-          >
-            <Table
-              rowKey="id" loading={isFetching} dataSource={returnTrips} scroll={{ x: 640 }} pagination={false}
-              locale={{ emptyText: <Empty description="لا توجد رحلات عودة لهذا اليوم بعد" /> }}
-              columns={columns}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Card
+          size="small" type="inner"
+          title={<Space><CarOutlined style={{ color: '#0B2E5E' }} />رحلات الذهاب ({goTrips.length})</Space>}
+        >
+          <Table
+            rowKey="id" loading={isFetching} dataSource={goTrips} scroll={{ x: 800 }}
+            pagination={goTrips.length > 6 ? { pageSize: 6 } : false}
+            locale={{ emptyText: <Empty description="لا توجد رحلات ذهاب لهذا اليوم بعد" /> }}
+            columns={columns}
+          />
+        </Card>
+        <Card
+          size="small" type="inner"
+          title={<Space><RollbackOutlined style={{ color: '#EC6A16' }} />رحلات العودة ({returnTrips.length})</Space>}
+        >
+          <Table
+            rowKey="id" loading={isFetching} dataSource={returnTrips} scroll={{ x: 800 }}
+            pagination={returnTrips.length > 6 ? { pageSize: 6 } : false}
+            locale={{ emptyText: <Empty description="لا توجد رحلات عودة لهذا اليوم بعد" /> }}
+            columns={columns}
+          />
+        </Card>
+      </Space>
 
       <Drawer
         title={openTrip ? `ركاب: ${openTrip.slot_name} — ${openTrip.route_name}` : ''}
