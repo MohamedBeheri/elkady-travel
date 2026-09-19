@@ -9,6 +9,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     student_phone = serializers.CharField(source='student.phone', read_only=True)
     route_name = serializers.CharField(source='route.name', read_only=True)
     destination_name = serializers.CharField(source='route.destination.name', read_only=True)
+    return_destination_name = serializers.CharField(source='route.effective_return_destination.name', read_only=True)
     university_name = serializers.CharField(source='university.name', read_only=True)
     pickup_name = serializers.CharField(source='pickup_point.name', read_only=True)
     pickup_center = serializers.CharField(source='pickup_point.center', read_only=True)
@@ -24,7 +25,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'student', 'student_name', 'student_national_id', 'student_phone',
             'subscription_type', 'type_display', 'route', 'route_name',
-            'destination_name', 'university', 'university_name',
+            'destination_name', 'return_destination_name', 'university', 'university_name',
             'pickup_point', 'pickup_name', 'pickup_center', 'pickup_center_display',
             'morning_slot', 'morning_slot_name', 'return_slot', 'return_slot_name',
             'amount', 'status', 'status_display',

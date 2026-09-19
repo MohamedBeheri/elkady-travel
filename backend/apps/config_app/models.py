@@ -63,20 +63,42 @@ class College(models.Model):
 
 
 class Route(models.Model):
-    """An origin corridor → destination, e.g. Shebin/Quesna/Benha → Badr."""
+    """An origin corridor → destination, e.g. Shebin/Quesna/Benha → Badr.
+
+    ``destination`` is where the GO leg ends. Almost every route's return leg
+    just retraces the same cities back to the origin, so a single field
+    covers both directions fine. A few routes don't: e.g. الباجور ← بدر's
+    return doesn't end back at الباجور, it continues to شبين. For those,
+    ``return_destination`` overrides the label for return-direction trips,
+    tickets and reports only — it's optional and defaults to matching
+    ``destination`` (same symmetric behavior every other route already has).
+    """
     code = models.CharField(max_length=40, unique=True, verbose_name=_('الكود'))
     origin_label = models.CharField(max_length=150, verbose_name=_('خط الانطلاق'))
     name = models.CharField(max_length=180, verbose_name=_('اسم المسار'))
     name_en = models.CharField(max_length=180, blank=True, verbose_name=_('الاسم بالإنجليزية'))
     destination = models.ForeignKey(
         Destination, on_delete=models.PROTECT, related_name='routes',
-        verbose_name=_('الوجهة'),
+        verbose_name=_('الوجهة (ذهاب)'),
+    )
+    return_destination = models.ForeignKey(
+        Destination, on_delete=models.PROTECT, related_name='return_routes',
+        null=True, blank=True, verbose_name=_('الوجهة عند العودة (اختياري)'),
+        help_text=_('اتركها فارغة لو العودة بترجع لنفس نقطة انطلاق الذهاب — '
+                     'عبّيها بس لو خط العودة بينتهي في مدينة مختلفة.'),
     )
     active = models.BooleanField(default=True, verbose_name=_('نشط'))
     seat_selection_enabled = models.BooleanField(
         default=True, verbose_name=_('إظهار خريطة اختيار المقاعد للطالب'),
         help_text=_('عند التفعيل يختار الطالب مقعده من الرسم؛ وإلا يُخصَّص له مقعد تلقائياً.'),
     )
+
+    @property
+    def effective_return_destination(self):
+        return self.return_destination or self.destination
+
+    def destination_for(self, direction):
+        return self.return_destination if (direction == 'return' and self.return_destination_id) else self.destination
 
     class Meta:
         verbose_name = _('مسار')

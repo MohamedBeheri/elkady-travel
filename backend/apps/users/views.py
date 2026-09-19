@@ -73,7 +73,7 @@ class UserViewSet(viewsets.ModelViewSet):
         today = timezone.localdate()
 
         subs = Subscription.objects.filter(student=student).select_related(
-            'route', 'route__destination', 'university', 'pickup_point', 'payment_method',
+            'route', 'route__destination', 'route__return_destination', 'university', 'pickup_point', 'payment_method',
         ).order_by('-created_at')
 
         locks = TermSeatLock.objects.filter(student=student, active=True).select_related(

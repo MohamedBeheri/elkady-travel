@@ -228,7 +228,7 @@ def _active_priority(student, route):
 
 
 class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = DailyTrip.objects.select_related('route', 'route__destination', 'morning_slot').all()
+    queryset = DailyTrip.objects.select_related('route', 'route__destination', 'route__return_destination', 'morning_slot').all()
     serializer_class = DailyTripSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['date', 'route', 'morning_slot']

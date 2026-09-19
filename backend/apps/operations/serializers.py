@@ -27,7 +27,7 @@ class SeatRequestSerializer(serializers.ModelSerializer):
 class DailyTripSerializer(serializers.ModelSerializer):
     route_name = serializers.CharField(source='route.name', read_only=True)
     route_origin = serializers.CharField(source='route.origin_label', read_only=True)
-    destination_name = serializers.CharField(source='route.destination.name', read_only=True)
+    destination_name = serializers.SerializerMethodField()
     slot_name = serializers.CharField(source='slot_label', read_only=True)
     direction_display = serializers.CharField(source='get_direction_display', read_only=True)
     confirmed_count = serializers.IntegerField(read_only=True)
@@ -49,6 +49,9 @@ class DailyTripSerializer(serializers.ModelSerializer):
             'confirmed_count', 'waiting_count', 'available_seats', 'allocated_at',
             'occupancy_percent', 'is_full',
         ]
+
+    def get_destination_name(self, obj):
+        return obj.route.destination_for(obj.direction).name
 
     def get_occupancy_percent(self, obj):
         cap = obj.effective_capacity or 0

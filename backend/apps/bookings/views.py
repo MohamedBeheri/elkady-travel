@@ -30,7 +30,8 @@ class SubscriptionFilter(django_filters.FilterSet):
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     queryset = Subscription.objects.select_related(
-        'student', 'route', 'route__destination', 'university', 'pickup_point', 'payment_method',
+        'student', 'route', 'route__destination', 'route__return_destination',
+        'university', 'pickup_point', 'payment_method',
     ).all()
     permission_classes = [IsAuthenticated]
     filterset_class = SubscriptionFilter

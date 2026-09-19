@@ -152,7 +152,9 @@ function RoutesTab() {
         columns={[
           { title: 'الكود', dataIndex: 'code' },
           { title: 'الاسم', dataIndex: 'name' },
-          { title: 'الوجهة', dataIndex: 'destination_name' },
+          { title: 'الوجهة (ذهاب)', dataIndex: 'destination_name' },
+          { title: 'الوجهة (عودة)', render: (_, r: any) => r.return_destination
+            ? <Tag color="purple">{r.return_destination_name}</Tag> : <span style={{ color: '#94a3b8' }}>مثل الذهاب</span> },
           { title: 'نقاط', render: (_, r: any) => r.pickup_points?.length || 0 },
           { title: 'خريطة المقاعد', dataIndex: 'seat_selection_enabled', render: (v) => v ? <Tag color="blue">تظهر</Tag> : <Tag color="orange">تلقائي</Tag> },
           { title: 'نشط', dataIndex: 'active', render: (v) => v ? <Tag color="green">نعم</Tag> : <Tag>لا</Tag> },
@@ -169,8 +171,13 @@ function RoutesTab() {
           <Form.Item name="code" label="الكود" rules={[{ required: true }]}><Input disabled={!!editing} /></Form.Item>
           <Form.Item name="origin_label" label="خط الانطلاق" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="name" label="اسم المسار" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="destination" label="الوجهة" rules={[{ required: true }]}>
+          <Form.Item name="destination" label="الوجهة (ذهاب)" rules={[{ required: true }]}>
             <Select options={(dests?.results || dests || []).map((d: any) => ({ value: d.id, label: d.name }))} />
+          </Form.Item>
+          <Form.Item name="return_destination" label="الوجهة عند العودة (اختياري)"
+            tooltip="اتركها فاضية لو العودة بترجع لنفس نقطة انطلاق الذهاب. اختر وجهة بس لو خط العودة بينتهي في مدينة مختلفة."
+            extra="مثال: خط ذهاب الباجور ← بدر، لكن خط العودة فعلياً بينتهي في شبين مش الباجور.">
+            <Select allowClear options={(dests?.results || dests || []).map((d: any) => ({ value: d.id, label: d.name }))} />
           </Form.Item>
           <Form.Item name="seat_selection_enabled" label="إظهار خريطة اختيار المقاعد للطالب" valuePropName="checked" initialValue={true}
             tooltip="عند التفعيل يختار الطالب مقعده من الرسم؛ وإلا يُخصَّص له مقعد تلقائياً." extra="لو أُطفئت، لن تظهر خريطة المقاعد في الحجز ويُخصَّص المقعد تلقائياً.">

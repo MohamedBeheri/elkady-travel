@@ -39,13 +39,15 @@ class PickupPointSerializer(serializers.ModelSerializer):
 
 class RouteSerializer(serializers.ModelSerializer):
     destination_name = serializers.CharField(source='destination.name', read_only=True)
+    return_destination_name = serializers.CharField(source='effective_return_destination.name', read_only=True)
     pickup_points = PickupPointSerializer(many=True, read_only=True)
 
     class Meta:
         model = Route
         fields = [
             'id', 'code', 'origin_label', 'name', 'name_en',
-            'destination', 'destination_name', 'active', 'seat_selection_enabled', 'pickup_points',
+            'destination', 'destination_name', 'return_destination', 'return_destination_name',
+            'active', 'seat_selection_enabled', 'pickup_points',
         ]
 
 
