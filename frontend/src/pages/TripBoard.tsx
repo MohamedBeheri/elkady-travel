@@ -129,7 +129,9 @@ function Passengers({ trip }: { trip: any }) {
             size="small" rowKey={(r: any) => `${r.student_name}-${r.seat_number}`} pagination={false} dataSource={g.passengers}
             columns={[
               ...(SHOW_SEAT_NUMBERS ? [{ title: 'مقعد', dataIndex: 'seat_number', width: 70, align: 'center' as const, render: (v: any) => <b>{v}</b> }] : []),
-              { title: 'الطالب', dataIndex: 'student_name' },
+              { title: 'الطالب', dataIndex: 'student_name', render: (v: string, r: any) => (
+                <span>{v}{r.rescheduled && <Tag color="gold" style={{ marginInlineStart: 6 }}>مؤجل</Tag>}</span>
+              ) },
               { title: 'الجامعة', dataIndex: 'university' },
               { title: 'الهاتف', dataIndex: 'student_phone' },
               { title: 'النوع', dataIndex: 'kind', render: (v) => <Tag>{v}</Tag> },

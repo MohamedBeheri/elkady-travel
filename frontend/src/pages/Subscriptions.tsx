@@ -117,7 +117,9 @@ function TripsTable(rows: any[], emptyText: string) {
       size="small" rowKey={(r: any, i: any) => `${r.date}-${r.route}-${r.direction}-${i}`}
       pagination={false} dataSource={rows} scroll={{ x: 750 }}
       columns={[
-        { title: 'التاريخ', dataIndex: 'date' },
+        { title: 'التاريخ', dataIndex: 'date', render: (v: string, r: any) => (
+          <span>{v}{r.rescheduled && <Tag color="gold" style={{ marginInlineStart: 6 }}>مؤجل</Tag>}</span>
+        ) },
         { title: 'المسار', dataIndex: 'route' },
         { title: 'الاتجاه', dataIndex: 'direction' },
         { title: 'الموعد', dataIndex: 'slot' },

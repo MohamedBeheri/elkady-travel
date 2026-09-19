@@ -67,7 +67,7 @@ class UserViewSet(viewsets.ModelViewSet):
         from django.utils import timezone
         from apps.bookings.models import Subscription
         from apps.bookings.serializers import SubscriptionSerializer
-        from apps.operations.models import AttendanceConfirmation, SeatAbsence, SeatRequest, TermSeatLock
+        from apps.operations.models import AttendanceConfirmation, DailyReschedule, SeatAbsence, SeatRequest, TermSeatLock
 
         student = self.get_object()
         today = timezone.localdate()
@@ -89,6 +89,11 @@ class UserViewSet(viewsets.ModelViewSet):
         ).select_related(
             'daily_trip', 'daily_trip__route', 'daily_trip__morning_slot', 'daily_trip__return_slot',
         )
+        # Trips this student reached via self-service reschedule (not their
+        # original booking) — flagged in the history below as "مؤجل".
+        rescheduled_trip_ids = set(
+            DailyReschedule.objects.filter(student=student).values_list('new_trip_id', flat=True))
+
         past_trips, upcoming_trips = [], []
         for r in reqs:
             t = r.daily_trip
@@ -99,6 +104,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 'kind': PRIORITY_LABEL.get(r.priority_type, r.priority_type),
                 'status': r.status, 'status_display': r.get_status_display(),
                 'confirmed_at': timezone.localtime(r.requested_at).strftime('%Y-%m-%d %H:%M'),
+                'rescheduled': t.id in rescheduled_trip_ids,
             }
             (past_trips if t.date < today else upcoming_trips).append(row)
 

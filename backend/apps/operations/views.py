@@ -441,10 +441,14 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         # One-off (daily) confirmed seat bookings for this trip.
         reqs = trip.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).select_related(
             'student', 'university', 'pickup_point')
+        # Riders who reached THIS trip via self-service reschedule (not their
+        # original booking) — flagged so the driver/admin sees it's a change.
+        rescheduled_student_ids = set(
+            DailyReschedule.objects.filter(new_trip=trip).values_list('student_id', flat=True))
 
         # Bucket passengers by pickup point (id/name), each with the point's time.
         buckets: dict = {}  # pp_id -> {name, time, sequence, passengers[]}
-        def add(pp, student, university_name, seat_number, kind_label):
+        def add(pp, student, university_name, seat_number, kind_label, rescheduled=False):
             pp_id = pp.id if pp else 0
             b = buckets.get(pp_id)
             if not b:
@@ -457,7 +461,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
                 'student_name': student.full_name or student.username,
                 'student_phone': student.phone or '',
                 'university': university_name or '',
-                'seat_number': seat_number, 'kind': kind_label,
+                'seat_number': seat_number, 'kind': kind_label, 'rescheduled': rescheduled,
             })
         for lock in locks:
             pp = lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id) else lock.student.pickup_point
@@ -465,7 +469,8 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             sub_label = lock.subscription.get_subscription_type_display() if lock.subscription_id else 'اشتراك'
             add(pp, lock.student, uni_name, lock.seat_number, sub_label)
         for r in reqs:
-            add(r.pickup_point, r.student, r.university.name if r.university_id else '', r.seat_number, 'يومي')
+            add(r.pickup_point, r.student, r.university.name if r.university_id else '', r.seat_number, 'يومي',
+                rescheduled=r.student_id in rescheduled_student_ids)
 
         # Sort: first by the point's time (empty last), then by sequence.
         def key(g): return (g['time'] or '99:99', g['sequence'])
