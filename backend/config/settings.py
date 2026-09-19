@@ -166,3 +166,19 @@ CORS_ALLOW_CREDENTIALS = True
 # Term & Monthly booking deadline; Daily window opens/closes. Times are local (Africa/Cairo).
 DAILY_PRIORITY_DEADLINE_HOUR = int(os.getenv('DAILY_PRIORITY_DEADLINE_HOUR', '22'))   # 10:00 PM
 DAILY_WINDOW_CLOSE_HOUR = int(os.getenv('DAILY_WINDOW_CLOSE_HOUR', '24'))             # 12:00 AM
+
+# Django's built-in logging only prints request-handling exceptions to the
+# console when DEBUG=True (see django.utils.log.DEFAULT_LOGGING's 'console'
+# handler filter) — in production (DEBUG=False) an unhandled 500 vanished
+# with no trace anywhere. Force tracebacks to stdout/gunicorn's log always.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler'},
+    },
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': 'WARNING'},
+        'django.request': {'handlers': ['console'], 'level': 'ERROR', 'propagate': False},
+    },
+}
