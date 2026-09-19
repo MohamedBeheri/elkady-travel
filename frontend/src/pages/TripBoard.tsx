@@ -1,10 +1,10 @@
-import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Modal, List, Tooltip } from 'antd'
+import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Tooltip } from 'antd'
 import { ThunderboltOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
   useTripBoardQuery, useRunAllocationMutation, useTripPassengersQuery,
-  useSeatmapQuery, useReleaseSeatMutation, useSeatRequestsQuery, useConfirmSeatMutation,
+  useSeatmapQuery, useReleaseSeatMutation,
   useDeleteEmptyTripMutation,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
@@ -13,9 +13,7 @@ import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 function SeatManager({ trip }: { trip: any }) {
   const { modal, message } = AntdApp.useApp()
   const { data } = useSeatmapQuery(trip.id)
-  const { data: held } = useSeatRequestsQuery({ daily_trip: trip.id, status: 'held' })
   const [release] = useReleaseSeatMutation()
-  const [confirm] = useConfirmSeatMutation()
 
   const onSeat = (n: number) => {
     const seat = data?.seats?.find((s: any) => s.number === n)
@@ -32,20 +30,6 @@ function SeatManager({ trip }: { trip: any }) {
 
   return (
     <div>
-      {(held?.results || []).length > 0 && (
-        <Card size="small" title="حجوزات معلّقة بانتظار تأكيد الدفع" style={{ marginBottom: 16 }}>
-          <List
-            size="small" dataSource={held?.results || []}
-            renderItem={(r: any) => (
-              <List.Item actions={[
-                <Button key="c" size="small" type="primary" onClick={async () => { await confirm(r.id); message.success('تم تأكيد الدفع') }}>تأكيد الدفع</Button>,
-              ]}>
-                <List.Item.Meta title={SHOW_SEAT_NUMBERS ? `${r.student_name} — مقعد ${r.seat_number}` : r.student_name} description={r.university_name} />
-              </List.Item>
-            )}
-          />
-        </Card>
-      )}
       {data && (
         <div style={{ textAlign: 'center' }}>
           <SeatMap layout={data.layout} seats={data.seats} staff onSelect={onSeat} />
