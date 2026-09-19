@@ -74,11 +74,18 @@ export default function AppLayout() {
   const perms = user?.permissions || {}
   const canView = (k: string) => isAdmin || !!perms[k]?.view
 
-  // Small red count badge next to a menu label — shows live pending work
+  // Small red count pill next to a menu label — shows live pending work
   // (unpaid confirmations, waiting-list entries, unquoted tourism requests).
+  // A plain fixed-size span instead of antd's standalone <Badge count> —
+  // without a child to anchor to, Badge stretches to fill the menu row.
   const withBadge = (label: string, count?: number) => !count ? label : (
     <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-      {label}<Badge count={count} size="small" style={{ marginInlineStart: 8 }} />
+      <span>{label}</span>
+      <span style={{
+        background: '#ff4d4f', color: '#fff', borderRadius: 9, minWidth: 18, height: 18,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 700, lineHeight: 1, padding: '0 5px', flexShrink: 0,
+      }}>{count > 99 ? '99+' : count}</span>
     </span>
   )
 
