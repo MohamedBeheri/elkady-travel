@@ -84,7 +84,9 @@ export default function AppLayout() {
         { key: '/reschedules', icon: <SwapOutlined />, label: 'طلبات التأجيل' },
         { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
         { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
-        { key: '/returns', icon: <RollbackOutlined />, label: 'رحلات العودة' },
+        // Hidden from the menu — كشف اليوم الشامل now covers this, and the
+        // separate ReturnBooking system it reads from has no real usage.
+        // Page/route/backend left intact; still reachable at /returns directly.
         { key: '/payments', icon: <DollarOutlined />, label: 'تأكيد المدفوعات' },
         { key: '/tourism', icon: <CompassOutlined />, label: 'السياحة والرحلات' },
       ],
