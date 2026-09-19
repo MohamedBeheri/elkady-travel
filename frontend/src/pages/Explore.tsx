@@ -23,6 +23,14 @@ const CENTERS = [
   { value: 'bagour', label: 'الباجور' }, { value: 'benha', label: 'بنها' },
 ]
 
+// A route's own pickup points (e.g. الباجور, منوف on الباجور ← بدر) sit on
+// its GO corridor — when the route's return leg actually ends somewhere else
+// (e.g. terminating at شبين instead of doubling back), none of that route's
+// own points are valid return drop-offs. See Book.tsx for the fuller note.
+function isAsymmetricRoutePoint(p: any) {
+  return !!(p?.return_destination_name && p.return_destination_name !== p?.destination_name)
+}
+
 /* ---------- advanced search: trip type → center → university → point → matching trip ---------- */
 function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
   const [tripType, setTripType] = useState<'go' | 'return'>('go')
@@ -38,7 +46,8 @@ function AvailabilityChecker({ data, bookTo }: { data: any; bookTo: string }) {
   const unis = data?.universities || []
   const selUni = unis.find((u: any) => u.id === university)
   // explore data exposes destination as a NAME; the pickup endpoint as destination_name.
-  const availPickups = (pickups || []).filter((p: any) => !selUni || p.destination_name === selUni.destination)
+  const availPickups = (pickups || []).filter((p: any) =>
+    (!selUni || p.destination_name === selUni.destination) && (tripType !== 'return' || !isAsymmetricRoutePoint(p)))
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const route = (data?.routes || []).find((r: any) => r.id === routeId)
