@@ -74,7 +74,11 @@ function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
   // The 9am morning slot on شبين الكوم's routes (to بدر or الشروق) only picks
   // up from a single consolidated point on this specific run — not each
   // rider's own registered point — so make that explicit before they confirm.
-  const isShebin9amGo = s.direction === 'go' && (s.route || '').includes('شبين') && chosen?.time === '09:00'
+  // Match on the slot's own name (stable "٩:٠٠ ص" label), not `time`: that
+  // field is the per-point PickupTime override when one exists (e.g. a rider
+  // further down the route sees "09:20"), so comparing it against "09:00"
+  // misses everyone except whoever has no override at all.
+  const isShebin9amGo = s.direction === 'go' && (s.route || '').includes('شبين') && (chosen?.name || '').includes('٩:٠٠')
   const borderColor = s.attending ? '#16a34a' : s.declined ? '#ef4444' : '#f59e0b'
   return (
     <Col xs={24} md={12}>
