@@ -151,10 +151,12 @@ function DailyFlow({ unis }: any) {
   const goSlotIds = new Set((caps?.results || caps || [])
     .filter((c: any) => c.route === routeId).map((c: any) => c.morning_slot))
   const availGoSlots = (mSlots?.results || mSlots || []).filter((s: any) => !routeId || goSlotIds.has(s.id))
-  // Same موفي مون exception as the daily attendance page: the 9am run on
-  // شبين الكوم's routes only picks up from one consolidated point.
+  // Same موفي مون exception as the daily attendance page: the 9am run only
+  // bypasses قويسنا/بنها, boarding from one consolidated point instead —
+  // check the pickup point's own center (شبين), not the shared route, since
+  // one route serves all three centers together.
   const chosenGoSlot = availGoSlots.find((s: any) => s.id === goSlot)
-  const isShebin9amGo = (selPickup?.route || '').includes('شبين') && !!chosenGoSlot?.departure_time?.startsWith('09:00')
+  const isShebin9amGo = selPickup?.center === 'shebin' && !!chosenGoSlot?.departure_time?.startsWith('09:00')
 
   // Re-align the saved pickup ID to the row for the CURRENT university's
   // destination — the saved ID may live on the other-destination copy.

@@ -120,6 +120,7 @@ def attendance(request):
             'seat_number': lock.seat_number,
             'route': lock.route.name,
             'pickup_name': pp.name if pp else '',
+            'pickup_center': pp.center if pp else '',
             'default_slot_id': default_id,
             'chosen_slot_id': chosen_id,
             'chosen_time': chosen_time,

@@ -71,14 +71,16 @@ function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
   const [pending, setPending] = useState<number>(s.chosen_slot_id)
   const chosen = s.available_slots.find((x: any) => x.id === pending) || s.available_slots.find((x: any) => x.id === s.chosen_slot_id)
   const differsFromDefault = chosen && chosen.id !== s.default_slot_id
-  // The 9am morning slot on شبين الكوم's routes (to بدر or الشروق) only picks
-  // up from a single consolidated point on this specific run — not each
-  // rider's own registered point — so make that explicit before they confirm.
-  // Match on the slot's own name (stable "٩:٠٠ ص" label), not `time`: that
+  // The 9am morning slot only bypasses قويسنا/بنها entirely on this run — it
+  // boards from one consolidated point instead. That only affects riders
+  // registered in شبين الكوم itself; قويسنا/بنها riders share the same route
+  // but keep their own stop, so this checks the point's own center, not the
+  // route (a single route serves all three centers together).
+  // Match the slot by its own name (stable "٩:٠٠ ص" label), not `time`: that
   // field is the per-point PickupTime override when one exists (e.g. a rider
   // further down the route sees "09:20"), so comparing it against "09:00"
   // misses everyone except whoever has no override at all.
-  const isShebin9amGo = s.direction === 'go' && (s.route || '').includes('شبين') && (chosen?.name || '').includes('٩:٠٠')
+  const isShebin9amGo = s.direction === 'go' && s.pickup_center === 'shebin' && (chosen?.name || '').includes('٩:٠٠')
   const borderColor = s.attending ? '#16a34a' : s.declined ? '#ef4444' : '#f59e0b'
   return (
     <Col xs={24} md={12}>
