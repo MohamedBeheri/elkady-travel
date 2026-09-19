@@ -40,3 +40,13 @@ def notify(user, title, message='', link='', severity='info'):
     return Notification.objects.create(
         user=user, title=title, message=message, link=link, severity=severity,
     )
+
+
+def notify_staff(title, message='', link='', severity='info'):
+    """Notify every staff member (admin/managers/officers/supervisors) — used
+    for events a student/customer triggers that staff need to act on, since
+    Notification is single-recipient and staff have no shared inbox row."""
+    from config.permissions import STAFF_ROLES
+    from apps.users.models import User
+    for staff in User.objects.filter(role__in=STAFF_ROLES):
+        notify(staff, title, message, link=link, severity=severity)

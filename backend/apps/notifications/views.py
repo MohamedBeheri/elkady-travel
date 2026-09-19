@@ -28,6 +28,24 @@ class NotificationViewSet(viewsets.ModelViewSet):
         self.get_queryset().filter(read=False).update(read=True)
         return Response({'ok': True})
 
+    @action(detail=False, methods=['get'], url_path='pending-counts')
+    def pending_counts(self, request):
+        """Live pending-work counts for the sidebar badges (not notification
+        history — a current snapshot of how many items need staff action)."""
+        from config.permissions import STAFF_ROLES
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        from apps.bookings.models import Subscription
+        from apps.operations.models import SeatRequest
+        from apps.tourism.models import TourismRequest
+        return Response({
+            'payments': Subscription.objects.filter(status__in=[
+                Subscription.Status.PAYMENT_SUBMITTED, Subscription.Status.UNDER_REVIEW,
+            ]).count(),
+            'waiting': SeatRequest.objects.filter(status=SeatRequest.Status.WAITING).count(),
+            'tourism': TourismRequest.objects.filter(status=TourismRequest.Status.PENDING).count(),
+        })
+
     @action(detail=True, methods=['post'], url_path='read')
     def mark_read(self, request, pk=None):
         n = self.get_object()

@@ -490,6 +490,9 @@ export const api = createApi({
       query: () => ({ url: 'notifications/mark-all-read/', method: 'POST' }),
       invalidatesTags: ['Notification'],
     }),
+    pendingCounts: b.query<any, void>({
+      query: () => 'notifications/pending-counts/', providesTags: ['Notification'],
+    }),
   }),
 })
 
@@ -524,7 +527,7 @@ export const {
   useVehicleTypesQuery, useTourismRequestsQuery, useCreateTourismRequestMutation, useDeleteTourismRequestMutation,
   useAcceptTourismMutation, useRejectTourismMutation,
   useCreateQuotationMutation, useSendQuotationMutation,
-  useUnreadNotificationsQuery, useMarkAllReadMutation,
+  useUnreadNotificationsQuery, useMarkAllReadMutation, usePendingCountsQuery,
   // fleet
   useFleetDashboardQuery, useVehicles2Query, useSaveVehicleMutation, useDeleteVehicleMutation, useVehicleHistoryQuery,
   useDriversQuery, useSaveDriverMutation, useDeleteDriverMutation, useDriverAlertsQuery, useDriverReportQuery,

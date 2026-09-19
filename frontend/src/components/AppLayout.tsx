@@ -10,7 +10,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../app/store'
 import { logout } from '../app/authSlice'
-import { useUnreadNotificationsQuery, useMarkAllReadMutation, useCompanyQuery } from '../app/api'
+import { useUnreadNotificationsQuery, useMarkAllReadMutation, usePendingCountsQuery, useCompanyQuery } from '../app/api'
 import Logo from './Logo'
 import KaffoCredit from './KaffoCredit'
 
@@ -66,12 +66,21 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const isStaff = STAFF.includes(user?.role || '')
+  const { data: pending } = usePendingCountsQuery(undefined, { skip: !isStaff, pollingInterval: 30000 })
 
   const role = user?.role || ''
   const isAdmin = role === 'admin'
   // Dynamic per-role screen permissions (admin sees everything).
   const perms = user?.permissions || {}
   const canView = (k: string) => isAdmin || !!perms[k]?.view
+
+  // Small red count badge next to a menu label — shows live pending work
+  // (unpaid confirmations, waiting-list entries, unquoted tourism requests).
+  const withBadge = (label: string, count?: number) => !count ? label : (
+    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+      {label}<Badge count={count} size="small" style={{ marginInlineStart: 8 }} />
+    </span>
+  )
 
   // Full menu; leaves are filtered by view permission, empty groups dropped.
   const rawItems: any[] = [
@@ -83,12 +92,12 @@ export default function AppLayout() {
         { key: '/day-manifest', icon: <ProfileOutlined />, label: 'كشف اليوم الشامل' },
         { key: '/reschedules', icon: <SwapOutlined />, label: 'طلبات التأجيل' },
         { key: '/subscriptions', icon: <TeamOutlined />, label: 'الطلاب والاشتراكات' },
-        { key: '/waiting', icon: <ClockCircleOutlined />, label: 'قوائم الانتظار' },
+        { key: '/waiting', icon: <ClockCircleOutlined />, label: withBadge('قوائم الانتظار', pending?.waiting) },
         // Hidden from the menu — كشف اليوم الشامل now covers this, and the
         // separate ReturnBooking system it reads from has no real usage.
         // Page/route/backend left intact; still reachable at /returns directly.
-        { key: '/payments', icon: <DollarOutlined />, label: 'تأكيد المدفوعات' },
-        { key: '/tourism', icon: <CompassOutlined />, label: 'السياحة والرحلات' },
+        { key: '/payments', icon: <DollarOutlined />, label: withBadge('تأكيد المدفوعات', pending?.payments) },
+        { key: '/tourism', icon: <CompassOutlined />, label: withBadge('السياحة والرحلات', pending?.tourism) },
       ],
     },
     {

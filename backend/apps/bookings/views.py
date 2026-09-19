@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from config.permissions import STAFF_ROLES
 from apps.config_app.models import CompanySettings
-from apps.notifications.models import notify
+from apps.notifications.models import notify, notify_staff
 from .models import Subscription
 from .serializers import SubscriptionCreateSerializer, SubscriptionSerializer
 
@@ -96,6 +96,12 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             sub.payment_proof = request.FILES['payment_proof']
         sub.save()
         sub.submit_payment()  # RULE 12: still requires admin approval
+        if request.user.role not in STAFF_ROLES:
+            notify_staff(
+                'إثبات دفع جديد',
+                f'{sub.student.full_name or sub.student.username} رفع إثبات دفع لاشتراك {sub.get_subscription_type_display()}',
+                link='/payments', severity='info',
+            )
         return Response(SubscriptionSerializer(sub).data)
 
     @action(detail=True, methods=['post'])

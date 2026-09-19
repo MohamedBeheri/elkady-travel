@@ -13,7 +13,7 @@ from config.permissions import STAFF_ROLES
 from apps.bookings.models import Subscription
 from apps.bookings.serializers import SubscriptionSerializer
 from apps.config_app.models import CompanySettings, MorningSlot, PricingRule, Route, ReturnSlot
-from apps.notifications.models import notify
+from apps.notifications.models import notify, notify_staff
 from .layouts import LAYOUTS
 from .models import (
     AttendanceConfirmation, DailyReschedule, DailySlotChoice, DailyTrip, ReturnBooking, SeatAbsence,
@@ -600,6 +600,12 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             priority_type=priority_type, university_id=university_id,
             pickup_point_id=pickup_id,
         )
+        if req.status == SeatRequest.Status.WAITING:
+            notify_staff(
+                'طالب في قائمة الانتظار',
+                f'{user.full_name or user.username} دخل قائمة انتظار رحلة {route.name} — {slot.name} بتاريخ {date}',
+                link='/waiting', severity='warning',
+            )
         return Response(SeatRequestSerializer(req).data, status=201)
 
     @action(detail=False, methods=['post'], url_path='book-daily')

@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from config.permissions import STAFF_ROLES, ReadOnlyOrStaff
-from apps.notifications.models import notify
+from apps.notifications.models import notify, notify_staff
 from .models import Quotation, TourismRequest, VehicleType
 from .serializers import (
     QuotationSerializer, TourismRequestSerializer, VehicleTypeSerializer,
@@ -32,7 +32,13 @@ class TourismRequestViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(customer=self.request.user)
+        req = serializer.save(customer=self.request.user)
+        if self.request.user.role not in STAFF_ROLES:
+            notify_staff(
+                'طلب سياحة جديد',
+                f'{req.full_name} — {req.origin} → {req.destination} بتاريخ {req.travel_date}',
+                link='/tourism', severity='info',
+            )
 
     def destroy(self, request, *args, **kwargs):
         """Only staff may hard-delete a tourism request."""
