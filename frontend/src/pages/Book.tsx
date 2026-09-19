@@ -151,6 +151,10 @@ function DailyFlow({ unis }: any) {
   const goSlotIds = new Set((caps?.results || caps || [])
     .filter((c: any) => c.route === routeId).map((c: any) => c.morning_slot))
   const availGoSlots = (mSlots?.results || mSlots || []).filter((s: any) => !routeId || goSlotIds.has(s.id))
+  // Same موفي مون exception as the daily attendance page: the 9am run on
+  // شبين الكوم's routes only picks up from one consolidated point.
+  const chosenGoSlot = availGoSlots.find((s: any) => s.id === goSlot)
+  const isShebin9amGo = (selPickup?.route || '').includes('شبين') && !!chosenGoSlot?.departure_time?.startsWith('09:00')
 
   // Re-align the saved pickup ID to the row for the CURRENT university's
   // destination — the saved ID may live on the other-destination copy.
@@ -315,6 +319,10 @@ function DailyFlow({ unis }: any) {
           {goSlot && selPickup?.go_times?.[goSlot] && (
             <Alert type="info" showIcon style={{ marginBottom: 12 }}
               message={`⏰ موعد التقاطك من ${pointName}: ${selPickup.go_times[goSlot]}`} />
+          )}
+          {isShebin9amGo && (
+            <Alert type="warning" showIcon style={{ marginBottom: 12, fontWeight: 700 }}
+              message="ملحوظة: ميعاد الساعة ٩ صباحاً على خط شبين الكوم (لبدر أو الشروق) نقطة الركوب فيه أمام قاعة موفي مون بالبر الشرقي فقط — مش نقطتك المعتادة." />
           )}
           {!seatSelection
             ? goSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعدك تلقائياً لهذه الرحلة (اختيار المقاعد غير مفعّل لهذا الخط)." />
