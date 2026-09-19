@@ -93,6 +93,8 @@ def attendance(request):
         'student__pickup_point')
     absences = set(SeatAbsence.objects.filter(term_lock__in=locks, date=date)
                    .values_list('term_lock_id', flat=True))
+    confirmed_ids = set(AttendanceConfirmation.objects.filter(term_lock__in=locks, date=date)
+                        .values_list('term_lock_id', flat=True))
     choices = {c.term_lock_id: c for c in DailySlotChoice.objects.filter(term_lock__in=locks, date=date)
                .select_related('morning_slot', 'return_slot')}
     out = []
@@ -123,7 +125,8 @@ def attendance(request):
             'chosen_time': chosen_time,
             'available_slots': avail,
             'subscription_type': lock.subscription.subscription_type if lock.subscription_id else '',
-            'attending': lock.id not in absences,
+            'attending': lock.id in confirmed_ids and lock.id not in absences,
+            'declined': lock.id in absences,
         })
     cutoff = _attendance_lock_cutoff(date)
     locked = bool(cutoff and timezone.localtime().time() >= cutoff)
@@ -291,6 +294,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         date = request.query_params.get('date') or timezone.localdate().isoformat()
 
         absent_ids = set(SeatAbsence.objects.filter(date=date).values_list('term_lock_id', flat=True))
+        confirmed_ids = set(AttendanceConfirmation.objects.filter(date=date).values_list('term_lock_id', flat=True))
         choice_by_lock = {
             c.term_lock_id: c for c in
             DailySlotChoice.objects.filter(date=date).select_related('morning_slot', 'return_slot')
@@ -330,7 +334,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
                 return r
 
             for lock in locks_by_route.get(route.id, []):
-                if lock.id in absent_ids:
+                if lock.id not in confirmed_ids or lock.id in absent_ids:
                     continue
                 choice = choice_by_lock.get(lock.id)
                 is_return = lock.direction == 'return'
@@ -393,7 +397,10 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         """
         trip = self.get_object()
         slot_id = trip.return_slot_id if trip.direction == 'return' else trip.morning_slot_id
-        # Absences on this date free the term seats.
+        # A standing seat only counts once its rider explicitly confirmed
+        # attendance for this date; absences on this date free the term seats too.
+        confirmed_lock_ids = set(AttendanceConfirmation.objects.filter(
+            date=trip.date, term_lock__route=trip.route).values_list('term_lock_id', flat=True))
         absent_lock_ids = set(SeatAbsence.objects.filter(
             date=trip.date, term_lock__route=trip.route).values_list('term_lock_id', flat=True))
         # Day-of slot overrides: which locks moved AWAY from this slot, and which moved INTO it.
@@ -412,8 +419,9 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         base_qs = TermSeatLock.objects.filter(
             route=trip.route, direction=trip.direction, active=True,
             **({'return_slot_id': slot_id} if trip.direction == 'return' else {'morning_slot_id': slot_id}),
-        ).exclude(pk__in=absent_lock_ids | moved_away_ids)
-        override_qs = TermSeatLock.objects.filter(pk__in=moved_here_ids).exclude(pk__in=absent_lock_ids)
+        ).filter(pk__in=confirmed_lock_ids).exclude(pk__in=absent_lock_ids | moved_away_ids)
+        override_qs = TermSeatLock.objects.filter(pk__in=moved_here_ids).filter(
+            pk__in=confirmed_lock_ids).exclude(pk__in=absent_lock_ids)
         locks = list((base_qs | override_qs).distinct().select_related(
             'student', 'subscription', 'subscription__university', 'subscription__pickup_point',
             'student__pickup_point'))

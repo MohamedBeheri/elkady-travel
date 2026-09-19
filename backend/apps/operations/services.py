@@ -151,18 +151,24 @@ def build_seatmap(trip, viewer=None, is_staff=False):
     genders = _seat_gender_map(trip)
 
     # Subscriber seat locks on this route/slot/direction — with day-of overrides:
+    #   • A seat only counts as occupied once the rider explicitly confirmed
+    #     attendance for THIS date (AttendanceConfirmation) — a standing lock no
+    #     longer holds the seat by default; silence/no-response frees it.
     #   • SeatAbsence on this date → student is out today, seat freed.
     #   • DailySlotChoice on this date → student is riding on a DIFFERENT slot today
     #     (a) locks bound to this slot but overridden away are excluded.
     #     (b) locks bound to another slot but overridden HERE are included.
     from .models import DailySlotChoice as _Choice
+    confirmed_ids = set(AttendanceConfirmation.objects.filter(date=trip.date).values_list('term_lock_id', flat=True))
     locks = {}
     default_locks = TermSeatLock.objects.filter(
         route=trip.route, active=True, direction=trip.direction,
         **({'return_slot': trip.return_slot} if trip.direction == 'return' else {'morning_slot': trip.morning_slot}),
     ).select_related('student')
-    # (a) default locks minus absent/overridden-away for this date
+    # (a) default locks minus absent/overridden-away for this date, and only if confirmed
     for lock in default_locks:
+        if lock.id not in confirmed_ids:
+            continue
         if SeatAbsence.objects.filter(term_lock=lock, date=trip.date).exists():
             continue
         ch = _Choice.objects.filter(term_lock=lock, date=trip.date).first()
@@ -181,6 +187,8 @@ def build_seatmap(trip, viewer=None, is_staff=False):
             term_lock__active=True, **{slot_key: slot_val},
         ).select_related('term_lock', 'term_lock__student'):
             lk = ch.term_lock
+            if lk.id not in confirmed_ids:
+                continue
             # Don't overwrite a seat if the default holder is here (would collide).
             if lk.seat_number not in locks:
                 locks[lk.seat_number] = lk
@@ -227,12 +235,15 @@ def _lock_filter_for(trip):
 
 
 def _seat_occupied(trip, seat_number, exclude_student=None):
-    """True if the seat is taken (subscriber lock w/o absence, or an active booking)."""
+    """True if the seat is taken: a subscriber lock whose rider explicitly
+    confirmed attendance for this date (and didn't also mark absence), or an
+    active one-off booking."""
     lock_q = TermSeatLock.objects.filter(seat_number=seat_number, **_lock_filter_for(trip))
     if exclude_student:
         lock_q = lock_q.exclude(student=exclude_student)
     lock = lock_q.first()
-    if lock and not SeatAbsence.objects.filter(term_lock=lock, date=trip.date).exists():
+    if lock and AttendanceConfirmation.objects.filter(term_lock=lock, date=trip.date).exists() \
+            and not SeatAbsence.objects.filter(term_lock=lock, date=trip.date).exists():
         return True
     q = trip.seat_requests.filter(
         seat_number=seat_number,

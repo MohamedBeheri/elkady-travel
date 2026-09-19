@@ -1,5 +1,5 @@
 import { Card, DatePicker, Row, Col, Tag, Button, Empty, Alert, App as AntdApp, Spin, Select } from 'antd'
-import { CarOutlined, RollbackOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined } from '@ant-design/icons'
+import { CarOutlined, RollbackOutlined, CheckCircleFilled, CloseCircleFilled, ClockCircleOutlined, QuestionCircleFilled } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import { useAttendanceQuery, useSetAttendanceMutation } from '../app/api'
@@ -32,10 +32,10 @@ export default function Attendance() {
     <div>
       <Card style={{ marginBottom: 16, background: 'linear-gradient(120deg,#0B2E5E,#123a73 60%,#EC6A16)', border: 'none' }}>
         <div style={{ color: '#fff' }}>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>تأكيد رحلة الغد</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>تأكيد الحضور</div>
           <div style={{ opacity: 0.9, marginTop: 4 }}>
-            اختر الميعاد اللي ترغب في الركوب فيه بكرا (ذهاب وعودة)، وتذكرتك تتحدَّث تلقائياً بموعد التقاطك.
-            لو مش هتحضر يوم، أخلِ مقعدك يستفيد منه غيرك — ويبقى محجوزاً لك في باقي الأيام.
+            لازم تأكد حضورك لأي يوم عشان مقعدك يتحجز فعلياً — بدون تأكيد مقعدك بيفضل متاح لغيرك.
+            اختر الميعاد اللي ترغب في الركوب فيه (ذهاب وعودة)، وتذكرتك تتحدَّث تلقائياً بموعد التقاطك.
           </div>
         </div>
       </Card>
@@ -61,7 +61,7 @@ export default function Attendance() {
       )}
 
       <Alert type="info" showIcon style={{ marginTop: 16 }}
-        message="مقعدك يبقى محجوزاً لك طوال مدة الاشتراك ما لم تعتذر عن يوم بعينه، أو تُلغِ الإدارة الحجز." />
+        message="مقعدك مش بيتحجز تلقائياً — لازم تأكد حضورك كل يوم عشان يبان محجوز عندنا، غير كده هيفضل متاح لطالب تاني." />
     </div>
   )
 }
@@ -71,15 +71,18 @@ function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
   const [pending, setPending] = useState<number>(s.chosen_slot_id)
   const chosen = s.available_slots.find((x: any) => x.id === pending) || s.available_slots.find((x: any) => x.id === s.chosen_slot_id)
   const differsFromDefault = chosen && chosen.id !== s.default_slot_id
+  const borderColor = s.attending ? '#16a34a' : s.declined ? '#ef4444' : '#f59e0b'
   return (
     <Col xs={24} md={12}>
-      <Card style={{ borderInlineStart: `5px solid ${s.attending ? '#16a34a' : '#ef4444'}` }}>
+      <Card style={{ borderInlineStart: `5px solid ${borderColor}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
           {s.direction === 'return' ? <RollbackOutlined style={{ fontSize: 20, color: '#EC6A16' }} /> : <CarOutlined style={{ fontSize: 20, color: '#0B2E5E' }} />}
           <b style={{ fontSize: 16 }}>{s.direction_display}</b>
           {s.attending
             ? <Tag icon={<CheckCircleFilled />} color="green">محجوز — سأحضر</Tag>
-            : <Tag icon={<CloseCircleFilled />} color="red">مُخلى لهذا اليوم</Tag>}
+            : s.declined
+              ? <Tag icon={<CloseCircleFilled />} color="red">مُخلى لهذا اليوم</Tag>
+              : <Tag icon={<QuestionCircleFilled />} color="orange">لم تؤكد بعد</Tag>}
         </div>
         <div style={{ color: '#475569', marginBottom: 4 }}>الخط: {s.route}</div>
         <div style={{ display: 'flex', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -104,7 +107,7 @@ function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
           <Button type="primary" loading={isLoading} disabled={locked} onClick={() => confirm(s.lock_id, pending)}>
             {s.attending && pending === s.chosen_slot_id ? 'تحديث الاختيار' : 'سأحضر على هذا الميعاد'}
           </Button>
-          {s.attending && <Button danger loading={isLoading} disabled={locked} onClick={() => decline(s.lock_id)}>لن أحضر هذا اليوم</Button>}
+          {!s.declined && <Button danger loading={isLoading} disabled={locked} onClick={() => decline(s.lock_id)}>لن أحضر هذا اليوم</Button>}
         </div>
       </Card>
     </Col>

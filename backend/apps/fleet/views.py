@@ -360,7 +360,7 @@ def trip_cost_report(request):
 def operations_dashboard(request):
     """Supervisor board for a given day: trips, assignments, gaps, pickup distribution."""
     from apps.config_app.models import MorningSlot, Route
-    from apps.operations.models import DailyTrip, SeatAbsence, SeatRequest, TermSeatLock
+    from apps.operations.models import AttendanceConfirmation, DailyTrip, SeatAbsence, SeatRequest, TermSeatLock
     from apps.operations.services import _get_or_create_trip, build_seatmap
     date = request.query_params.get('date') or str(timezone.localdate())
 
@@ -408,8 +408,10 @@ def operations_dashboard(request):
         ).select_related('student__pickup_point', 'subscription__pickup_point')
         absent_today = set(SeatAbsence.objects.filter(
             date=date, term_lock__in=term_locks).values_list('term_lock_id', flat=True))
+        confirmed_today = set(AttendanceConfirmation.objects.filter(
+            date=date, term_lock__in=term_locks).values_list('term_lock_id', flat=True))
         for lock in term_locks:
-            if lock.id in absent_today:
+            if lock.id not in confirmed_today or lock.id in absent_today:
                 continue
             pp = lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id) else lock.student.pickup_point
             key = pp.name if pp else 'غير محدد'
