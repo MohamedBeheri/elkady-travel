@@ -1,5 +1,5 @@
-import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Tooltip } from 'antd'
-import { ThunderboltOutlined, FilePdfOutlined } from '@ant-design/icons'
+import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Tooltip, Row, Col } from 'antd'
+import { ThunderboltOutlined, FilePdfOutlined, CarOutlined, RollbackOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
@@ -165,6 +165,51 @@ export default function TripBoard() {
     })
   }
 
+  const columns = [
+    { title: 'الموعد', dataIndex: 'slot_name', render: (v: string) => <Tag color="blue">{v}</Tag> },
+    { title: 'المسار', dataIndex: 'route_name' },
+    { title: 'السعة', dataIndex: 'total_seats' },
+    { title: 'مؤكد', dataIndex: 'confirmed_count', render: (v: number, r: any) => (
+      <Space size={4}>
+        <Tag color="green">{v}</Tag>
+        {r.held_count > 0 && <Tag color="gold">+{r.held_count} معلّق</Tag>}
+      </Space>
+    ) },
+    { title: 'انتظار', dataIndex: 'waiting_count', render: (v: number) => <Tag color="orange">{v}</Tag> },
+    {
+      title: 'الإشغال', render: (_: any, r: any) => {
+        // occupancy from the server counts BOTH مؤكد and معلّق (held daily
+        // bookings awaiting payment approval) against the live capacity, so
+        // a seat reserved by a daily student is reflected here too.
+        const occ = r.occupancy_percent ?? Math.round(((r.confirmed_count + (r.held_count || 0)) / (r.total_seats || 1)) * 100)
+        return (
+          <Tooltip title={`مؤكد ${r.confirmed_count}${r.held_count ? ` + معلّق ${r.held_count}` : ''} من ${r.total_seats}`}>
+            <Progress
+              percent={Math.min(occ, 100)} format={() => `${occ}%`} size="small" style={{ width: 100 }}
+              strokeColor={r.is_full ? '#dc2626' : occ >= 80 ? '#ea580c' : '#0e7490'} />
+          </Tooltip>
+        )
+      },
+    },
+    {
+      title: '', render: (_: any, r: any) => (
+        <Space wrap>
+          <Button size="small" type="primary" ghost onClick={() => setSeatTrip(r)}>المقاعد</Button>
+          <Button size="small" onClick={() => setOpenTrip(r)}>كشف الركاب</Button>
+          {r.confirmed_count === 0 && r.held_count === 0 && r.waiting_count === 0 && (
+            <Tooltip title="لا يوجد أي حجز مرتبط بهذه الرحلة">
+              <Button size="small" danger onClick={() => removeEmpty(r)}>حذف</Button>
+            </Tooltip>
+          )}
+        </Space>
+      ),
+    },
+  ]
+
+  const trips = data?.trips || []
+  const goTrips = trips.filter((t: any) => t.direction !== 'return')
+  const returnTrips = trips.filter((t: any) => t.direction === 'return')
+
   return (
     <Card
       title="رحلات الغد التشغيلية"
@@ -177,51 +222,32 @@ export default function TripBoard() {
         </Space>
       }
     >
-      <Table
-        rowKey="id" loading={isFetching} dataSource={data?.trips || []} scroll={{ x: 800 }}
-        locale={{ emptyText: <Empty description="لا توجد رحلات لهذا اليوم بعد" /> }}
-        columns={[
-          { title: 'الاتجاه', dataIndex: 'direction_display', render: (v, r: any) => <Tag color={r.direction === 'return' ? 'purple' : 'geekblue'}>{v}</Tag> },
-          { title: 'الموعد', dataIndex: 'slot_name', render: (v, r: any) => <Tag color="blue">{v}</Tag> },
-          { title: 'المسار', dataIndex: 'route_name' },
-          { title: 'السعة', dataIndex: 'total_seats' },
-          { title: 'مؤكد', dataIndex: 'confirmed_count', render: (v, r: any) => (
-            <Space size={4}>
-              <Tag color="green">{v}</Tag>
-              {r.held_count > 0 && <Tag color="gold">+{r.held_count} معلّق</Tag>}
-            </Space>
-          ) },
-          { title: 'انتظار', dataIndex: 'waiting_count', render: (v) => <Tag color="orange">{v}</Tag> },
-          {
-            title: 'الإشغال', render: (_, r: any) => {
-              // occupancy from the server counts BOTH مؤكد and معلّق (held daily
-              // bookings awaiting payment approval) against the live capacity, so
-              // a seat reserved by a daily student is reflected here too.
-              const occ = r.occupancy_percent ?? Math.round(((r.confirmed_count + (r.held_count || 0)) / (r.total_seats || 1)) * 100)
-              return (
-                <Tooltip title={`مؤكد ${r.confirmed_count}${r.held_count ? ` + معلّق ${r.held_count}` : ''} من ${r.total_seats}`}>
-                  <Progress
-                    percent={Math.min(occ, 100)} format={() => `${occ}%`} size="small" style={{ width: 120 }}
-                    strokeColor={r.is_full ? '#dc2626' : occ >= 80 ? '#ea580c' : '#0e7490'} />
-                </Tooltip>
-              )
-            },
-          },
-          {
-            title: '', render: (_, r: any) => (
-              <Space>
-                <Button size="small" type="primary" ghost onClick={() => setSeatTrip(r)}>المقاعد</Button>
-                <Button size="small" onClick={() => setOpenTrip(r)}>كشف الركاب</Button>
-                {r.confirmed_count === 0 && r.held_count === 0 && r.waiting_count === 0 && (
-                  <Tooltip title="لا يوجد أي حجز مرتبط بهذه الرحلة">
-                    <Button size="small" danger onClick={() => removeEmpty(r)}>حذف</Button>
-                  </Tooltip>
-                )}
-              </Space>
-            ),
-          },
-        ]}
-      />
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <Card
+            size="small" type="inner"
+            title={<Space><CarOutlined style={{ color: '#0B2E5E' }} />رحلات الذهاب ({goTrips.length})</Space>}
+          >
+            <Table
+              rowKey="id" loading={isFetching} dataSource={goTrips} scroll={{ x: 640 }} pagination={false}
+              locale={{ emptyText: <Empty description="لا توجد رحلات ذهاب لهذا اليوم بعد" /> }}
+              columns={columns}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card
+            size="small" type="inner"
+            title={<Space><RollbackOutlined style={{ color: '#EC6A16' }} />رحلات العودة ({returnTrips.length})</Space>}
+          >
+            <Table
+              rowKey="id" loading={isFetching} dataSource={returnTrips} scroll={{ x: 640 }} pagination={false}
+              locale={{ emptyText: <Empty description="لا توجد رحلات عودة لهذا اليوم بعد" /> }}
+              columns={columns}
+            />
+          </Card>
+        </Col>
+      </Row>
 
       <Drawer
         title={openTrip ? `ركاب: ${openTrip.slot_name} — ${openTrip.route_name}` : ''}
