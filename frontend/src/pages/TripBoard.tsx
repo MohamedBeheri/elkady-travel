@@ -187,7 +187,6 @@ export default function TripBoard() {
           { title: 'الاتجاه', dataIndex: 'direction_display', render: (v, r: any) => <Tag color={r.direction === 'return' ? 'purple' : 'geekblue'}>{v}</Tag> },
           { title: 'الموعد', dataIndex: 'slot_name', render: (v, r: any) => <Tag color="blue">{v}</Tag> },
           { title: 'المسار', dataIndex: 'route_name' },
-          { title: 'الوجهة', dataIndex: 'destination_name' },
           { title: 'السعة', dataIndex: 'total_seats' },
           { title: 'مؤكد', dataIndex: 'confirmed_count', render: (v, r: any) => (
             <Space size={4}>
