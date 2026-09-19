@@ -54,6 +54,69 @@ class UserViewSet(viewsets.ModelViewSet):
     def me(self, request):
         return Response(UserSerializer(request.user).data)
 
+    @action(detail=True, methods=['get'], url_path='full-profile')
+    def full_profile(self, request, pk=None):
+        """Admin dossier for one student: profile, every subscription (with
+        payment proof), standing term/monthly seats, and ride history split
+        into past/upcoming (from dated SeatRequest rows)."""
+        from config.permissions import STAFF_ROLES
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        from django.utils import timezone
+        from apps.bookings.models import Subscription
+        from apps.bookings.serializers import SubscriptionSerializer
+        from apps.operations.models import SeatAbsence, SeatRequest, TermSeatLock
+
+        student = self.get_object()
+        today = timezone.localdate()
+
+        subs = Subscription.objects.filter(student=student).select_related(
+            'route', 'route__destination', 'university', 'pickup_point', 'payment_method',
+        ).order_by('-created_at')
+
+        locks = TermSeatLock.objects.filter(student=student, active=True).select_related(
+            'route', 'morning_slot', 'return_slot')
+        standing_seats = [{
+            'route': l.route.name, 'direction': l.get_direction_display(),
+            'slot': l.slot_label, 'seat': l.seat_number,
+        } for l in locks]
+
+        PRIORITY_LABEL = {'term': 'ترم', 'monthly': 'شهري', 'daily': 'يومي'}
+        reqs = SeatRequest.objects.filter(student=student).exclude(
+            status=SeatRequest.Status.CANCELLED,
+        ).select_related(
+            'daily_trip', 'daily_trip__route', 'daily_trip__morning_slot', 'daily_trip__return_slot',
+        )
+        past_trips, upcoming_trips = [], []
+        for r in reqs:
+            t = r.daily_trip
+            slot = t.return_slot if t.direction == 'return' else t.morning_slot
+            row = {
+                'date': t.date, 'route': t.route.name, 'direction': t.get_direction_display(),
+                'slot': slot.name if slot else '—', 'seat': r.seat_number,
+                'kind': PRIORITY_LABEL.get(r.priority_type, r.priority_type),
+                'status': r.status, 'status_display': r.get_status_display(),
+            }
+            (past_trips if t.date < today else upcoming_trips).append(row)
+        past_trips.sort(key=lambda x: x['date'], reverse=True)
+        upcoming_trips.sort(key=lambda x: x['date'])
+
+        absences = SeatAbsence.objects.filter(term_lock__student=student).select_related(
+            'term_lock__route').order_by('-date')[:20]
+        absence_rows = [{
+            'date': a.date, 'route': a.term_lock.route.name,
+            'direction': a.term_lock.get_direction_display(),
+        } for a in absences]
+
+        return Response({
+            'student': UserSerializer(student).data,
+            'subscriptions': SubscriptionSerializer(subs, many=True).data,
+            'standing_seats': standing_seats,
+            'past_trips': past_trips,
+            'upcoming_trips': upcoming_trips,
+            'declared_absences': absence_rows,
+        })
+
     @action(detail=False, methods=['patch'], url_path='update-profile')
     def update_profile(self, request):
         ser = UserWriteSerializer(request.user, data=request.data, partial=True)

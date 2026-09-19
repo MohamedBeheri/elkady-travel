@@ -61,6 +61,9 @@ export const api = createApi({
     deleteUser: b.mutation<any, number>({
       query: (id) => ({ url: `auth/users/${id}/`, method: 'DELETE' }), invalidatesTags: ['User'],
     }),
+    studentFullProfile: b.query<any, number>({
+      query: (id) => `auth/users/${id}/full-profile/`, providesTags: ['User', 'Subscription', 'SeatRequest'],
+    }),
     permissionsMatrix: b.query<any, void>({ query: () => 'config/permissions/', providesTags: ['Permissions'] }),
     savePermissions: b.mutation<any, { items: any[] }>({
       query: (body) => ({ url: 'config/permissions/', method: 'POST', body }),
@@ -492,7 +495,7 @@ export const api = createApi({
 
 export const {
   useLoginMutation, useRegisterMutation, usePasswordResetLookupMutation, useResetStudentPasswordMutation, useAdminResetUserPasswordMutation, useMeQuery, useUpdateProfileMutation,
-  useUsersQuery, useSaveUserMutation, useDeleteUserMutation, usePermissionsMatrixQuery, useSavePermissionsMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
+  useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useStudentFullProfileQuery, usePermissionsMatrixQuery, useSavePermissionsMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
   usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation,
   useDestinationsQuery, useSaveDestinationMutation,
