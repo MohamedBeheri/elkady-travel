@@ -252,6 +252,20 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             elif lock.direction == 'go' and lock.morning_slot_id:
                 _get_or_create_trip(date, lock.route, morning_slot=lock.morning_slot)
 
+        # Same gap for a route that's fully configured (سعة المقاعد وضعت له)
+        # but hasn't had its first booking yet — an admin who just opened a
+        # brand-new route wants to see it on tomorrow's board immediately
+        # (at 0/0), not only once a student actually books it.
+        from apps.config_app.models import SeatCapacity, PickupTime
+        for route_id, slot_id in SeatCapacity.objects.values_list('route_id', 'morning_slot_id').distinct():
+            _get_or_create_trip(date, Route.objects.get(pk=route_id), morning_slot=MorningSlot.objects.get(pk=slot_id))
+        for route_id, slot_id in PickupTime.objects.filter(
+            direction='return', return_slot__isnull=False,
+        ).values_list('pickup_point__route_id', 'return_slot_id').distinct():
+            _get_or_create_trip(
+                date, Route.objects.get(pk=route_id), return_slot=ReturnSlot.objects.get(pk=slot_id),
+                direction='return')
+
         trips = self.get_queryset().filter(date=date)
         data = DailyTripSerializer(trips, many=True).data
         # `confirmed_count` on the model only counts one-off SeatRequests, so a bus
