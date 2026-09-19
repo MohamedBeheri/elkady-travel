@@ -3,9 +3,9 @@ import {
   Form, Input, DatePicker, App as AntdApp, Tooltip,
 } from 'antd'
 import {
-  WhatsAppOutlined, EyeOutlined, FileExcelOutlined, FilePdfOutlined, EditOutlined, DeleteOutlined,
+  WhatsAppOutlined, EyeOutlined, FileExcelOutlined, FilePdfOutlined, EditOutlined, DeleteOutlined, SearchOutlined,
 } from '@ant-design/icons'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import dayjs from 'dayjs'
 import {
   useSubscriptionsQuery, useDeleteSubscriptionMutation, useRoutesQuery, useUniversitiesQuery, useUsersQuery,
@@ -207,6 +207,12 @@ export default function Subscriptions() {
   const [pickup, setPickup] = useState<number>()
   const [ordering, setOrdering] = useState<string>()
   const [profileId, setProfileId] = useState<number | null>(null)
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const { data: routes } = useRoutesQuery({ active: true })
   const { data: unis } = useUniversitiesQuery({ active: true })
@@ -215,7 +221,7 @@ export default function Subscriptions() {
   const { data: allStudentsData } = useUsersQuery({ role: 'student', page_size: 5000 })
   const [orphansOpen, setOrphansOpen] = useState(false)
 
-  const params: any = { route, university, status, center, pickup_point: pickup, ordering, page_size: 1000 }
+  const params: any = { route, university, status, center, pickup_point: pickup, ordering, search: search || undefined, page_size: 1000 }
   if (type !== 'all') params.subscription_type = (type === 'daily' && dailyDir !== 'all') ? dailyDir : type
   const { data, isFetching } = useSubscriptionsQuery(params)
   const rows = data?.results || []
@@ -288,6 +294,8 @@ export default function Subscriptions() {
         </span>
       </div>
       <Space wrap style={{ marginBottom: 12 }}>
+        <Input allowClear placeholder="بحث بالاسم أو رقم الهاتف" prefix={<SearchOutlined />}
+          value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ width: 220 }} />
         <Segmented value={type} onChange={(v) => { setType(v as string); if (v !== 'daily') setDailyDir('all') }}
           options={[{ value: 'all', label: 'الكل' }, { value: 'term', label: 'ترم' },
             { value: 'monthly', label: 'شهري' }, { value: 'daily', label: 'يومي' }]} />
