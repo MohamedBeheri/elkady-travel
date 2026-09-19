@@ -2,7 +2,10 @@ import { Card, DatePicker, Table, Tag, Space, Button, Collapse, Empty, Select } 
 import { FileExcelOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { useDayManifestQuery, useRoutesQuery, useUniversitiesQuery, useMorningSlotsQuery, useReturnSlotsQuery } from '../app/api'
+import {
+  useDayManifestQuery, useRoutesQuery, useUniversitiesQuery, useMorningSlotsQuery, useReturnSlotsQuery,
+  useDestinationsQuery,
+} from '../app/api'
 import { SHOW_SEAT_NUMBERS } from '../app/uiFlags'
 
 const CAT_LABEL: Record<string, string> = { go_only: 'ذهاب فقط', return_only: 'عودة فقط', round_trip: 'ذهاب وعودة' }
@@ -36,7 +39,7 @@ function flattenRows(routes: any[]) {
     for (const cat of CATS) {
       for (const p of r[cat] || []) {
         rows.push({
-          route: r.route_name, category: CAT_LABEL[cat],
+          route: r.route_name, destination: r.destination_name, category: CAT_LABEL[cat],
           student_name: p.student_name, student_phone: p.student_phone,
           university: p.university, pickup: p.pickup, subscription_type: p.subscription_type,
           go_time: p.go?.time || '', go_seat: p.go?.seat ?? '',
@@ -50,10 +53,10 @@ function flattenRows(routes: any[]) {
 
 function downloadCSV(routes: any[], date: string) {
   const rows = flattenRows(routes)
-  const head = ['المسار', 'الفئة', 'الطالب', 'الهاتف', 'الجامعة', 'نقطة الالتقاط', 'نوع الاشتراك',
+  const head = ['المسار', 'الوجهة', 'الفئة', 'الطالب', 'الهاتف', 'الجامعة', 'نقطة الالتقاط', 'نوع الاشتراك',
     'موعد الذهاب', ...(SHOW_SEAT_NUMBERS ? ['مقعد الذهاب'] : []), 'موعد العودة', ...(SHOW_SEAT_NUMBERS ? ['مقعد العودة'] : [])]
   const body = rows.map((r) => [
-    r.route, r.category, r.student_name, r.student_phone, r.university, r.pickup, r.subscription_type,
+    r.route, r.destination, r.category, r.student_name, r.student_phone, r.university, r.pickup, r.subscription_type,
     r.go_time, ...(SHOW_SEAT_NUMBERS ? [r.go_seat] : []), r.return_time, ...(SHOW_SEAT_NUMBERS ? [r.return_seat] : []),
   ])
   const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
@@ -75,7 +78,7 @@ function exportPDF(routes: any[], date: string, totals: any) {
       ].map((c: any) => `<td>${c}</td>`).join('')}</tr>`).join('')
       return `<tr class="cat"><td colspan="8">${CAT_LABEL[cat]} (${list.length})</td></tr>${trs}`
     }).join('')
-    return `<tr class="rt"><td colspan="8">🚌 ${r.route_name} — إجمالي ${r.totals.total}</td></tr>${catBlocks}`
+    return `<tr class="rt"><td colspan="8">🚌 ${r.route_name} (${r.destination_name}) — إجمالي ${r.totals.total}</td></tr>${catBlocks}`
   }).join('')
   const html = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>كشف اليوم الشامل</title><style>
@@ -128,9 +131,11 @@ export default function DayManifest() {
   const { data: unisData } = useUniversitiesQuery({ active: true })
   const { data: mSlotsData } = useMorningSlotsQuery()
   const { data: rSlotsData } = useReturnSlotsQuery()
+  const { data: destsData } = useDestinationsQuery()
   const allRoutes = data?.routes || []
 
   const [routeFilter, setRouteFilter] = useState<number>()
+  const [destFilter, setDestFilter] = useState<number>()
   const [catFilter, setCatFilter] = useState<string>()
   const [subTypeFilter, setSubTypeFilter] = useState<string>()
   const [uniFilter, setUniFilter] = useState<string>()
@@ -143,8 +148,9 @@ export default function DayManifest() {
 
   const routes = useMemo(() => allRoutes
     .filter((r: any) => !routeFilter || r.route_id === routeFilter)
+    .filter((r: any) => !destFilter || r.destination_id === destFilter)
     .map((r: any) => {
-      const out: any = { route_id: r.route_id, route_name: r.route_name }
+      const out: any = { route_id: r.route_id, route_name: r.route_name, destination_name: r.destination_name }
       for (const cat of CATS) {
         out[cat] = (!catFilter || catFilter === cat) ? (r[cat] || []).filter(passes) : []
       }
@@ -155,7 +161,7 @@ export default function DayManifest() {
       return out
     })
     .filter((r: any) => r.totals.total > 0),
-  [allRoutes, routeFilter, catFilter, subTypeFilter, uniFilter, slotFilter])
+  [allRoutes, routeFilter, destFilter, catFilter, subTypeFilter, uniFilter, slotFilter])
 
   const totals = useMemo(() => routes.reduce((acc: any, r: any) => ({
     go_only: acc.go_only + r.totals.go_only, return_only: acc.return_only + r.totals.return_only,
@@ -164,6 +170,7 @@ export default function DayManifest() {
 
   const routeOptions = (routesData?.results || []).map((r: any) => ({ value: r.id, label: r.name }))
   const uniOptions = (unisData?.results || []).map((u: any) => ({ value: u.name, label: u.name }))
+  const destOptions = (destsData?.results || destsData || []).map((d: any) => ({ value: d.id, label: d.name }))
 
   // The موعد options depend on which trip-direction filter is active right now —
   // go slots only for "ذهاب فقط", return slots only for "عودة فقط", both otherwise.
@@ -188,6 +195,7 @@ export default function DayManifest() {
     >
       <Space wrap style={{ marginBottom: 12 }}>
         <Select placeholder="المسار" allowClear style={{ width: 180 }} value={routeFilter} onChange={setRouteFilter} options={routeOptions} />
+        <Select placeholder="الوجهة" allowClear style={{ width: 140 }} value={destFilter} onChange={setDestFilter} options={destOptions} />
         <Select placeholder="نوع الرحلة" allowClear style={{ width: 150 }} value={catFilter}
           onChange={(v) => { setCatFilter(v); setSlotFilter(undefined) }}
           options={CATS.map((c) => ({ value: c, label: CAT_LABEL[c] }))} />
@@ -226,6 +234,7 @@ export default function DayManifest() {
             label: (
               <Space wrap>
                 <b>{r.route_name}</b>
+                <Tag>{r.destination_name}</Tag>
                 <Tag color="blue">ذهاب فقط: {r.totals.go_only}</Tag>
                 <Tag color="purple">عودة فقط: {r.totals.return_only}</Tag>
                 <Tag color="green">ذهاب وعودة: {r.totals.round_trip}</Tag>

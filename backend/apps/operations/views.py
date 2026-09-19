@@ -314,7 +314,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
 
         route_ids = set(daily_by_route) | set(locks_by_route)
         routes_out = []
-        for route in Route.objects.filter(id__in=route_ids).order_by('origin_label', 'name'):
+        for route in Route.objects.filter(id__in=route_ids).select_related('destination').order_by('origin_label', 'name'):
             by_student: dict = {}
 
             def rec_for(student):
@@ -371,6 +371,7 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             if go_only or return_only or round_trip:
                 routes_out.append({
                     'route_id': route.id, 'route_name': route.name,
+                    'destination_id': route.destination_id, 'destination_name': route.destination.name,
                     'go_only': go_only, 'return_only': return_only, 'round_trip': round_trip,
                     'totals': {
                         'go_only': len(go_only), 'return_only': len(return_only), 'round_trip': len(round_trip),
