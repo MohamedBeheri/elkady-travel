@@ -58,8 +58,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def full_profile(self, request, pk=None):
         """Admin dossier for one student: profile, every subscription (with
         payment proof), standing term/monthly seats, and ride history split
-        into past/upcoming (from dated SeatRequest rows plus, for upcoming,
-        any explicit AttendanceConfirmation on a standing term/monthly seat)."""
+        into past/upcoming (from dated SeatRequest rows plus any explicit
+        AttendanceConfirmation on a standing term/monthly seat, in either
+        direction of time)."""
         from config.permissions import STAFF_ROLES
         if request.user.role not in STAFF_ROLES:
             return Response(status=403)
@@ -102,24 +103,26 @@ class UserViewSet(viewsets.ModelViewSet):
             (past_trips if t.date < today else upcoming_trips).append(row)
 
         # Standing term/monthly seats aren't tied to a date — but a rider who
-        # explicitly confirmed "I will attend" for an upcoming date (the daily
-        # attendance page) leaves an AttendanceConfirmation we can show here.
+        # explicitly confirmed "I will attend" for a date (the daily
+        # attendance page) leaves an AttendanceConfirmation we can show here,
+        # past or future, even if the lock has since been deactivated/renewed.
         confirmations = AttendanceConfirmation.objects.filter(
-            term_lock__student=student, term_lock__active=True, date__gte=today,
+            term_lock__student=student,
         ).select_related(
             'term_lock__route', 'term_lock__morning_slot', 'term_lock__return_slot',
             'term_lock__subscription',
         )
         for c in confirmations:
             lock = c.term_lock
-            upcoming_trips.append({
+            row = {
                 'date': c.date, 'route': lock.route.name, 'direction': lock.get_direction_display(),
                 'slot': lock.slot_label, 'seat': lock.seat_number,
                 'kind': PRIORITY_LABEL.get(
                     lock.subscription.subscription_type if lock.subscription_id else '', 'ثابت'),
                 'status': 'confirmed', 'status_display': 'مؤكد الحضور',
                 'confirmed_at': timezone.localtime(c.created_at).strftime('%Y-%m-%d %H:%M'),
-            })
+            }
+            (past_trips if c.date < today else upcoming_trips).append(row)
 
         past_trips.sort(key=lambda x: x['date'], reverse=True)
         upcoming_trips.sort(key=lambda x: x['date'])
