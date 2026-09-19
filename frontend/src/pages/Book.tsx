@@ -28,17 +28,17 @@ const CENTERS = [
   { value: 'benha', label: 'بنها' },
 ]
 
-// A pickup point only appears for a direction the admin actually configured a
-// PickupTime for (go_times/return_times, from public/pickup-points/) — e.g.
-// الباجور is a go-only stop on the البدر/الشروق routes since their return leg
-// ends at شبين without passing back through الباجور. 'round' (daily
-// round-trip, and every term/monthly subscription) needs both directions.
-function supportsDirection(p: any, need: 'go' | 'return' | 'round') {
-  const hasGo = Object.keys(p?.go_times || {}).length > 0
-  const hasReturn = Object.keys(p?.return_times || {}).length > 0
-  if (need === 'go') return hasGo
-  if (need === 'return') return hasReturn
-  return hasGo && hasReturn
+// A route's own pickup points (e.g. الباجور, منوف on الباجور ← بدر) sit on
+// its GO corridor. When the route's return leg actually ends somewhere else
+// (return_destination_name differs from destination_name — its return skips
+// back through them entirely, e.g. terminating at شبين instead), none of
+// that route's own points are valid drop-offs for a return-only trip.
+// Per-point PickupTime rows aren't a reliable signal for this — most points
+// across the system don't have an exact return time entered even though
+// they're perfectly reachable on return — so this checks the route-level
+// flag instead of go_times/return_times presence.
+function isAsymmetricRoutePoint(p: any) {
+  return !!(p?.return_destination_name && p.return_destination_name !== p?.destination_name)
 }
 const SUB_TYPES = [
   { value: 'term', label: 'اشتراك ترم' },
@@ -141,7 +141,7 @@ function DailyFlow({ unis }: any) {
 
   const selUni = unis.find((u: any) => u.id === university)
   const availPickups = dedupePickups((pickups || []).filter((p: any) =>
-    (!selUni || p.destination === selUni.destination) && supportsDirection(p, tripType)))
+    (!selUni || p.destination === selUni.destination) && (tripType !== 'return' || !isAsymmetricRoutePoint(p))))
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const seatSelection = selPickup ? selPickup.seat_selection !== false : true
@@ -172,6 +172,11 @@ function DailyFlow({ unis }: any) {
   const uniName = selUni?.name || ''
   const destName = selPickup?.destination_name || ''
   const pointName = selPickup?.name || ''
+  // The return leg only ends back at the student's own point when the route
+  // is symmetric — on الباجور's routes it actually terminates at شبين, so a
+  // round-trip rider is dropped off there, not back at pointName.
+  const asymmetricReturn = !!(selPickup?.return_destination_name && selPickup.return_destination_name !== destName)
+  const returnDropLabel = asymmetricReturn ? selPickup.return_destination_name : pointName
   const pointFieldLabel = tripType === 'return' ? 'نقطة النزول' : tripType === 'round' ? 'نقطة الالتقاط / النزول' : 'نقطة الالتقاط'
   const step2Title = tripType === 'return' ? '٢) المركز ونقطة النزول والتاريخ' : '٢) المركز ونقطة الالتقاط والتاريخ'
 
@@ -280,12 +285,16 @@ function DailyFlow({ unis }: any) {
           {selPickup && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {wantGo && <Tag icon={<CarOutlined />} color="blue">الذهاب: من {pointName} إلى {uniName}</Tag>}
-              {wantRet && <Tag icon={<RollbackOutlined />} color="gold">العودة: من {uniName || destName} إلى {pointName} (نقطة النزول)</Tag>}
+              {wantRet && (
+                <Tag icon={<RollbackOutlined />} color="gold">
+                  العودة: من {uniName || destName} إلى {returnDropLabel}{asymmetricReturn ? '' : ' (نقطة النزول)'}
+                </Tag>
+              )}
             </div>
           )}
-          {selPickup && selPickup.return_destination_name && selPickup.return_destination_name !== destName && (
-            <Alert type="info" showIcon style={{ marginTop: 8 }}
-              message={`ملحوظة: خط هذا المسار في اتجاه العودة ينتهي عند ${selPickup.return_destination_name} وليس ${destName} — نقطة نزولك في العودة ستكون هناك.`} />
+          {selPickup && asymmetricReturn && (
+            <Alert type="warning" showIcon style={{ marginTop: 8, fontWeight: 700 }}
+              message={`يرجى العلم: ينتهي خط هذا المسار في اتجاه العودة في ${selPickup.return_destination_name} — نقطة نزولك في العودة ستكون هناك.`} />
           )}
         </Form>
       </Card>
@@ -325,7 +334,7 @@ function DailyFlow({ unis }: any) {
           title={<span><RollbackOutlined /> <b>{wantGo ? '٤' : '٣'}) العودة — من الجامعة إلى مركزك</b></span>}>
           {selPickup && (
             <Alert type="info" showIcon style={{ marginBottom: 12 }}
-              message={`رحلة العودة من ${uniName || destName} إلى ${pointName} (نقطة النزول) — عكس اتجاه الذهاب.`} />
+              message={`رحلة العودة من ${uniName || destName} إلى ${returnDropLabel}${asymmetricReturn ? '' : ' (نقطة النزول)'} — عكس اتجاه الذهاب.`} />
           )}
           <Form layout="vertical">
             <Form.Item label="موعد العودة" required style={{ maxWidth: 260 }}>
@@ -529,8 +538,8 @@ function SubscriptionBooking({ unis, termOpen = true, monthlyOpen = true }: any)
         {noPickups && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
         {selPickup && <Tag color="blue" style={{ marginBottom: 12 }}>الخط: {selPickup.route}</Tag>}
         {selPickup && selPickup.return_destination_name && selPickup.return_destination_name !== selPickup.destination_name && (
-          <Alert type="info" showIcon style={{ marginBottom: 12 }}
-            message={`ملحوظة: خط هذا المسار في اتجاه العودة ينتهي عند ${selPickup.return_destination_name} وليس ${selPickup.destination_name} — نقطة نزولك في العودة ستكون هناك.`} />
+          <Alert type="warning" showIcon style={{ marginBottom: 12, fontWeight: 700 }}
+            message={`يرجى العلم: ينتهي خط هذا المسار في اتجاه العودة في ${selPickup.return_destination_name} — نقطة نزولك في العودة ستكون هناك.`} />
         )}
         <Alert type="info" showIcon style={{ marginBottom: 12 }}
           message="ميعاد الذهاب والعودة تختاره يومياً من صفحة «رحلة الغد» بعد تأكيد الإدارة، وتذكرتك تتحدَّث بموعد التقاطك تلقائياً." />
