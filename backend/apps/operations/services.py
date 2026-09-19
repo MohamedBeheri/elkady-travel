@@ -544,14 +544,17 @@ DAILY_RESCHEDULE_LEAD_HOURS = 8
 
 @transaction.atomic
 def reschedule_daily_booking(*, subscription, new_date, new_route, new_morning_slot=None,
-                              new_return_slot=None, new_pickup_point_id=None):
+                              new_return_slot=None, new_pickup_point_id=None,
+                              reschedule_go=True, reschedule_return=True):
     """Move a confirmed daily subscription's booking to a different date/route/slot(s).
 
-    Self-service, no admin approval — allowed only while more than
-    DAILY_RESCHEDULE_LEAD_HOURS remain before the EARLIEST currently-booked leg
-    departs (server clock only, never trusts the client). Keeps the same
-    trip_type (go/return/round) the subscription already has. Raises ValueError
-    on any failure (too late, no capacity, bad input) — nothing is changed.
+    Self-service, no admin approval. For a round-trip (`daily_round`) booking,
+    ``reschedule_go``/``reschedule_return`` let the student move only ONE leg —
+    the other leg's existing seat is left exactly as it was. Allowed only while
+    more than DAILY_RESCHEDULE_LEAD_HOURS remain before the leg(s) actually
+    being moved depart (server clock only, never trusts the client). Raises
+    ValueError on any failure (too late, no capacity, bad input) — nothing is
+    changed.
     """
     student = subscription.student
     old_reqs = list(
@@ -562,16 +565,27 @@ def reschedule_daily_booking(*, subscription, new_date, new_route, new_morning_s
     if not old_reqs:
         raise ValueError('لا يوجد حجز مؤكد لهذا الاشتراك حالياً.')
 
-    hours_left = reschedule_lead_hours_left(old_reqs)
+    want_go = any(r.daily_trip.direction == 'go' for r in old_reqs)
+    want_ret = any(r.daily_trip.direction == 'return' for r in old_reqs)
+    do_go = want_go and reschedule_go
+    do_ret = want_ret and reschedule_return
+    if not (do_go or do_ret):
+        raise ValueError('اختر رحلة واحدة على الأقل (ذهاب أو عودة) لتأجيلها.')
+
+    # The 8-hour rule is evaluated only against the leg(s) actually being
+    # moved — an already-departed (or soon-to-depart) leg the student is
+    # leaving untouched must not block rescheduling the other one.
+    moving_reqs = [r for r in old_reqs if
+                   (r.daily_trip.direction == 'go' and do_go) or
+                   (r.daily_trip.direction == 'return' and do_ret)]
+    hours_left = reschedule_lead_hours_left(moving_reqs)
     if hours_left is not None and hours_left <= DAILY_RESCHEDULE_LEAD_HOURS:
         raise ValueError(
             f'تجاوزت مهلة التأجيل — لازم يتبقى أكثر من {DAILY_RESCHEDULE_LEAD_HOURS} ساعات قبل ميعاد رحلتك الحالية.')
 
-    want_go = any(r.daily_trip.direction == 'go' for r in old_reqs)
-    want_ret = any(r.daily_trip.direction == 'return' for r in old_reqs)
-    if want_go and not new_morning_slot:
+    if do_go and not new_morning_slot:
         raise ValueError('اختر موعد الذهاب الجديد.')
-    if want_ret and not new_return_slot:
+    if do_ret and not new_return_slot:
         raise ValueError('اختر موعد العودة الجديد.')
 
     pickup_point_id = new_pickup_point_id or old_reqs[0].pickup_point_id
@@ -580,14 +594,14 @@ def reschedule_daily_booking(*, subscription, new_date, new_route, new_morning_s
     # Book the new leg(s) FIRST — if either fails (no capacity), nothing below
     # runs and the atomic transaction rolls back, leaving the old seats intact.
     new_by_direction = {}
-    if want_go:
+    if do_go:
         trip = _get_or_create_trip(new_date, new_route, morning_slot=new_morning_slot)
         if trip.id == old_trip_id_by_direction.get('go'):
             raise ValueError('اختر تاريخاً أو موعداً مختلفاً عن حجزك الحالي.')
         new_by_direction['go'] = reschedule_seat(
             trip=trip, student=student, university_id=subscription.university_id,
             subscription=subscription, pickup_point_id=pickup_point_id)
-    if want_ret:
+    if do_ret:
         trip = _get_or_create_trip(new_date, new_route, return_slot=new_return_slot, direction='return')
         if trip.id == old_trip_id_by_direction.get('return'):
             raise ValueError('اختر تاريخاً أو موعداً مختلفاً عن حجزك الحالي.')
@@ -596,17 +610,26 @@ def reschedule_daily_booking(*, subscription, new_date, new_route, new_morning_s
             subscription=subscription, pickup_point_id=pickup_point_id)
 
     for old_req in old_reqs:
-        new_leg = new_by_direction[old_req.daily_trip.direction]
+        direction = old_req.daily_trip.direction
+        new_leg = new_by_direction.get(direction)
+        if not new_leg:
+            continue  # this leg wasn't selected for rescheduling — leave it as-is
         old_trip = old_req.daily_trip
         cancel_seat(old_req)
         DailyReschedule.objects.create(
             student=student, subscription=subscription,
             old_trip=old_trip, new_trip=new_leg.daily_trip)
 
+    update_fields = ['route']
     subscription.route = new_route
-    subscription.morning_slot = new_morning_slot
-    subscription.return_slot = new_return_slot
+    if do_go:
+        subscription.morning_slot = new_morning_slot
+        update_fields.append('morning_slot')
+    if do_ret:
+        subscription.return_slot = new_return_slot
+        update_fields.append('return_slot')
     if new_pickup_point_id:
         subscription.pickup_point_id = new_pickup_point_id
-    subscription.save(update_fields=['route', 'morning_slot', 'return_slot', 'pickup_point'])
+        update_fields.append('pickup_point')
+    subscription.save(update_fields=update_fields)
     return list(new_by_direction.values())

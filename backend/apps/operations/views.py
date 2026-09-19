@@ -679,11 +679,19 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         route = Route.objects.get(pk=route_id)
         go_slot = MorningSlot.objects.get(pk=d['morning_slot']) if d.get('morning_slot') else None
         ret_slot = ReturnSlot.objects.get(pk=d['return_slot']) if d.get('return_slot') else None
+
+        def _as_bool(v, default):
+            if v is None:
+                return default
+            return v in (True, 'true', 'True', 1, '1')
+
         try:
             reschedule_daily_booking(
                 subscription=sub, new_date=new_date, new_route=route,
                 new_morning_slot=go_slot, new_return_slot=ret_slot,
-                new_pickup_point_id=d.get('pickup_point'))
+                new_pickup_point_id=d.get('pickup_point'),
+                reschedule_go=_as_bool(d.get('reschedule_go'), True),
+                reschedule_return=_as_bool(d.get('reschedule_return'), True))
         except ValueError as e:
             return Response({'detail': str(e)}, status=409)
         return Response({'subscription': SubscriptionSerializer(sub).data})
@@ -691,7 +699,9 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='reschedule-eligibility')
     def reschedule_eligibility(self, request):
         """Hours left (server clock) before the student can no longer reschedule
-        this subscription's booking — used by the UI to show/hide the button."""
+        this subscription's booking — used by the UI to show/hide the button,
+        plus a per-direction breakdown so a round-trip booking can move just
+        one leg while the other leg's own cutoff is checked independently."""
         try:
             sub = Subscription.objects.get(
                 pk=request.query_params.get('subscription'), student=request.user,
@@ -702,9 +712,19 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             subscription=sub, status=SeatRequest.Status.CONFIRMED,
         ).select_related('daily_trip', 'daily_trip__morning_slot', 'daily_trip__return_slot'))
         hours_left = reschedule_lead_hours_left(reqs)
+
+        def _leg(direction):
+            leg_reqs = [r for r in reqs if r.daily_trip.direction == direction]
+            if not leg_reqs:
+                return None
+            h = reschedule_lead_hours_left(leg_reqs)
+            return {'hours_left': h, 'eligible': h is None or h > DAILY_RESCHEDULE_LEAD_HOURS}
+
         return Response({
             'hours_left': hours_left,
             'eligible': hours_left is None or hours_left > DAILY_RESCHEDULE_LEAD_HOURS,
+            'go': _leg('go'),
+            'return': _leg('return'),
         })
 
     @action(detail=False, methods=['post'], url_path='book-seat')

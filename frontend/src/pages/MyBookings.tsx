@@ -1,4 +1,4 @@
-import { Card, Table, Tag, Button, Modal, Select, Input, Upload, App as AntdApp, Descriptions, Alert, DatePicker } from 'antd'
+import { Card, Table, Tag, Button, Modal, Select, Input, Upload, App as AntdApp, Descriptions, Alert, DatePicker, Checkbox } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
@@ -27,6 +27,13 @@ function RescheduleModal({ sub, onClose }: { sub: any; onClose: () => void }) {
 
   const wantGo = sub.subscription_type === 'daily_go' || sub.subscription_type === 'daily_round' || sub.subscription_type === 'daily'
   const wantRet = sub.subscription_type === 'daily_return' || sub.subscription_type === 'daily_round'
+  const isRoundTrip = wantGo && wantRet
+  // On a round-trip booking the student can pick just one leg to reschedule
+  // and leave the other exactly as it was; a single-leg booking has no choice.
+  const [moveGo, setMoveGo] = useState(true)
+  const [moveRet, setMoveRet] = useState(true)
+  const doGo = wantGo && (!isRoundTrip || moveGo)
+  const doRet = wantRet && (!isRoundTrip || moveRet)
   // Only offer morning slots actually configured (سعة المقاعد) for the chosen
   // route — same reasoning as the daily booking flow.
   const goSlotIds = new Set((caps?.results || caps || [])
@@ -35,12 +42,14 @@ function RescheduleModal({ sub, onClose }: { sub: any; onClose: () => void }) {
 
   const submit = async () => {
     if (!routeId) { message.error('اختر المسار'); return }
-    if (wantGo && !goSlot) { message.error('اختر موعد الذهاب'); return }
-    if (wantRet && !retSlot) { message.error('اختر موعد العودة'); return }
+    if (!doGo && !doRet) { message.error('اختر رحلة واحدة على الأقل (ذهاب أو عودة) لتأجيلها'); return }
+    if (doGo && !goSlot) { message.error('اختر موعد الذهاب'); return }
+    if (doRet && !retSlot) { message.error('اختر موعد العودة'); return }
     try {
       await reschedule({
         subscription: sub.id, date: date.format('YYYY-MM-DD'), route: routeId,
-        morning_slot: wantGo ? goSlot : undefined, return_slot: wantRet ? retSlot : undefined,
+        morning_slot: doGo ? goSlot : undefined, return_slot: doRet ? retSlot : undefined,
+        reschedule_go: doGo, reschedule_return: doRet,
       }).unwrap()
       message.success('تم تأجيل حجزك إلى الميعاد الجديد بنجاح')
       onClose()
@@ -53,7 +62,13 @@ function RescheduleModal({ sub, onClose }: { sub: any; onClose: () => void }) {
     <Modal title="تأجيل الحجز إلى ميعاد آخر" open onCancel={onClose} onOk={submit}
       confirmLoading={isLoading} okText="تأكيد التأجيل" cancelText="إلغاء">
       <Alert type="info" showIcon style={{ marginBottom: 12 }}
-        message="التأجيل متاح فقط قبل ميعاد رحلتك الحالية بأكثر من ٨ ساعات — حسب توقيت السيرفر، لا توقيت جهازك." />
+        message="التأجيل متاح فقط قبل ميعاد الرحلة اللي هتأجلها بأكثر من ٨ ساعات — حسب توقيت السيرفر، لا توقيت جهازك." />
+      {isRoundTrip && (
+        <div style={{ marginBottom: 10, display: 'flex', gap: 16 }}>
+          <Checkbox checked={moveGo} onChange={(e) => setMoveGo(e.target.checked)}>تأجيل الذهاب</Checkbox>
+          <Checkbox checked={moveRet} onChange={(e) => setMoveRet(e.target.checked)}>تأجيل العودة</Checkbox>
+        </div>
+      )}
       <div style={{ marginBottom: 10 }}>
         <div style={{ marginBottom: 4, color: '#475569' }}>التاريخ الجديد</div>
         <DatePicker style={{ width: '100%' }} value={date} onChange={(d) => d && setDate(d)}
@@ -65,14 +80,14 @@ function RescheduleModal({ sub, onClose }: { sub: any; onClose: () => void }) {
           onChange={(v) => { setRouteId(v); setGoSlot(undefined) }}
           options={(routes?.results || []).map((r: any) => ({ value: r.id, label: r.name }))} />
       </div>
-      {wantGo && (
+      {doGo && (
         <div style={{ marginBottom: 10 }}>
           <div style={{ marginBottom: 4, color: '#475569' }}>موعد الذهاب</div>
           <Select style={{ width: '100%' }} placeholder="اختر الموعد" value={goSlot} onChange={setGoSlot} disabled={!routeId}
             options={availGoSlots.map((s: any) => ({ value: s.id, label: s.name }))} />
         </div>
       )}
-      {wantRet && (
+      {doRet && (
         <div style={{ marginBottom: 10 }}>
           <div style={{ marginBottom: 4, color: '#475569' }}>موعد العودة</div>
           <Select style={{ width: '100%' }} placeholder="اختر الموعد" value={retSlot} onChange={setRetSlot}
