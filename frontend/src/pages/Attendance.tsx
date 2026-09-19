@@ -71,6 +71,10 @@ function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
   const [pending, setPending] = useState<number>(s.chosen_slot_id)
   const chosen = s.available_slots.find((x: any) => x.id === pending) || s.available_slots.find((x: any) => x.id === s.chosen_slot_id)
   const differsFromDefault = chosen && chosen.id !== s.default_slot_id
+  // The 9am morning slot on شبين الكوم's routes (to بدر or الشروق) only picks
+  // up from a single consolidated point on this specific run — not each
+  // rider's own registered point — so make that explicit before they confirm.
+  const isShebin9amGo = s.direction === 'go' && (s.route || '').includes('شبين') && chosen?.time === '09:00'
   const borderColor = s.attending ? '#16a34a' : s.declined ? '#ef4444' : '#f59e0b'
   return (
     <Col xs={24} md={12}>
@@ -102,6 +106,10 @@ function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
             </Tag>
           )}
           {differsFromDefault && <Tag color="orange" style={{ marginTop: 8 }}>ميعاد مختلف عن الافتراضي</Tag>}
+          {isShebin9amGo && (
+            <Alert type="warning" showIcon style={{ marginTop: 8, fontWeight: 700 }}
+              message="ملحوظة: ميعاد الساعة ٩ صباحاً على خط شبين الكوم (لبدر أو الشروق) نقطة الركوب فيه أمام قاعة موفي مون بالبر الشرقي فقط — مش نقطتك المعتادة." />
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Button type="primary" loading={isLoading} disabled={locked} onClick={() => confirm(s.lock_id, pending)}>
