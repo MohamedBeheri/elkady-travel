@@ -235,11 +235,24 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='board')
     def board(self, request):
-        """Admin operational board for a date, grouped by slot → route (§16)."""
+        """Admin operational board for a date — every trip, both directions
+        (ذهاب وعودة), grouped by slot → route (§16)."""
         if request.user.role not in STAFF_ROLES:
             return Response(status=403)
         date = request.query_params.get('date') or timezone.localdate().isoformat()
-        trips = self.get_queryset().filter(date=date, direction='go')
+
+        # A term/monthly rider holds their seat via TermSeatLock, not a
+        # SeatRequest, and their route+slot only gets a DailyTrip row lazily
+        # (whoever first views a seatmap/ticket for it). Eagerly create any
+        # missing ones here so a route running purely on term/monthly riders
+        # still shows up on the board — same gap fixed for لوحة المشرف.
+        for lock in TermSeatLock.objects.filter(active=True):
+            if lock.direction == 'return' and lock.return_slot_id:
+                _get_or_create_trip(date, lock.route, return_slot=lock.return_slot, direction='return')
+            elif lock.direction == 'go' and lock.morning_slot_id:
+                _get_or_create_trip(date, lock.route, morning_slot=lock.morning_slot)
+
+        trips = self.get_queryset().filter(date=date)
         data = DailyTripSerializer(trips, many=True).data
         # `confirmed_count` on the model only counts one-off SeatRequests, so a bus
         # full of TERM subscribers (fixed seat locks) showed مؤكد=0 / الإشغال=0%.
