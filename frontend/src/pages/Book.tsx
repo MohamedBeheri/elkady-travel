@@ -27,6 +27,19 @@ const CENTERS = [
   { value: 'bagour', label: 'الباجور' },
   { value: 'benha', label: 'بنها' },
 ]
+
+// A pickup point only appears for a direction the admin actually configured a
+// PickupTime for (go_times/return_times, from public/pickup-points/) — e.g.
+// الباجور is a go-only stop on the البدر/الشروق routes since their return leg
+// ends at شبين without passing back through الباجور. 'round' (daily
+// round-trip, and every term/monthly subscription) needs both directions.
+function supportsDirection(p: any, need: 'go' | 'return' | 'round') {
+  const hasGo = Object.keys(p?.go_times || {}).length > 0
+  const hasReturn = Object.keys(p?.return_times || {}).length > 0
+  if (need === 'go') return hasGo
+  if (need === 'return') return hasReturn
+  return hasGo && hasReturn
+}
 const SUB_TYPES = [
   { value: 'term', label: 'اشتراك ترم' },
   { value: 'monthly', label: 'اشتراك شهري' },
@@ -127,7 +140,8 @@ function DailyFlow({ unis }: any) {
   const [bookDaily, { isLoading }] = useBookDailyMutation()
 
   const selUni = unis.find((u: any) => u.id === university)
-  const availPickups = dedupePickups((pickups || []).filter((p: any) => !selUni || p.destination === selUni.destination))
+  const availPickups = dedupePickups((pickups || []).filter((p: any) =>
+    (!selUni || p.destination === selUni.destination) && supportsDirection(p, tripType)))
   const selPickup = availPickups.find((p: any) => p.id === pickupId)
   const routeId: number | undefined = selPickup?.route_id
   const seatSelection = selPickup ? selPickup.seat_selection !== false : true
@@ -234,7 +248,7 @@ function DailyFlow({ unis }: any) {
                 options={unis.map((u: any) => ({ value: u.id, label: u.name }))} />
             </Form.Item>
             <Form.Item label="نوع الرحلة" required style={{ marginBottom: 8 }}>
-              <Radio.Group value={tripType} onChange={(e) => setTripType(e.target.value)} optionType="button" buttonStyle="solid">
+              <Radio.Group value={tripType} onChange={(e) => { setTripType(e.target.value); setPickupId(undefined) }} optionType="button" buttonStyle="solid">
                 <Radio.Button value="go">ذهاب فقط</Radio.Button>
                 <Radio.Button value="return">عودة فقط</Radio.Button>
                 <Radio.Button value="round">ذهاب وعودة</Radio.Button>
@@ -268,6 +282,10 @@ function DailyFlow({ unis }: any) {
               {wantGo && <Tag icon={<CarOutlined />} color="blue">الذهاب: من {pointName} إلى {uniName}</Tag>}
               {wantRet && <Tag icon={<RollbackOutlined />} color="gold">العودة: من {uniName || destName} إلى {pointName} (نقطة النزول)</Tag>}
             </div>
+          )}
+          {selPickup && selPickup.return_destination_name && selPickup.return_destination_name !== destName && (
+            <Alert type="info" showIcon style={{ marginTop: 8 }}
+              message={`ملحوظة: خط هذا المسار في اتجاه العودة ينتهي عند ${selPickup.return_destination_name} وليس ${destName} — نقطة نزولك في العودة ستكون هناك.`} />
           )}
         </Form>
       </Card>
@@ -510,6 +528,10 @@ function SubscriptionBooking({ unis, termOpen = true, monthlyOpen = true }: any)
         </div>
         {noPickups && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="لا توجد نقاط لهذا المركز تخدم الجامعة المختارة. جرّب مركزاً آخر." />}
         {selPickup && <Tag color="blue" style={{ marginBottom: 12 }}>الخط: {selPickup.route}</Tag>}
+        {selPickup && selPickup.return_destination_name && selPickup.return_destination_name !== selPickup.destination_name && (
+          <Alert type="info" showIcon style={{ marginBottom: 12 }}
+            message={`ملحوظة: خط هذا المسار في اتجاه العودة ينتهي عند ${selPickup.return_destination_name} وليس ${selPickup.destination_name} — نقطة نزولك في العودة ستكون هناك.`} />
+        )}
         <Alert type="info" showIcon style={{ marginBottom: 12 }}
           message="ميعاد الذهاب والعودة تختاره يومياً من صفحة «رحلة الغد» بعد تأكيد الإدارة، وتذكرتك تتحدَّث بموعد التقاطك تلقائياً." />
         {price !== undefined

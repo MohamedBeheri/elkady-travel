@@ -116,7 +116,7 @@ def public_pickup_points(request):
     import unicodedata, re
     from apps.config_app.models import PickupTime  # noqa: F401  (kept for compat)
     qs = PickupPoint.objects.filter(active=True, route__active=True).select_related(
-        'route', 'route__destination').prefetch_related('times')
+        'route', 'route__destination', 'route__return_destination').prefetch_related('times')
     center = request.query_params.get('center')
     if center:
         qs = qs.filter(center=center)
@@ -139,6 +139,7 @@ def public_pickup_points(request):
                 'seat_selection': p.route.seat_selection_enabled,
                 'destination': p.route.destination_id,
                 'destination_name': p.route.destination.name if p.route.destination_id else '',
+                'return_destination_name': p.route.effective_return_destination.name if p.route.destination_id else '',
                 'sequence': p.sequence, 'go_times': {}, 'return_times': {},
             }
             grouped[key] = row
