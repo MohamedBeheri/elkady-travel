@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 import {
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, useDestinationsQuery,
+  useSaveDestinationMutation, useDeleteDestinationMutation,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation, useBulkSetPickupsMutation,
   usePickupTimesMatrixQuery, useSavePickupTimesMutation,
   useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
@@ -118,6 +119,9 @@ function RoutesTab() {
   }
   const submit = async () => {
     const v = await form.validateFields()
+    // A cleared Select yields `undefined`, which JSON.stringify drops from the
+    // PATCH body entirely — the backend would never learn to unset the field.
+    v.return_destination = v.return_destination ?? null
     await saveRoute(editing ? { id: editing.id, ...v } : v).unwrap()
     message.success('تم الحفظ'); setOpen(false); setEditing(null); form.resetFields()
   }
@@ -280,6 +284,20 @@ function SimpleTab({ title, rows, columns, fields, onSave, onDelete, rowLabel, e
       </Modal>
     </>
   )
+}
+
+function DestinationsTab() {
+  const { data } = useDestinationsQuery()
+  const [save] = useSaveDestinationMutation()
+  const [del] = useDeleteDestinationMutation()
+  return <SimpleTab title="وجهة" rows={data?.results || data || []} onSave={save} onDelete={del}
+    columns={[{ title: 'الكود', dataIndex: 'code' }, { title: 'الاسم', dataIndex: 'name' }, { title: 'بالإنجليزية', dataIndex: 'name_en' }, { title: 'نشط', dataIndex: 'active', render: (v: any) => v ? 'نعم' : 'لا' }]}
+    fields={[
+      { name: 'code', label: 'الكود', required: true },
+      { name: 'name', label: 'الاسم', required: true },
+      { name: 'name_en', label: 'بالإنجليزية' },
+      { name: 'active', label: 'نشط', type: 'switch', initial: true },
+    ]} />
 }
 
 function UniversitiesTab() {
@@ -496,6 +514,7 @@ export default function Config() {
     <Card title="الإعدادات والتهيئة">
       <Tabs
         items={[
+          { key: 'destinations', label: 'الوجهات', children: <DestinationsTab /> },
           { key: 'routes', label: 'المسارات ونقاط الالتقاط', children: <RoutesTab /> },
           { key: 'pickup-times', label: 'مواعيد النقاط', children: <PickupTimesTab /> },
           { key: 'unis', label: 'الجامعات', children: <UniversitiesTab /> },

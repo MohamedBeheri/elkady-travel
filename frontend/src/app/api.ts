@@ -115,6 +115,9 @@ export const api = createApi({
       query: ({ id, ...body }) => ({ url: id ? `config/destinations/${id}/` : 'config/destinations/', method: id ? 'PATCH' : 'POST', body }),
       invalidatesTags: ['Destination'],
     }),
+    deleteDestination: b.mutation<any, number>({
+      query: (id) => ({ url: `config/destinations/${id}/`, method: 'DELETE' }), invalidatesTags: ['Destination'],
+    }),
     universities: b.query<any, Record<string, any> | void>({
       query: (p) => `config/universities/${qs(p as any)}`, providesTags: ['University'],
     }),
@@ -501,7 +504,7 @@ export const {
   useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useStudentFullProfileQuery, usePermissionsMatrixQuery, useSavePermissionsMutation, useDashboardQuery, useDashboardChartsQuery, useFinanceReportQuery, useExploreQuery, usePublicUniversitiesQuery,
   useLazyAvailabilityQuery, usePublicTourismRequestMutation,
   usePublicCollegesQuery, useCollegesQuery, useSaveCollegeMutation, useDeleteCollegeMutation,
-  useDestinationsQuery, useSaveDestinationMutation,
+  useDestinationsQuery, useSaveDestinationMutation, useDeleteDestinationMutation,
   useUniversitiesQuery, useSaveUniversityMutation, useDeleteUniversityMutation,
   useRoutesQuery, useSaveRouteMutation, useDeleteRouteMutation, usePublicPickupPointsQuery,
   usePickupPointsQuery, useSavePickupMutation, useDeletePickupMutation, useBulkSetPickupsMutation,
