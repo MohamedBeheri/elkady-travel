@@ -115,7 +115,7 @@ function TripsTable(rows: any[], emptyText: string) {
   return (
     <Table
       size="small" rowKey={(r: any, i: any) => `${r.date}-${r.route}-${r.direction}-${i}`}
-      pagination={false} dataSource={rows} scroll={{ x: 600 }}
+      pagination={false} dataSource={rows} scroll={{ x: 750 }}
       columns={[
         { title: 'التاريخ', dataIndex: 'date' },
         { title: 'المسار', dataIndex: 'route' },
@@ -123,6 +123,7 @@ function TripsTable(rows: any[], emptyText: string) {
         { title: 'الموعد', dataIndex: 'slot' },
         { title: 'النوع', dataIndex: 'kind', render: (v: string) => <Tag color="cyan">{v}</Tag> },
         { title: 'الحالة', dataIndex: 'status_display', render: (v: string, r: any) => <Tag color={STATUS_COLOR[r.status] || 'default'}>{v}</Tag> },
+        { title: 'تاريخ تأكيد الذهاب', dataIndex: 'confirmed_at', render: (v: string) => v || '—' },
       ]}
     />
   )

@@ -58,14 +58,15 @@ class UserViewSet(viewsets.ModelViewSet):
     def full_profile(self, request, pk=None):
         """Admin dossier for one student: profile, every subscription (with
         payment proof), standing term/monthly seats, and ride history split
-        into past/upcoming (from dated SeatRequest rows)."""
+        into past/upcoming (from dated SeatRequest rows plus, for upcoming,
+        any explicit AttendanceConfirmation on a standing term/monthly seat)."""
         from config.permissions import STAFF_ROLES
         if request.user.role not in STAFF_ROLES:
             return Response(status=403)
         from django.utils import timezone
         from apps.bookings.models import Subscription
         from apps.bookings.serializers import SubscriptionSerializer
-        from apps.operations.models import SeatAbsence, SeatRequest, TermSeatLock
+        from apps.operations.models import AttendanceConfirmation, SeatAbsence, SeatRequest, TermSeatLock
 
         student = self.get_object()
         today = timezone.localdate()
@@ -96,8 +97,30 @@ class UserViewSet(viewsets.ModelViewSet):
                 'slot': slot.name if slot else '—', 'seat': r.seat_number,
                 'kind': PRIORITY_LABEL.get(r.priority_type, r.priority_type),
                 'status': r.status, 'status_display': r.get_status_display(),
+                'confirmed_at': timezone.localtime(r.requested_at).strftime('%Y-%m-%d %H:%M'),
             }
             (past_trips if t.date < today else upcoming_trips).append(row)
+
+        # Standing term/monthly seats aren't tied to a date — but a rider who
+        # explicitly confirmed "I will attend" for an upcoming date (the daily
+        # attendance page) leaves an AttendanceConfirmation we can show here.
+        confirmations = AttendanceConfirmation.objects.filter(
+            term_lock__student=student, term_lock__active=True, date__gte=today,
+        ).select_related(
+            'term_lock__route', 'term_lock__morning_slot', 'term_lock__return_slot',
+            'term_lock__subscription',
+        )
+        for c in confirmations:
+            lock = c.term_lock
+            upcoming_trips.append({
+                'date': c.date, 'route': lock.route.name, 'direction': lock.get_direction_display(),
+                'slot': lock.slot_label, 'seat': lock.seat_number,
+                'kind': PRIORITY_LABEL.get(
+                    lock.subscription.subscription_type if lock.subscription_id else '', 'ثابت'),
+                'status': 'confirmed', 'status_display': 'مؤكد الحضور',
+                'confirmed_at': timezone.localtime(c.created_at).strftime('%Y-%m-%d %H:%M'),
+            })
+
         past_trips.sort(key=lambda x: x['date'], reverse=True)
         upcoming_trips.sort(key=lambda x: x['date'])
 
