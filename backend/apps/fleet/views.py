@@ -359,8 +359,22 @@ def trip_cost_report(request):
 @permission_classes([IsFleetManager])
 def operations_dashboard(request):
     """Supervisor board for a given day: trips, assignments, gaps, pickup distribution."""
-    from apps.operations.models import DailyTrip, SeatRequest
+    from apps.config_app.models import MorningSlot, Route
+    from apps.operations.models import DailyTrip, SeatAbsence, SeatRequest, TermSeatLock
+    from apps.operations.services import _get_or_create_trip, build_seatmap
     date = request.query_params.get('date') or str(timezone.localdate())
+
+    # A term/monthly rider holds their seat via TermSeatLock, not a SeatRequest,
+    # and their route+slot only gets a DailyTrip row lazily (whoever first
+    # views a seatmap/ticket for it). Eagerly create any missing ones here so a
+    # route running purely on term/monthly riders still shows up today — the
+    # exact gap that made "رحلات اليوم"/"الركاب" undercount before this fix.
+    term_pairs = {
+        (l.route_id, l.morning_slot_id)
+        for l in TermSeatLock.objects.filter(active=True, direction='go', morning_slot__isnull=False)
+    }
+    for route_id, slot_id in term_pairs:
+        _get_or_create_trip(date, Route.objects.get(pk=route_id), morning_slot=MorningSlot.objects.get(pk=slot_id))
 
     trips = DailyTrip.objects.filter(date=date, direction='go').select_related('route', 'route__destination', 'morning_slot')
     assignments = VehicleAssignment.objects.filter(date=date).exclude(status='cancelled').select_related('driver', 'vehicle', 'daily_trip', 'route')
@@ -370,8 +384,12 @@ def operations_dashboard(request):
             by_trip.setdefault(a.daily_trip_id, []).append(a)
 
     trip_rows, missing = [], []
+    pickup_counts: dict = {}
     for t in trips:
-        confirmed = t.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).count()
+        # Count CONFIRMED seats the same way كشف اليوم الشامل / رحلات الغد do —
+        # term-lock holders included, not just one-off SeatRequest rows.
+        sm = build_seatmap(t)
+        confirmed = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'term'))
         assigns = by_trip.get(t.id, [])
         row = {
             'id': t.id, 'route': t.route.name, 'slot': t.slot_label,
@@ -385,12 +403,23 @@ def operations_dashboard(request):
         if not assigns:
             missing.append({'route': t.route.name, 'slot': t.slot_label})
 
-    # Pickup point distribution across today's confirmed passengers.
-    dist = {}
+        term_locks = TermSeatLock.objects.filter(
+            active=True, direction='go', route_id=t.route_id, morning_slot_id=t.morning_slot_id,
+        ).select_related('student__pickup_point', 'subscription__pickup_point')
+        absent_today = set(SeatAbsence.objects.filter(
+            date=date, term_lock__in=term_locks).values_list('term_lock_id', flat=True))
+        for lock in term_locks:
+            if lock.id in absent_today:
+                continue
+            pp = lock.subscription.pickup_point if (lock.subscription_id and lock.subscription.pickup_point_id) else lock.student.pickup_point
+            key = pp.name if pp else 'غير محدد'
+            pickup_counts[key] = pickup_counts.get(key, 0) + 1
+
+    # One-off (daily) confirmed bookings' pickup points, added to the term/monthly tally above.
     for sr in SeatRequest.objects.filter(daily_trip__date=date, status=SeatRequest.Status.CONFIRMED).select_related('pickup_point'):
         key = sr.pickup_point.name if sr.pickup_point else 'غير محدد'
-        dist[key] = dist.get(key, 0) + 1
-    pickup_dist = sorted([{'name': k, 'count': v} for k, v in dist.items()], key=lambda x: -x['count'])
+        pickup_counts[key] = pickup_counts.get(key, 0) + 1
+    pickup_dist = sorted([{'name': k, 'count': v} for k, v in pickup_counts.items()], key=lambda x: -x['count'])
 
     return Response({
         'date': date,
