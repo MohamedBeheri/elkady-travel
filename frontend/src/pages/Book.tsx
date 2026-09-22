@@ -125,6 +125,7 @@ function DailyFlow({ unis }: any) {
   const [params] = useSearchParams()
   const qDate = params.get('date')
   const [date, setDate] = useState<any>(qDate ? dayjs(qDate) : dayjs().add(1, 'day'))
+  const [dateTouched, setDateTouched] = useState(!!qDate)
   const [goSlot, setGoSlot] = useState<number>()
   const [goSeat, setGoSeat] = useState<number | null>(null)
   const [retSlot, setRetSlot] = useState<number>()
@@ -138,6 +139,20 @@ function DailyFlow({ unis }: any) {
   const { data: prices } = usePricesQuery({ active: true })
   const { data: caps } = useCapacitiesQuery()
   const [bookDaily, { isLoading }] = useBookDailyMutation()
+
+  // A student booking at 2am for "tomorrow" is really booking for TODAY's
+  // still-upcoming morning run, not the day after — the naive "tomorrow"
+  // default only makes sense once today's earliest trip has already left.
+  // Correct the default once slot times are known, unless they've already
+  // picked a date themselves.
+  useEffect(() => {
+    if (dateTouched) return
+    const slots = (mSlots?.results || mSlots || []).filter((s: any) => s.departure_time)
+    if (!slots.length) return
+    const earliest = slots.reduce((min: string, s: any) => (s.departure_time < min ? s.departure_time : min), slots[0].departure_time)
+    const now = dayjs()
+    if (now.format('HH:mm:ss') < earliest) setDate(now)
+  }, [mSlots, dateTouched])
 
   const selUni = unis.find((u: any) => u.id === university)
   const availPickups = dedupePickups((pickups || []).filter((p: any) =>
@@ -172,6 +187,9 @@ function DailyFlow({ unis }: any) {
   const wantGo = tripType === 'go' || tripType === 'round'
   const wantRet = tripType === 'return' || tripType === 'round'
   const dateStr = date ? date.format('YYYY-MM-DD') : undefined
+  const dateLabel = date
+    ? `يوم ${date.toDate().toLocaleDateString('ar-EG', { weekday: 'long' })} الموافق ${date.toDate().toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}`
+    : ''
 
   // Direction-aware wording: on the return leg the student's center point is the
   // DROP-OFF, and the trip runs from the university back to their center.
@@ -283,7 +301,7 @@ function DailyFlow({ unis }: any) {
                 options={availPickups.map((p: any) => ({ value: p.id, label: p.name }))} />
             </Form.Item>
             <Form.Item label="تاريخ الرحلة" required style={{ marginBottom: 8 }}>
-              <DatePicker style={{ width: '100%' }} value={date} onChange={setDate}
+              <DatePicker style={{ width: '100%' }} value={date} onChange={(d) => { setDate(d); setDateTouched(true) }}
                 disabledDate={(d) => d && d < dayjs().startOf('day')} />
             </Form.Item>
           </div>
@@ -386,6 +404,14 @@ function DailyFlow({ unis }: any) {
               </>}
         </Descriptions>
         <Statistic title="الإجمالي المطلوب" value={total} suffix="ج.م" valueStyle={{ color: '#0B2E5E', fontWeight: 800 }} />
+        {canConfirm && (
+          <Alert type="info" showIcon style={{ marginTop: 12 }}
+            message={`أنت الآن على وشك تأكيد رحلتك ${
+              tripType === 'go' ? `من ${pointName} إلى ${uniName}`
+                : tripType === 'return' ? `من ${uniName} إلى ${returnDropLabel}`
+                : `ذهاباً من ${pointName} إلى ${uniName} وعودة إلى ${returnDropLabel}`
+            } ${dateLabel}.`} />
+        )}
         <Divider style={{ margin: '14px 0' }} />
         <Button type="primary" size="large" disabled={!canConfirm} loading={isLoading} onClick={confirm}>
           تأكيد الحجز {total ? `(${total.toLocaleString()} ج.م)` : ''}
