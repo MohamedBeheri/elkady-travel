@@ -112,7 +112,7 @@ function PaymentPanel({ sub, title, onBack, onPaid }: any) {
 
 /* ================= Daily booking: university → trip type → center → pickup → slot(s) → seat(s) ================= */
 function DailyFlow({ unis }: any) {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const navigate = useNavigate()
   const user = useAppSelector((s) => s.auth.user)
   const gender = user?.gender
@@ -227,7 +227,7 @@ function DailyFlow({ unis }: any) {
     && (!wantGo || (goSlot && (goSeat || !seatSelection)))
     && (!wantRet || (retSlot && (retSeat || !seatSelection))))
 
-  const confirm = async () => {
+  const doBook = async () => {
     try {
       const res = await bookDaily({
         date: dateStr, route: routeId, university, pickup_point: pickupId,
@@ -239,6 +239,20 @@ function DailyFlow({ unis }: any) {
       }).unwrap()
       setCreated(res.subscription)
     } catch (e: any) { message.error(e?.data?.detail || 'تعذر إتمام الحجز') }
+  }
+
+  // Confirm the trip's date/route out loud before booking — a student
+  // catches a wrong date (e.g. booking after midnight) here, before paying.
+  const confirmSummary = `أنت الآن على وشك تأكيد رحلتك ${
+    tripType === 'go' ? `من ${pointName} إلى ${uniName}`
+      : tripType === 'return' ? `من ${uniName} إلى ${returnDropLabel}`
+      : `ذهاباً من ${pointName} إلى ${uniName} وعودة إلى ${returnDropLabel}`
+  } ${dateLabel}.`
+  const confirm = () => {
+    modal.confirm({
+      title: 'تأكيد الحجز', content: confirmSummary,
+      okText: 'تأكيد الحجز', cancelText: 'رجوع', onOk: doBook,
+    })
   }
 
   const reset = () => {
@@ -404,14 +418,6 @@ function DailyFlow({ unis }: any) {
               </>}
         </Descriptions>
         <Statistic title="الإجمالي المطلوب" value={total} suffix="ج.م" valueStyle={{ color: '#0B2E5E', fontWeight: 800 }} />
-        {canConfirm && (
-          <Alert type="info" showIcon style={{ marginTop: 12 }}
-            message={`أنت الآن على وشك تأكيد رحلتك ${
-              tripType === 'go' ? `من ${pointName} إلى ${uniName}`
-                : tripType === 'return' ? `من ${uniName} إلى ${returnDropLabel}`
-                : `ذهاباً من ${pointName} إلى ${uniName} وعودة إلى ${returnDropLabel}`
-            } ${dateLabel}.`} />
-        )}
         <Divider style={{ margin: '14px 0' }} />
         <Button type="primary" size="large" disabled={!canConfirm} loading={isLoading} onClick={confirm}>
           تأكيد الحجز {total ? `(${total.toLocaleString()} ج.م)` : ''}
