@@ -118,6 +118,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         sub.approve(request.user)
 
         seat_msg = ''
+        seat_warning = ''
         if sub.subscription_type in ('term', 'monthly'):
             from apps.operations.services import assign_subscription_seats
             d = request.data
@@ -132,6 +133,18 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             if created.get('return'):
                 parts.append(f"عودة مقعد {created['return'].seat_number}")
             seat_msg = (' — ' + '، '.join(parts)) if parts else ''
+            # The subscription stays CONFIRMED (the student paid), but if no
+            # free seat was found on the default slot the student gets no
+            # ticket — say so loudly instead of failing silently.
+            missing = [lbl for key, lbl in (('go', 'الذهاب'), ('return', 'العودة')) if not created.get(key)]
+            if missing:
+                seat_warning = (
+                    f'تم تأكيد الاشتراك لكن لم يُخصَّص مقعد {" و".join(missing)} — '
+                    f'الميعاد ممتلئ على خط {sub.route} أو لا يوجد مقعد مناسب لنوع الطالب. '
+                    f'الطالب لن تظهر له تذكرة حتى يُخصَّص له مقعد (بعد زيادة سعة الخط أو تفريغ مقعد).')
+                notify_staff('اشتراك مؤكد بدون مقعد',
+                             f'{sub.student.full_name or sub.student.username}: {seat_warning}',
+                             link='/subscriptions', severity='warning')
         elif sub.subscription_type.startswith('daily'):
             # Daily: the seat(s) were HELD at booking — confirm them + issue QR.
             from apps.operations.models import SeatRequest as _SR
@@ -142,10 +155,13 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 parts.append(f"مقعد {req.seat_number}")
             seat_msg = (' — ' + '، '.join(parts)) if parts else ''
 
+        pending_seat = ' — سيتم تخصيص مقعدك من الإدارة قريباً وتظهر تذكرتك بعدها' if seat_warning else ''
         notify(sub.student, 'تم تأكيد اشتراكك',
-               f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}{seat_msg}',
+               f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}{seat_msg}{pending_seat}',
                link='/tickets', severity='success')
-        return Response(SubscriptionSerializer(sub).data)
+        data = SubscriptionSerializer(sub).data
+        data['seat_warning'] = seat_warning
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):

@@ -25,7 +25,7 @@ from .serializers import (
 from .services import (
     allocate_trip, book_specific_seat, build_seatmap, cancel_seat, confirm_seat_payment,
     make_qr, release_seat, request_seat, run_daily_allocation, reschedule_daily_booking,
-    reschedule_lead_hours_left, DAILY_RESCHEDULE_LEAD_HOURS, _get_or_create_trip,
+    reschedule_lead_hours_left, DAILY_RESCHEDULE_LEAD_HOURS, _first_free_seat_on_trip, _get_or_create_trip,
 )
 
 
@@ -676,6 +676,51 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
+                legs = []
+                if want_go:
+                    legs.append(('go', _get_or_create_trip(
+                        date, route, morning_slot=MorningSlot.objects.get(pk=go_slot_id)), d.get('go_seat')))
+                if want_ret:
+                    legs.append(('return', _get_or_create_trip(
+                        date, route, return_slot=ReturnSlot.objects.get(pk=ret_slot_id), direction='return'),
+                        d.get('ret_seat')))
+                # A leg with no seat picked and no free seat left → the whole
+                # booking goes on the waiting list (no seat held, no payment yet).
+                full = [(k, t) for k, t, seat in legs
+                        if seat in (None, '', 0, '0') and not _first_free_seat_on_trip(
+                            DailyTrip.objects.select_for_update().get(pk=t.pk), user)]
+                if full:
+                    sub = Subscription.objects.create(
+                        student=user, subscription_type=sub_type, route=route,
+                        university_id=university_id, pickup_point_id=pickup_id,
+                        morning_slot_id=go_slot_id if want_go else None,
+                        return_slot_id=ret_slot_id if want_ret else None,
+                        amount=amount, status=Subscription.Status.DRAFT,
+                    )
+                    for _k, t, _seat in legs:
+                        req, made = SeatRequest.objects.get_or_create(
+                            daily_trip=t, student=user,
+                            defaults={'university_id': university_id, 'priority_type': 'daily',
+                                      'subscription': sub, 'pickup_point_id': pickup_id,
+                                      'status': SeatRequest.Status.WAITING})
+                        if not made and req.status == SeatRequest.Status.CANCELLED:
+                            req.status = SeatRequest.Status.WAITING
+                            req.seat_number = None
+                            req.requested_at = timezone.now()
+                            req.subscription = sub
+                            req.save()
+                    full_lbl = ' و'.join('الذهاب' if k == 'go' else 'العودة' for k, _t in full)
+                    notify_staff(
+                        'طالب في قائمة الانتظار',
+                        f'{user.full_name or user.username} دخل قائمة انتظار {route.name} بتاريخ {date} '
+                        f'({full_lbl} ممتلئ)', link='/waiting', severity='warning')
+                    return Response({
+                        'subscription': SubscriptionSerializer(sub).data, 'seats': {},
+                        'waiting': True,
+                        'detail': f'رحلة {full_lbl} ممتلئة — تم تسجيلك في قائمة الانتظار. لا تدفع الآن؛ '
+                                  f'سنتواصل معك فور توفر مقعد.',
+                    }, status=201)
+
                 sub = Subscription.objects.create(
                     student=user, subscription_type=sub_type, route=route,
                     university_id=university_id, pickup_point_id=pickup_id,
@@ -685,14 +730,14 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
                 )
                 seats = {}
                 if want_go:
-                    trip = _get_or_create_trip(date, route, morning_slot=MorningSlot.objects.get(pk=go_slot_id))
+                    trip = legs[0][1]
                     _, obj, _ = book_specific_seat(
                         trip=trip, student=user, seat_number=d.get('go_seat'),
                         university_id=university_id, priority_type='daily',
                         subscription=sub, pickup_point_id=pickup_id)
                     seats['go'] = getattr(obj, 'seat_number', None)
                 if want_ret:
-                    trip = _get_or_create_trip(date, route, return_slot=ReturnSlot.objects.get(pk=ret_slot_id), direction='return')
+                    trip = legs[-1][1]
                     _, obj, _ = book_specific_seat(
                         trip=trip, student=user, seat_number=d.get('ret_seat'),
                         university_id=university_id, priority_type='daily',

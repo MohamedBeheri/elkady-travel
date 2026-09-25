@@ -132,6 +132,7 @@ function DailyFlow({ unis }: any) {
   const [retSeat, setRetSeat] = useState<number | null>(null)
   const [created, setCreated] = useState<any>(null)
   const [paid, setPaid] = useState(false)
+  const [waitMsg, setWaitMsg] = useState('')
 
   const { data: pickups } = usePublicPickupPointsQuery(center, { skip: !center })
   const { data: mSlots } = useMorningSlotsQuery()
@@ -223,9 +224,17 @@ function DailyFlow({ unis }: any) {
   const roundPrice = priceFor('daily_round') ?? (goPrice + returnPrice)
   const total = tripType === 'round' ? roundPrice : tripType === 'return' ? returnPrice : goPrice
 
+  // A seat map with no empty seat the student may take = trip is full → the
+  // booking goes to the waiting list instead (no seat to pick, no payment yet).
+  const mapFull = (m: any) => !!m && !(m.seats || []).some((x: any) =>
+    x.raw_state === 'empty' && (!x.gender || !gender || x.gender === gender))
+  const goFull = wantGo && seatSelection && !!goQuery && !goFetch && mapFull(goMap)
+  const retFull = wantRet && seatSelection && !!retQuery && !retFetch && mapFull(retMap)
+  const willWait = goFull || retFull
+
   const canConfirm = !!(university && center && pickupId && dateStr && routeId
-    && (!wantGo || (goSlot && (goSeat || !seatSelection)))
-    && (!wantRet || (retSlot && (retSeat || !seatSelection))))
+    && (!wantGo || (goSlot && (goSeat || !seatSelection || goFull)))
+    && (!wantRet || (retSlot && (retSeat || !seatSelection || retFull))))
 
   const doBook = async () => {
     try {
@@ -234,9 +243,10 @@ function DailyFlow({ unis }: any) {
         trip_type: tripType,
         morning_slot: wantGo ? goSlot : undefined,
         return_slot: wantRet ? retSlot : undefined,
-        go_seat: wantGo && seatSelection ? goSeat : undefined,
-        ret_seat: wantRet && seatSelection ? retSeat : undefined,
+        go_seat: wantGo && seatSelection && !willWait ? goSeat : undefined,
+        ret_seat: wantRet && seatSelection && !willWait ? retSeat : undefined,
       }).unwrap()
+      if (res.waiting) { setWaitMsg(res.detail || 'تم تسجيلك في قائمة الانتظار'); return }
       setCreated(res.subscription)
     } catch (e: any) { message.error(e?.data?.detail || 'تعذر إتمام الحجز') }
   }
@@ -250,13 +260,24 @@ function DailyFlow({ unis }: any) {
   } ${dateLabel}.`
   const confirm = () => {
     modal.confirm({
-      title: 'تأكيد الحجز', content: confirmSummary,
+      title: willWait ? 'قائمة الانتظار' : 'تأكيد الحجز',
+      content: willWait ? `${confirmSummary} الرحلة ممتلئة، وسيتم تسجيلك في قائمة الانتظار بدون دفع الآن.` : confirmSummary,
       okText: 'تأكيد الحجز', cancelText: 'رجوع', onOk: doBook,
     })
   }
 
   const reset = () => {
-    setCreated(null); setPaid(false); setGoSeat(null); setRetSeat(null); setGoSlot(undefined); setRetSlot(undefined)
+    setCreated(null); setPaid(false); setWaitMsg(''); setGoSeat(null); setRetSeat(null); setGoSlot(undefined); setRetSlot(undefined)
+  }
+
+  if (waitMsg) {
+    return (
+      <Result status="info" title="تم تسجيلك في قائمة الانتظار" subTitle={waitMsg}
+        extra={[
+          <Button type="primary" key="b" onClick={() => navigate('/my-bookings')}>حجوزاتي</Button>,
+          <Button key="n" type="dashed" onClick={reset}>حجز آخر</Button>,
+        ]} />
+    )
   }
 
   if (paid) {
@@ -360,7 +381,10 @@ function DailyFlow({ unis }: any) {
           )}
           {!seatSelection
             ? goSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعدك تلقائياً لهذه الرحلة (اختيار المقاعد غير مفعّل لهذا الخط)." />
-            : goQuery && (goFetch ? <Spin /> : goMap && (
+            : goQuery && (goFetch ? <Spin /> : goFull ? (
+              <Alert type="warning" showIcon style={{ fontWeight: 700 }}
+                message="رحلة الذهاب في هذا الميعاد ممتلئة — عند التأكيد سيتم تسجيلك في قائمة الانتظار (بدون دفع الآن) ونتواصل معك فور توفر مقعد." />
+            ) : goMap && (
               <div style={{ textAlign: 'center' }}>
                 <SeatMap layout={goMap.layout} seats={goMap.seats} selected={goSeat} onSelect={setGoSeat} viewerGender={gender} />
                 <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
@@ -393,7 +417,10 @@ function DailyFlow({ unis }: any) {
           )}
           {!seatSelection
             ? retSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعد العودة تلقائياً (اختيار المقاعد غير مفعّل لهذا الخط)." />
-            : retQuery && (retFetch ? <Spin /> : retMap && (
+            : retQuery && (retFetch ? <Spin /> : retFull ? (
+              <Alert type="warning" showIcon style={{ fontWeight: 700 }}
+                message="رحلة العودة في هذا الميعاد ممتلئة — عند التأكيد سيتم تسجيلك في قائمة الانتظار (بدون دفع الآن) ونتواصل معك فور توفر مقعد." />
+            ) : retMap && (
               <div style={{ textAlign: 'center' }}>
                 <SeatMap layout={retMap.layout} seats={retMap.seats} selected={retSeat} onSelect={setRetSeat} viewerGender={gender} />
                 <div style={{ display: 'flex', justifyContent: 'center' }}><SeatLegend /></div>
@@ -420,10 +447,12 @@ function DailyFlow({ unis }: any) {
         <Statistic title="الإجمالي المطلوب" value={total} suffix="ج.م" valueStyle={{ color: '#0B2E5E', fontWeight: 800 }} />
         <Divider style={{ margin: '14px 0' }} />
         <Button type="primary" size="large" disabled={!canConfirm} loading={isLoading} onClick={confirm}>
-          تأكيد الحجز {total ? `(${total.toLocaleString()} ج.م)` : ''}
+          {willWait ? 'التسجيل في قائمة الانتظار' : <>تأكيد الحجز {total ? `(${total.toLocaleString()} ج.م)` : ''}</>}
         </Button>
         <div style={{ color: '#64748b', fontSize: 13, marginTop: 8 }}>
-          يُحجز المقعد مؤقتاً ثم يُعتمد بعد رفع إثبات الدفع ومراجعة الإدارة من صفحة «حجوزاتي والدفع».
+          {willWait
+            ? 'الرحلة ممتلئة — لن يُطلب منك دفع الآن. ستظهر في قائمة الانتظار ونتواصل معك فور توفر مقعد.'
+            : 'يُحجز المقعد مؤقتاً ثم يُعتمد بعد رفع إثبات الدفع ومراجعة الإدارة من صفحة «حجوزاتي والدفع».'}
         </div>
       </Card>
     </div>

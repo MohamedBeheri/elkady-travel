@@ -158,6 +158,7 @@ export default function MyBookings() {
               ['payment_pending', 'rejected'].includes(r.status)
                 ? <Button size="small" type="primary" onClick={() => openPay(r)}>ادفع الآن</Button>
                 : r.status === 'payment_submitted' ? <span style={{ color: '#64748b' }}>بانتظار المراجعة</span>
+                : r.status === 'draft' && r.subscription_type?.startsWith('daily') ? <Tag color="orange">قائمة انتظار — لا تدفع الآن</Tag>
                 : r.status === 'confirmed' && r.subscription_type?.startsWith('daily')
                 ? <Button size="small" onClick={() => setRescheduling(r)}>تأجيل</Button>
                 : r.rejection_reason ? <span style={{ color: '#ef4444' }}>{r.rejection_reason}</span> : '—'

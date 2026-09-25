@@ -5,7 +5,7 @@ import { usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscrip
 const TYPE_LABEL: Record<string, string> = { term: 'ترم', monthly: 'شهري', daily: 'يومي' }
 
 export default function PaymentQueue() {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const { data, isFetching } = usePaymentQueueQuery()
   const [approve] = useApproveSubscriptionMutation()
   const [reject] = useRejectSubscriptionMutation()
@@ -13,7 +13,15 @@ export default function PaymentQueue() {
   const [reason, setReason] = useState('')
 
   const doApprove = async (id: number) => {
-    try { await approve(id).unwrap(); message.success('تم تأكيد الدفع والاشتراك') } catch { message.error('خطأ') }
+    try {
+      const res: any = await approve(id).unwrap()
+      if (res?.seat_warning) {
+        // Confirmed, but no seat could be assigned → the student has no ticket yet.
+        modal.warning({ title: 'تم التأكيد — بدون مقعد', content: res.seat_warning, okText: 'فهمت' })
+      } else {
+        message.success('تم تأكيد الدفع والاشتراك')
+      }
+    } catch { message.error('خطأ') }
   }
   const doReject = async () => {
     try {
