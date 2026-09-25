@@ -508,12 +508,28 @@ def missing_seat_report(subscription):
             out.append({'direction': direction, 'label': label, 'slot': '', 'taken': 0, 'total': total,
                         'free_seat': None, 'reason': 'لا يوجد موعد مُعرّف'})
             continue
-        taken = TermSeatLock.objects.filter(
-            route=subscription.route, direction=direction, active=True,
-            **({'return_slot': slot} if direction == 'return' else {'morning_slot': slot})).count()
+        slot_kw = {'return_slot': slot} if direction == 'return' else {'morning_slot': slot}
+        locks = list(TermSeatLock.objects.filter(
+            route=subscription.route, direction=direction, active=True, **slot_kw,
+        ).select_related('subscription'))
+        taken = len(locks)
         free = _first_free_seat(subscription.route, slot, direction, layout, subscription.student)
+        # What those standing seats really are (read-only breakdown).
+        live = [l for l in locks if l.subscription_id and l.subscription.status == 'confirmed']
+        stale = taken - len(live)  # seat still held by a cancelled/rejected/expired/missing subscription
+        per_student = {}
+        for l in live:
+            per_student[l.student_id] = per_student.get(l.student_id, 0) + 1
+        dup = sum(n - 1 for n in per_student.values() if n > 1)
+        seat_nums = [l.seat_number for l in locks]
+        same_seat = len(seat_nums) - len(set(seat_nums))
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        riding = AttendanceConfirmation.objects.filter(
+            date=tomorrow, term_lock__in=[l.id for l in locks]).count()
         out.append({'direction': direction, 'label': label, 'slot': slot.name, 'taken': taken, 'total': total,
                     'free_seat': free,
+                    'breakdown': {'confirmed_subs': len(live) - dup, 'stale': stale, 'duplicate': dup,
+                                  'same_seat_number': same_seat, 'riding_tomorrow': riding},
                     'reason': '' if free else 'الميعاد ممتلئ أو لا يوجد مقعد مناسب لنوع الطالب'})
     return out
 

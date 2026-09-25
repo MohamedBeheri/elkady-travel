@@ -170,6 +170,10 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         sub = self.get_object()
         reason = request.data.get('rejection_reason', '')
         sub.reject(request.user, reason)
+        # A rejected term/monthly subscription must not keep its standing seat —
+        # otherwise the seat stays «taken» forever and blocks new subscribers.
+        from apps.operations.models import TermSeatLock
+        TermSeatLock.objects.filter(subscription=sub, active=True).update(active=False)
         # Daily: free the seats that were HELD for this rejected booking.
         if sub.subscription_type.startswith('daily'):
             from apps.operations.models import SeatRequest as _SR

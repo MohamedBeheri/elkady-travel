@@ -325,18 +325,29 @@ export default function Subscriptions() {
         </Button>
         <Table
           rowKey="id" size="small" pagination={{ pageSize: 20, showSizeChanger: false }}
-          dataSource={missing} scroll={{ x: 780 }} locale={{ emptyText: 'لا يوجد ✔' }}
+          dataSource={missing} scroll={{ x: 860 }} locale={{ emptyText: 'لا يوجد ✔' }}
           columns={[
             { title: 'الطالب', dataIndex: 'student_name', width: 160 },
             { title: 'الهاتف', dataIndex: 'student_phone', width: 120 },
             { title: 'النوع', dataIndex: 'type_display', width: 90 },
             { title: 'المسار', dataIndex: 'route_name', width: 170 },
-            { title: 'الناقص', dataIndex: 'missing_legs', width: 240, render: (legs: any[]) => (
+            { title: 'الناقص', dataIndex: 'missing_legs', width: 320, render: (legs: any[]) => (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {legs.map((l) => (
-                  <span key={l.direction} style={{ color: l.free_seat ? '#16a34a' : '#dc2626', fontSize: 12 }}>
-                    {l.label} {l.slot}: محجوز {l.taken}/{l.total} — {l.free_seat ? 'يوجد مقعد متاح' : l.reason}
-                  </span>
+                  <div key={l.direction} style={{ fontSize: 12 }}>
+                    <div style={{ color: l.free_seat ? '#16a34a' : '#dc2626' }}>
+                      {l.label} {l.slot}: مقاعد ثابتة {l.taken}/{l.total} — {l.free_seat ? 'يوجد مقعد متاح' : l.reason}
+                    </div>
+                    {l.breakdown && (
+                      <div style={{ color: '#475569' }}>
+                        منهم: {l.breakdown.confirmed_subs} اشتراك مؤكد
+                        {l.breakdown.stale ? ` · ${l.breakdown.stale} لاشتراك ملغي/مرفوض/منتهي` : ''}
+                        {l.breakdown.duplicate ? ` · ${l.breakdown.duplicate} مكرر لنفس الطالب` : ''}
+                        {l.breakdown.same_seat_number ? ` · ${l.breakdown.same_seat_number} على رقم مقعد مكرر` : ''}
+                        {' · '}أكدوا حضور بكرة: {l.breakdown.riding_tomorrow}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             ) },
