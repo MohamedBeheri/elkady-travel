@@ -198,6 +198,52 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         sub.save(update_fields=['whatsapp_notified_at', 'updated_at'])
         return Response(SubscriptionSerializer(sub).data)
 
+    def _missing_seat_qs(self):
+        from apps.operations.models import TermSeatLock
+        from django.db.models import Count, Q
+        return (Subscription.objects
+                .filter(subscription_type__in=['term', 'monthly'], status=Subscription.Status.CONFIRMED)
+                .annotate(n_locks=Count('term_seats', filter=Q(term_seats__active=True), distinct=True))
+                .filter(n_locks__lt=2)
+                .select_related('student', 'route', 'route__destination', 'route__return_destination',
+                                'university', 'pickup_point', 'payment_method')
+                .order_by('route_id', 'verified_at'))
+
+    @action(detail=False, methods=['get'], url_path='missing-seats')
+    def missing_seats(self, request):
+        """READ-ONLY: confirmed term/monthly subscriptions missing a seat (no ticket), with why."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        from apps.operations.services import missing_seat_report
+        out = []
+        for sub in self._missing_seat_qs():
+            legs = missing_seat_report(sub)
+            if not legs:
+                continue
+            row = SubscriptionSerializer(sub).data
+            row['missing_legs'] = legs
+            row['can_fill'] = any(l['free_seat'] for l in legs)
+            out.append(row)
+        return Response(out)
+
+    @action(detail=True, methods=['post'], url_path='fill-seats')
+    def fill_seats(self, request, pk=None):
+        """Assign a seat for the missing direction(s) only — never moves an existing seat."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        sub = self.get_object()
+        if sub.status != Subscription.Status.CONFIRMED or sub.subscription_type not in ('term', 'monthly'):
+            return Response({'detail': 'متاح فقط لاشتراكات الترم/الشهري المؤكدة'}, status=400)
+        from apps.operations.services import fill_missing_subscription_seats
+        made = fill_missing_subscription_seats(sub)
+        got = [('ذهاب' if k == 'go' else 'عودة') for k, v in made.items() if v]
+        still = [('ذهاب' if k == 'go' else 'عودة') for k, v in made.items() if not v]
+        if got:
+            notify(sub.student, 'تم تخصيص مقعدك',
+                   f'تم تخصيص مقعد {" و".join(got)} لاشتراكك على {sub.route} — تذكرتك ظاهرة الآن',
+                   link='/tickets', severity='success')
+        return Response({'assigned': got, 'still_missing': still})
+
     @action(detail=False, methods=['get'], url_path='payment-queue')
     def payment_queue(self, request):
         """Admin queue of payments awaiting review."""

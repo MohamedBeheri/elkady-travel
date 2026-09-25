@@ -246,6 +246,13 @@ export const api = createApi({
     paymentQueue: b.query<any, void>({
       query: () => 'bookings/subscriptions/payment-queue/', providesTags: ['Subscription'],
     }),
+    missingSeats: b.query<any, void>({
+      query: () => 'bookings/subscriptions/missing-seats/', providesTags: ['Subscription'],
+    }),
+    fillSeats: b.mutation<any, number>({
+      query: (id) => ({ url: `bookings/subscriptions/${id}/fill-seats/`, method: 'POST' }),
+      invalidatesTags: ['Subscription', 'Ticket'],
+    }),
     approveSubscription: b.mutation<any, number>({
       query: (id) => ({ url: `bookings/subscriptions/${id}/approve/`, method: 'POST' }),
       invalidatesTags: ['Subscription', 'Dashboard'],
@@ -516,6 +523,7 @@ export const {
   usePaymentMethodsQuery, usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation,
   useCompanyQuery, useSaveCompanyMutation,
   useSubscriptionsQuery, useCreateSubscriptionMutation, useDeleteSubscriptionMutation, useSubmitPaymentMutation,
+  useMissingSeatsQuery, useFillSeatsMutation,
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
   useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation,
   useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useDayManifestQuery, useRunAllocationMutation,

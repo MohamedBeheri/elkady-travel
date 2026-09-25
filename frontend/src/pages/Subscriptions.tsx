@@ -11,6 +11,7 @@ import {
   useSubscriptionsQuery, useDeleteSubscriptionMutation, useRoutesQuery, useUniversitiesQuery, useUsersQuery,
   usePublicPickupPointsQuery,
   useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation,
+  useMissingSeatsQuery, useFillSeatsMutation,
 } from '../app/api'
 import { dedupePickups } from '../app/validators'
 import { STATUS_COLOR, StudentProfileModal } from '../components/StudentProfileModal'
@@ -146,9 +147,38 @@ export default function Subscriptions() {
   const allStudents = allStudentsData?.results || []
   const orphanStudents = allStudents.filter((u: any) => !studentsWithSubs.has(u.id))
   const { message, modal } = AntdApp.useApp()
+  // Confirmed term/monthly subscribers with no seat → no ticket. Admin fixes them here.
+  const { data: missingData } = useMissingSeatsQuery()
+  const missing: any[] = missingData || []
+  const [missingOpen, setMissingOpen] = useState(false)
+  const [fillSeats] = useFillSeatsMutation()
+  const [filling, setFilling] = useState<number | 'all' | null>(null)
+
   const [del] = useDeleteSubscriptionMutation()
   const [markNotified] = useMarkSubscriptionNotifiedMutation()
   const [clearNotified] = useClearSubscriptionNotifiedMutation()
+
+  const fillOne = async (r: any, quiet = false) => {
+    try {
+      const res: any = await fillSeats(r.id).unwrap()
+      if (!quiet) {
+        if (res.assigned?.length && !res.still_missing?.length) message.success(`تم تخصيص مقعد ${res.assigned.join(' و')} لـ${r.student_name || ''} — تذكرته ظاهرة الآن`)
+        else if (res.assigned?.length) message.warning(`تم تخصيص ${res.assigned.join(' و')} فقط — ${res.still_missing.join(' و')} ما زال ممتلئاً`)
+        else message.warning('الميعاد ما زال ممتلئاً — زوّد سعة الخط من الإعدادات أو فرّغ مقعداً')
+      }
+      return res
+    } catch (e: any) { if (!quiet) message.error(e?.data?.detail || 'تعذّر التخصيص'); return null }
+  }
+  const fillAll = async () => {
+    setFilling('all')
+    let ok = 0
+    for (const r of missing.filter((x) => x.can_fill)) {
+      const res = await fillOne(r, true)
+      if (res?.assigned?.length) ok += 1
+    }
+    setFilling(null)
+    message.success(`تم تخصيص مقاعد لـ${ok} طالب`)
+  }
 
   const remove = (r: any) => {
     modal.confirm({
@@ -192,6 +222,11 @@ export default function Subscriptions() {
         {orphanStudents.length > 0 && (
           <Button size="small" onClick={() => setOrphansOpen(true)}>
             عرض الطلاب بدون اشتراك
+          </Button>
+        )}
+        {missing.length > 0 && (
+          <Button size="small" danger type="primary" onClick={() => setMissingOpen(true)}>
+            مؤكد بدون مقعد/تذكرة: {missing.length}
           </Button>
         )}
         <span style={{ color: '#64748b', fontSize: 12, marginInlineStart: 'auto' }}>
@@ -276,6 +311,46 @@ export default function Subscriptions() {
         ]}
       />
       <StudentProfileModal studentId={profileId} onClose={() => setProfileId(null)} />
+
+      <Modal
+        title={`اشتراكات مؤكدة بدون مقعد — الطالب لا تظهر له تذكرة (${missing.length})`}
+        open={missingOpen} onCancel={() => setMissingOpen(false)} footer={null} width={900}
+      >
+        <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>
+          «تخصيص مقعد» يضيف مقعداً للاتجاه الناقص فقط ولا يغيّر أي مقعد موجود. لو الميعاد ممتلئ، زوّد سعة الخط من الإعدادات (سعة المقاعد) ثم ارجع هنا.
+        </div>
+        <Button type="primary" style={{ marginBottom: 10 }} disabled={!missing.some((x) => x.can_fill)}
+          loading={filling === 'all'} onClick={fillAll}>
+          تخصيص للكل (المتاح له مقعد: {missing.filter((x) => x.can_fill).length})
+        </Button>
+        <Table
+          rowKey="id" size="small" pagination={{ pageSize: 20, showSizeChanger: false }}
+          dataSource={missing} scroll={{ x: 780 }} locale={{ emptyText: 'لا يوجد ✔' }}
+          columns={[
+            { title: 'الطالب', dataIndex: 'student_name', width: 160 },
+            { title: 'الهاتف', dataIndex: 'student_phone', width: 120 },
+            { title: 'النوع', dataIndex: 'type_display', width: 90 },
+            { title: 'المسار', dataIndex: 'route_name', width: 170 },
+            { title: 'الناقص', dataIndex: 'missing_legs', width: 240, render: (legs: any[]) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {legs.map((l) => (
+                  <span key={l.direction} style={{ color: l.free_seat ? '#16a34a' : '#dc2626', fontSize: 12 }}>
+                    {l.label} {l.slot}: محجوز {l.taken}/{l.total} — {l.free_seat ? 'يوجد مقعد متاح' : l.reason}
+                  </span>
+                ))}
+              </div>
+            ) },
+            { title: '', width: 110, render: (_: any, r: any) => (
+              <Tooltip title={r.can_fill ? '' : 'الميعاد ممتلئ — زوّد سعة الخط أولاً'}>
+                <Button size="small" type="primary" disabled={!r.can_fill} loading={filling === r.id}
+                  onClick={async () => { setFilling(r.id); await fillOne(r); setFilling(null) }}>
+                  تخصيص مقعد
+                </Button>
+              </Tooltip>
+            ) },
+          ]}
+        />
+      </Modal>
 
       <Modal
         title={`طلاب مسجلون بلا أي اشتراك (${orphanStudents.length})`}

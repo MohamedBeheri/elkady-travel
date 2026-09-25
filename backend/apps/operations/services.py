@@ -479,6 +479,71 @@ def assign_subscription_seats(subscription, *, by_user=None, morning_slot=None,
     return created
 
 
+def _subscription_seat_defaults(subscription):
+    """(layout, morning_slot, return_slot) the approval flow uses for this subscription."""
+    from apps.config_app.models import MorningSlot, ReturnSlot, SeatCapacity
+    cap = SeatCapacity.objects.filter(route=subscription.route).select_related('morning_slot').first()
+    layout = cap.layout if cap else DEFAULT_LAYOUT
+    morning_slot = (subscription.morning_slot
+                    or (cap.morning_slot if cap and cap.morning_slot_id else None)
+                    or MorningSlot.objects.filter(active=True).order_by('departure_time').first())
+    return_slot = (subscription.return_slot
+                   or ReturnSlot.objects.filter(active=True).order_by('departure_time').first())
+    return layout, morning_slot, return_slot
+
+
+def missing_seat_report(subscription):
+    """Which directions of a CONFIRMED term/monthly subscription have no active
+    seat lock, and whether a seat is free for them right now. Read-only."""
+    layout, ms, rs = _subscription_seat_defaults(subscription)
+    total = len(seat_set(layout if layout in LAYOUTS else DEFAULT_LAYOUT))
+    have = set(TermSeatLock.objects.filter(subscription=subscription, active=True)
+               .values_list('direction', flat=True))
+    out = []
+    for direction, slot in (('go', ms), ('return', rs)):
+        if direction in have:
+            continue
+        label = 'ذهاب' if direction == 'go' else 'عودة'
+        if not slot:
+            out.append({'direction': direction, 'label': label, 'slot': '', 'taken': 0, 'total': total,
+                        'free_seat': None, 'reason': 'لا يوجد موعد مُعرّف'})
+            continue
+        taken = TermSeatLock.objects.filter(
+            route=subscription.route, direction=direction, active=True,
+            **({'return_slot': slot} if direction == 'return' else {'morning_slot': slot})).count()
+        free = _first_free_seat(subscription.route, slot, direction, layout, subscription.student)
+        out.append({'direction': direction, 'label': label, 'slot': slot.name, 'taken': taken, 'total': total,
+                    'free_seat': free,
+                    'reason': '' if free else 'الميعاد ممتلئ أو لا يوجد مقعد مناسب لنوع الطالب'})
+    return out
+
+
+@transaction.atomic
+def fill_missing_subscription_seats(subscription):
+    """Give a confirmed term/monthly subscriber a seat ONLY for the direction(s)
+    they are missing. Never moves or replaces an existing seat. Returns
+    {'go': lock|None, 'return': lock|None} for the directions that were missing."""
+    from apps.bookings.models import Subscription
+    sub = Subscription.objects.select_for_update().get(pk=subscription.pk)
+    layout, ms, rs = _subscription_seat_defaults(sub)
+    have = set(TermSeatLock.objects.filter(subscription=sub, active=True)
+               .values_list('direction', flat=True))
+    made = {}
+    for direction, slot in (('go', ms), ('return', rs)):
+        if direction in have:
+            continue
+        made[direction] = None
+        if not slot:
+            continue
+        seat = _first_free_seat(sub.route, slot, direction, layout, sub.student)
+        if seat:
+            made[direction] = TermSeatLock.objects.create(
+                student=sub.student, subscription=sub, route=sub.route, direction=direction,
+                seat_number=seat,
+                **({'return_slot': slot} if direction == 'return' else {'morning_slot': slot}))
+    return made
+
+
 def run_daily_allocation(date):
     """Run the deadline allocation for every trip on a given date (RULE 5)."""
     trips = DailyTrip.objects.filter(date=date, direction='go')
