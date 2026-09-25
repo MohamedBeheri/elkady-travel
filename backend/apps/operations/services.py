@@ -202,7 +202,10 @@ def build_seatmap(trip, viewer=None, is_staff=False):
         reqs[r.seat_number] = r
 
     seats = []
-    for n in sorted(seat_set(layout_id)):
+    slot_obj = trip.return_slot if trip.direction == 'return' else trip.morning_slot
+    extra = [n for n in standing_seat_pool(trip.route, slot_obj, trip.direction, layout_id)
+             if n not in seat_set(layout_id)]
+    for n in sorted(seat_set(layout_id)) + extra:
         state, student_name, mine = 'empty', '', False
         if n in reqs:
             r = reqs[n]
@@ -411,16 +414,42 @@ def release_seat(*, trip, seat_number, by_user=None):
 # Subscription fixed-seat assignment (term/monthly) — auto-assigned by admin/system.
 # ---------------------------------------------------------------------------
 
+def _standing_capacity_row(route, slot, direction):
+    """The سعة المقاعد row that governs standing (term/monthly) seats on this
+    route/slot. Going: the row for exactly this morning slot. Return (no row of
+    its own): the route's largest configured vehicle."""
+    from apps.config_app.models import SeatCapacity
+    if direction == 'go' and slot is not None:
+        cap = SeatCapacity.objects.filter(route=route, morning_slot=slot).first()
+        if cap:
+            return cap
+    return SeatCapacity.objects.filter(route=route).order_by('-total_seats', 'id').first()
+
+
+def standing_seat_pool(route, slot, direction, fallback_layout=None):
+    """Seat numbers available for standing seats, honouring the admin's
+    «إجمالي المقاعد»: fewer than the vehicle → only the first N seats; more
+    than the vehicle → the vehicle's seats plus extra numbers after them."""
+    cap = _standing_capacity_row(route, slot, direction)
+    layout = cap.layout if cap and cap.layout in LAYOUTS else (
+        fallback_layout if fallback_layout in LAYOUTS else DEFAULT_LAYOUT)
+    seats = sorted(seat_set(layout))
+    total = cap.total_seats if cap and cap.total_seats else len(seats)
+    if total <= len(seats):
+        return seats[:total]
+    top = seats[-1] if seats else 0
+    return seats + list(range(top + 1, top + 1 + total - len(seats)))
+
+
 def _first_free_seat(route, slot, direction, layout, student):
     """Lowest bookable seat free of other active locks and gender-compatible."""
-    from apps.config_app.models import SeatCapacity
     taken = set(TermSeatLock.objects.filter(
         route=route, direction=direction, active=True,
         **({'return_slot': slot} if direction == 'return' else {'morning_slot': slot}),
     ).values_list('seat_number', flat=True))
     genders = {}
     if direction == 'go':
-        cap = SeatCapacity.objects.filter(route=route, morning_slot=slot).first()
+        cap = _standing_capacity_row(route, slot, direction)
         if cap:
             def parse(s):
                 return [int(x) for x in str(s).replace('،', ',').split(',') if x.strip().isdigit()]
@@ -428,7 +457,7 @@ def _first_free_seat(route, slot, direction, layout, student):
                 genders[n] = 'female'
             for n in parse(cap.male_seats):
                 genders[n] = 'male'
-    for n in sorted(seat_set(layout if layout in LAYOUTS else DEFAULT_LAYOUT)):
+    for n in standing_seat_pool(route, slot, direction, layout):
         if n in taken:
             continue
         g = genders.get(n, '')
@@ -496,7 +525,6 @@ def missing_seat_report(subscription):
     """Which directions of a CONFIRMED term/monthly subscription have no active
     seat lock, and whether a seat is free for them right now. Read-only."""
     layout, ms, rs = _subscription_seat_defaults(subscription)
-    total = len(seat_set(layout if layout in LAYOUTS else DEFAULT_LAYOUT))
     have = set(TermSeatLock.objects.filter(subscription=subscription, active=True)
                .values_list('direction', flat=True))
     out = []
@@ -505,9 +533,10 @@ def missing_seat_report(subscription):
             continue
         label = 'ذهاب' if direction == 'go' else 'عودة'
         if not slot:
-            out.append({'direction': direction, 'label': label, 'slot': '', 'taken': 0, 'total': total,
+            out.append({'direction': direction, 'label': label, 'slot': '', 'taken': 0, 'total': 0,
                         'free_seat': None, 'reason': 'لا يوجد موعد مُعرّف'})
             continue
+        total = len(standing_seat_pool(subscription.route, slot, direction, layout))
         slot_kw = {'return_slot': slot} if direction == 'return' else {'morning_slot': slot}
         locks = list(TermSeatLock.objects.filter(
             route=subscription.route, direction=direction, active=True, **slot_kw,

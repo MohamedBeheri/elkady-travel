@@ -18,7 +18,7 @@ class Command(BaseCommand):
         from apps.config_app.models import MorningSlot, ReturnSlot, SeatCapacity
         from apps.operations.layouts import LAYOUTS, seat_set
         from apps.operations.models import TermSeatLock
-        from apps.operations.services import DEFAULT_LAYOUT, _first_free_seat
+        from apps.operations.services import DEFAULT_LAYOUT, _first_free_seat, standing_seat_pool
 
         subs = (Subscription.objects
                 .filter(subscription_type__in=['term', 'monthly'], status=Subscription.Status.CONFIRMED)
@@ -42,6 +42,7 @@ class Command(BaseCommand):
                 if not slot:
                     reasons.append(f'{label}: لا يوجد موعد مُعرّف')
                     continue
+                total = len(standing_seat_pool(route, slot, direction, layout))
                 taken = TermSeatLock.objects.filter(
                     route=route, direction=direction, active=True,
                     **({'return_slot': slot} if direction == 'return' else {'morning_slot': slot})).count()
