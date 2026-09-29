@@ -1,6 +1,6 @@
 import { Card, Table, Tag, Button, Modal, Form, Input, Select, Space, App as AntdApp } from 'antd'
-import { PlusOutlined, KeyOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { PlusOutlined, KeyOutlined, SearchOutlined } from '@ant-design/icons'
+import { useState, useEffect } from 'react'
 import { useUsersQuery, useSaveUserMutation, useDeleteUserMutation, useAdminResetUserPasswordMutation } from '../app/api'
 import { phoneRule } from '../app/validators'
 
@@ -18,7 +18,13 @@ const ROLE_COLOR: Record<string, string> = { admin: 'red', student: 'default' }
 export default function Users() {
   const { message, modal } = AntdApp.useApp()
   const [role, setRole] = useState<string>()
-  const { data, isFetching } = useUsersQuery({ page_size: 1000, ...(role ? { role } : {}) })
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
+  const { data, isFetching } = useUsersQuery({ page_size: 1000, ...(role ? { role } : {}), ...(search ? { search } : {}) })
   const [save] = useSaveUserMutation()
   const [del] = useDeleteUserMutation()
   const [resetPw] = useAdminResetUserPasswordMutation()
@@ -61,8 +67,12 @@ export default function Users() {
     <Card
       title="المستخدمون والصلاحيات"
       extra={
-        <Select placeholder="كل الأدوار" allowClear style={{ width: 160 }} value={role} onChange={setRole}
-          options={[...ROLE_OPTS, { value: 'student', label: 'طالب' }]} />
+        <Space wrap>
+          <Input allowClear placeholder="بحث بالاسم أو الهاتف أو اسم المستخدم" prefix={<SearchOutlined />}
+            value={searchInput} onChange={(e) => setSearchInput(e.target.value)} style={{ width: 260 }} />
+          <Select placeholder="كل الأدوار" allowClear style={{ width: 160 }} value={role} onChange={setRole}
+            options={[...ROLE_OPTS, { value: 'student', label: 'طالب' }]} />
+        </Space>
       }
     >
       <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} style={{ marginBottom: 12 }}>موظف جديد</Button>
