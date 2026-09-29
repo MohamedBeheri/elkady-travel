@@ -118,6 +118,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         sub.approve(request.user)
 
         seat_msg = ''
+        seat_warning = ''
         if sub.subscription_type in ('term', 'monthly'):
             from apps.operations.services import assign_subscription_seats
             d = request.data
@@ -132,6 +133,18 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             if created.get('return'):
                 parts.append(f"عودة مقعد {created['return'].seat_number}")
             seat_msg = (' — ' + '، '.join(parts)) if parts else ''
+            # The subscription stays CONFIRMED (the student paid), but if no
+            # free seat was found on the default slot the student gets no
+            # ticket — say so loudly instead of failing silently.
+            missing = [lbl for key, lbl in (('go', 'الذهاب'), ('return', 'العودة')) if not created.get(key)]
+            if missing:
+                seat_warning = (
+                    f'تم تأكيد الاشتراك لكن لم يُخصَّص مقعد {" و".join(missing)} — '
+                    f'الميعاد ممتلئ على خط {sub.route} أو لا يوجد مقعد مناسب لنوع الطالب. '
+                    f'الطالب لن تظهر له تذكرة حتى يُخصَّص له مقعد (بعد زيادة سعة الخط أو تفريغ مقعد).')
+                notify_staff('اشتراك مؤكد بدون مقعد',
+                             f'{sub.student.full_name or sub.student.username}: {seat_warning}',
+                             link='/subscriptions', severity='warning')
         elif sub.subscription_type.startswith('daily'):
             # Daily: the seat(s) were HELD at booking — confirm them + issue QR.
             from apps.operations.models import SeatRequest as _SR
@@ -142,10 +155,13 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 parts.append(f"مقعد {req.seat_number}")
             seat_msg = (' — ' + '، '.join(parts)) if parts else ''
 
+        pending_seat = ' — سيتم تخصيص مقعدك من الإدارة قريباً وتظهر تذكرتك بعدها' if seat_warning else ''
         notify(sub.student, 'تم تأكيد اشتراكك',
-               f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}{seat_msg}',
+               f'تم تأكيد اشتراك {sub.get_subscription_type_display()} على {sub.route}{seat_msg}{pending_seat}',
                link='/tickets', severity='success')
-        return Response(SubscriptionSerializer(sub).data)
+        data = SubscriptionSerializer(sub).data
+        data['seat_warning'] = seat_warning
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
@@ -154,6 +170,10 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         sub = self.get_object()
         reason = request.data.get('rejection_reason', '')
         sub.reject(request.user, reason)
+        # A rejected term/monthly subscription must not keep its standing seat —
+        # otherwise the seat stays «taken» forever and blocks new subscribers.
+        from apps.operations.models import TermSeatLock
+        TermSeatLock.objects.filter(subscription=sub, active=True).update(active=False)
         # Daily: free the seats that were HELD for this rejected booking.
         if sub.subscription_type.startswith('daily'):
             from apps.operations.models import SeatRequest as _SR
@@ -181,6 +201,52 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         sub.whatsapp_notified_at = None
         sub.save(update_fields=['whatsapp_notified_at', 'updated_at'])
         return Response(SubscriptionSerializer(sub).data)
+
+    def _missing_seat_qs(self):
+        from apps.operations.models import TermSeatLock
+        from django.db.models import Count, Q
+        return (Subscription.objects
+                .filter(subscription_type__in=['term', 'monthly'], status=Subscription.Status.CONFIRMED)
+                .annotate(n_locks=Count('term_seats', filter=Q(term_seats__active=True), distinct=True))
+                .filter(n_locks__lt=2)
+                .select_related('student', 'route', 'route__destination', 'route__return_destination',
+                                'university', 'pickup_point', 'payment_method')
+                .order_by('route_id', 'verified_at'))
+
+    @action(detail=False, methods=['get'], url_path='missing-seats')
+    def missing_seats(self, request):
+        """READ-ONLY: confirmed term/monthly subscriptions missing a seat (no ticket), with why."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        from apps.operations.services import missing_seat_report
+        out = []
+        for sub in self._missing_seat_qs():
+            legs = missing_seat_report(sub)
+            if not legs:
+                continue
+            row = SubscriptionSerializer(sub).data
+            row['missing_legs'] = legs
+            row['can_fill'] = any(l['free_seat'] for l in legs)
+            out.append(row)
+        return Response(out)
+
+    @action(detail=True, methods=['post'], url_path='fill-seats')
+    def fill_seats(self, request, pk=None):
+        """Assign a seat for the missing direction(s) only — never moves an existing seat."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        sub = self.get_object()
+        if sub.status != Subscription.Status.CONFIRMED or sub.subscription_type not in ('term', 'monthly'):
+            return Response({'detail': 'متاح فقط لاشتراكات الترم/الشهري المؤكدة'}, status=400)
+        from apps.operations.services import fill_missing_subscription_seats
+        made = fill_missing_subscription_seats(sub)
+        got = [('ذهاب' if k == 'go' else 'عودة') for k, v in made.items() if v]
+        still = [('ذهاب' if k == 'go' else 'عودة') for k, v in made.items() if not v]
+        if got:
+            notify(sub.student, 'تم تخصيص مقعدك',
+                   f'تم تخصيص مقعد {" و".join(got)} لاشتراكك على {sub.route} — تذكرتك ظاهرة الآن',
+                   link='/tickets', severity='success')
+        return Response({'assigned': got, 'still_missing': still})
 
     @action(detail=False, methods=['get'], url_path='payment-queue')
     def payment_queue(self, request):

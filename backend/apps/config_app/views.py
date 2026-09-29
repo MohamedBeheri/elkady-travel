@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db import transaction
 
+from config.pagination import LookupPagination
 from config.permissions import IsStaff, ReadOnlyOrStaff
 from .models import (
     College, CompanySettings, Destination, MorningSlot, PaymentAccount, PaymentMethod,
@@ -21,6 +22,7 @@ class DestinationViewSet(viewsets.ModelViewSet):
     queryset = Destination.objects.all()
     serializer_class = DestinationSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active']
 
 
@@ -28,6 +30,7 @@ class UniversityViewSet(viewsets.ModelViewSet):
     queryset = University.objects.select_related('destination').all()
     serializer_class = UniversitySerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active', 'destination']
 
 
@@ -35,6 +38,7 @@ class CollegeViewSet(viewsets.ModelViewSet):
     queryset = College.objects.select_related('university').all()
     serializer_class = CollegeSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active', 'university']
 
 
@@ -42,6 +46,7 @@ class RouteViewSet(viewsets.ModelViewSet):
     queryset = Route.objects.select_related('destination').prefetch_related('pickup_points').all()
     serializer_class = RouteSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active', 'destination']
 
 
@@ -49,6 +54,7 @@ class PickupPointViewSet(viewsets.ModelViewSet):
     queryset = PickupPoint.objects.select_related('route').all()
     serializer_class = PickupPointSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active', 'route']
 
     @action(detail=False, methods=['post'], url_path='bulk-set')
@@ -107,6 +113,7 @@ class MorningSlotViewSet(viewsets.ModelViewSet):
     queryset = MorningSlot.objects.all()
     serializer_class = MorningSlotSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active']
 
 
@@ -114,6 +121,7 @@ class ReturnSlotViewSet(viewsets.ModelViewSet):
     queryset = ReturnSlot.objects.all()
     serializer_class = ReturnSlotSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active']
 
 
@@ -125,6 +133,7 @@ class SeatCapacityViewSet(viewsets.ModelViewSet):
     # global slot list), so a route+slot combo with no capacity row can't be
     # booked into existence. Writes stay staff-only.
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['route', 'morning_slot']
 
 
@@ -132,6 +141,7 @@ class PricingRuleViewSet(viewsets.ModelViewSet):
     queryset = PricingRule.objects.select_related('route').all()
     serializer_class = PricingRuleSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active', 'route', 'subscription_type']
 
 
@@ -139,6 +149,7 @@ class PaymentMethodViewSet(viewsets.ModelViewSet):
     queryset = PaymentMethod.objects.all()
     serializer_class = PaymentMethodSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active']
 
 
@@ -146,6 +157,7 @@ class PaymentAccountViewSet(viewsets.ModelViewSet):
     queryset = PaymentAccount.objects.select_related('method').all()
     serializer_class = PaymentAccountSerializer
     permission_classes = [ReadOnlyOrStaff]
+    pagination_class = LookupPagination
     filterset_fields = ['active', 'method']
 
 
