@@ -140,7 +140,7 @@ function Passengers({ trip }: { trip: any }) {
 
 export default function TripBoard() {
   const { message, modal } = AntdApp.useApp()
-  const [date, setDate] = useState(dayjs().add(1, 'day'))
+  const [date, setDate] = useState(dayjs())
   const ds = date.format('YYYY-MM-DD')
   const { data, isFetching } = useTripBoardQuery({ date: ds }, { pollingInterval: 60000 })
   const [runAllocation, { isLoading }] = useRunAllocationMutation()
