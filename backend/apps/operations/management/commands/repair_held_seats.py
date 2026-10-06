@@ -30,3 +30,16 @@ class Command(BaseCommand):
                 confirm_seat_payment(r)
         self.stdout.write(self.style.SUCCESS(
             f'{qs.count()} seat(s) ' + ('fixed' if opts['apply'] else 'found (dry run)')))
+
+        # Report only (never changed here — the admin decides): the old nightly
+        # allocation turned UNPAID seats into «مؤكد» with a ticket, and promoted
+        # waiting-list riders to «مؤكد» with no seat at all.
+        from django.utils import timezone
+        today = timezone.localdate()
+        unpaid = SeatRequest.objects.filter(
+            status=SeatRequest.Status.CONFIRMED, priority_type='daily', daily_trip__date__gte=today,
+        ).exclude(subscription__status=Subscription.Status.CONFIRMED).select_related('student', 'daily_trip', 'subscription')
+        self.stdout.write(f'\n-- مؤكد بدون دفع معتمد (للمراجعة): {unpaid.count()}')
+        for r in unpaid:
+            st = r.subscription.get_status_display() if r.subscription_id else 'بدون اشتراك'
+            self.stdout.write(f'{r.student} | {r.daily_trip} | مقعد {r.seat_number or "—"} | الاشتراك: {st}')

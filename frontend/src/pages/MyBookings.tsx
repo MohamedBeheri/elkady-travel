@@ -136,8 +136,8 @@ export default function MyBookings() {
       await submitPayment({ id: current.id, body: fd }).unwrap()
       message.success('تم إرسال إثبات الدفع للمراجعة')
       setOpen(false)
-    } catch {
-      message.error('تعذر الإرسال')
+    } catch (e: any) {
+      message.error(e?.data?.detail || 'تعذر الإرسال')
     }
   }
 

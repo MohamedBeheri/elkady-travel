@@ -8,7 +8,7 @@ from rest_framework.test import APITestCase
 from apps.bookings.models import Subscription
 from apps.config_app.models import CompanySettings, PickupPoint, PickupTime, Route, SeatCapacity
 from apps.operations.models import DailyTrip, SeatRequest
-from apps.operations.services import auto_close_attendance, cancel_seat
+from apps.operations.services import allocate_trip, auto_close_attendance, cancel_seat
 from apps.users.models import User
 
 
@@ -31,12 +31,6 @@ class DailyVisibilityTests(APITestCase):
         self.ret_slot = pt.return_slot if pt else ReturnSlot.objects.first()
         self.pp = PickupPoint.objects.filter(route=self.route).first()
         self.date = (timezone.localdate() + timedelta(days=1)).isoformat()
-
-    def _student(self, name):
-        u = User.objects.create_user(username=name, password='x', role='student', full_name=name,
-                                     university_id=self.route.destination.universities.first().id
-                                     if hasattr(self.route.destination, 'universities') else None)
-        return u
 
     def _uni(self):
         from apps.config_app.models import University
@@ -112,3 +106,82 @@ class DailyVisibilityTests(APITestCase):
         self.client.post(f'/api/bookings/subscriptions/{sub2.id}/approve/')
         auto_close_attendance(self.date)
         self._assert_everywhere(s, 2)
+
+    def test_rebooking_a_paid_trip_is_refused_and_seat_stays_confirmed(self):
+        s = self._mk_student('yara2')
+        self._book_and_approve(s, 'round')
+        self.client.force_authenticate(s)
+        again = self.client.post('/api/operations/seat-requests/book-daily/', {
+            'date': self.date, 'route': self.route.id, 'trip_type': 'round',
+            'morning_slot': self.slot.id, 'return_slot': self.ret_slot.id,
+            'pickup_point': self.pp.id, 'university': self._uni().id}, format='json')
+        self.assertEqual(again.status_code, 409, again.content)
+        self.assertEqual(Subscription.objects.filter(student=s).count(), 1)
+        self._assert_everywhere(s, 2)
+
+    def test_rejected_then_repaid_gets_its_seat_back(self):
+        s = self._mk_student('repaid')
+        self.client.force_authenticate(s)
+        resp = self.client.post('/api/operations/seat-requests/book-daily/', {
+            'date': self.date, 'route': self.route.id, 'trip_type': 'go',
+            'morning_slot': self.slot.id, 'pickup_point': self.pp.id,
+            'university': self._uni().id}, format='json')
+        sub_id = resp.json()['subscription']['id']
+        self.client.force_authenticate(self.admin)
+        self.client.post(f'/api/bookings/subscriptions/{sub_id}/reject/', {'rejection_reason': 'x'})
+        self.assertEqual(SeatRequest.objects.get(student=s).status, 'cancelled')
+        self.client.force_authenticate(s)
+        self.assertEqual(self.client.post(f'/api/bookings/subscriptions/{sub_id}/submit-payment/').status_code, 200)
+        self.client.force_authenticate(self.admin)
+        r = self.client.post(f'/api/bookings/subscriptions/{sub_id}/approve/').json()
+        self.assertFalse(r['seat_warning'])
+        self._assert_everywhere(s, 1)
+
+    def test_waiting_list_gets_a_held_seat_and_opens_payment(self):
+        s = self._mk_student('waiter')
+        from apps.operations.services import _get_or_create_trip
+        trip = _get_or_create_trip(self.date, self.route, morning_slot=self.slot)
+        sub = Subscription.objects.create(student=s, subscription_type='daily_go', route=self.route,
+                                          university=self._uni(), amount=50, status=Subscription.Status.DRAFT)
+        req = SeatRequest.objects.create(daily_trip=trip, student=s, subscription=sub, university=self._uni(),
+                                         priority_type='daily', status=SeatRequest.Status.WAITING)
+        allocate_trip(trip.pk)
+        req.refresh_from_db(); sub.refresh_from_db()
+        self.assertEqual(req.status, 'held')
+        self.assertTrue(req.seat_number)
+        self.assertEqual(sub.status, 'payment_pending')
+
+    def test_student_cannot_bypass_payment_or_price(self):
+        s = self._mk_student('sneaky')
+        self.client.force_authenticate(s)
+        from apps.operations.services import _get_or_create_trip
+        trip = _get_or_create_trip(self.date, self.route, morning_slot=self.slot)
+        self.assertEqual(self.client.post('/api/operations/seat-requests/', {
+            'daily_trip': trip.id, 'student': s.id, 'university': self._uni().id,
+            'status': 'confirmed', 'seat_number': 3}, format='json').status_code, 403)
+        self.client.force_authenticate(s)
+        resp = self.client.post('/api/operations/seat-requests/book-daily/', {
+            'date': self.date, 'route': self.route.id, 'trip_type': 'go',
+            'morning_slot': self.slot.id, 'pickup_point': self.pp.id,
+            'university': self._uni().id}, format='json')
+        held = SeatRequest.objects.get(student=s)
+        self.assertEqual(self.client.patch(f'/api/operations/seat-requests/{held.id}/',
+                                           {'status': 'confirmed'}, format='json').status_code, 403)
+        sub_id = resp.json()['subscription']['id']
+        self.assertEqual(self.client.patch(f'/api/bookings/subscriptions/{sub_id}/',
+                                           {'amount': '1'}, format='json').status_code, 403)
+        from apps.config_app.models import PricingRule
+        rule = PricingRule.objects.filter(route=self.route, subscription_type='term', active=True).first()
+        if rule:
+            r = self.client.post('/api/bookings/subscriptions/', {
+                'subscription_type': 'term', 'route': self.route.id, 'university': self._uni().id,
+                'amount': '1'}, format='json')
+            self.assertEqual(r.status_code, 201, r.content)
+            self.assertEqual(float(r.json()['amount']), float(rule.price))
+
+    def test_cannot_pay_a_waiting_list_booking(self):
+        s = self._mk_student('early')
+        sub = Subscription.objects.create(student=s, subscription_type='daily_go', route=self.route,
+                                          university=self._uni(), amount=50, status=Subscription.Status.DRAFT)
+        self.client.force_authenticate(s)
+        self.assertEqual(self.client.post(f'/api/bookings/subscriptions/{sub.id}/submit-payment/').status_code, 400)

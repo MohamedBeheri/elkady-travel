@@ -1,5 +1,4 @@
 import django_filters
-from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -70,6 +69,25 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                         f'راجع «حجوزاتي» أو تواصل مع الإدارة.')
         return super().create(request, *args, **kwargs)
 
+    def perform_create(self, serializer):
+        # The price is the admin's PricingRule, never whatever the browser sent.
+        if self.request.user.role not in STAFF_ROLES:
+            from apps.config_app.models import PricingRule
+            d = serializer.validated_data
+            rule = (PricingRule.objects.filter(route=d.get('route'), subscription_type=d.get('subscription_type'),
+                                               active=True).order_by('-effective_date').first())
+            if rule:
+                serializer.save(amount=rule.price)
+                return
+        serializer.save()
+
+    def update(self, request, *args, **kwargs):
+        """Students change a booking only through its actions (pay / reschedule),
+        never by editing the record (amount, route, slots…) directly."""
+        if request.user.role not in STAFF_ROLES:
+            return Response({'detail': 'غير مصرح بالتعديل'}, status=403)
+        return super().update(request, *args, **kwargs)
+
     def destroy(self, request, *args, **kwargs):
         """Only staff may hard-delete a subscription record."""
         if request.user.role not in STAFF_ROLES:
@@ -92,6 +110,15 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     def submit_payment(self, request, pk=None):
         """Student uploads proof: method, reference, screenshot. Enters review queue."""
         sub = self.get_object()
+        if request.user.role not in STAFF_ROLES and sub.status not in (
+                Subscription.Status.PAYMENT_PENDING, Subscription.Status.REJECTED):
+            msg = {
+                Subscription.Status.DRAFT: 'أنت في قائمة الانتظار — لا تدفع الآن، سنبلغك فور توفر مقعد.',
+                Subscription.Status.CONFIRMED: 'هذا الحجز مؤكد بالفعل.',
+                Subscription.Status.PAYMENT_SUBMITTED: 'تم رفع إثبات الدفع بالفعل وهو قيد المراجعة.',
+                Subscription.Status.UNDER_REVIEW: 'تم رفع إثبات الدفع بالفعل وهو قيد المراجعة.',
+            }.get(sub.status, 'لا يمكن الدفع لهذا الحجز.')
+            return Response({'detail': msg}, status=400)
         sub.payment_method_id = request.data.get('payment_method') or sub.payment_method_id
         sub.payment_reference = request.data.get('payment_reference', sub.payment_reference)
         if 'payment_proof' in request.FILES:
@@ -148,19 +175,18 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                              link='/subscriptions', severity='warning')
         elif sub.subscription_type.startswith('daily'):
             # Daily: the seat(s) were HELD at booking — confirm them + issue QR.
-            from apps.operations.models import SeatRequest as _SR
-            from apps.operations.services import confirm_seat_payment
-            parts = []
-            held = list(sub.seat_requests.filter(status=_SR.Status.HELD))
-            # Orphans: held seats of this student on this route that lost their
-            # subscription link (e.g. return leg booked through the seat map).
-            held += list(_SR.objects.filter(
-                student=sub.student, status=_SR.Status.HELD, subscription__isnull=True,
-                daily_trip__route=sub.route, daily_trip__date__gte=timezone.localdate()))
-            for req in held:
-                confirm_seat_payment(req)
-                parts.append(f"مقعد {req.seat_number}")
+            from apps.operations.services import confirm_daily_subscription_seats
+            done, missing = confirm_daily_subscription_seats(sub)
+            parts = [f"مقعد {req.seat_number}" for req in done]
             seat_msg = (' — ' + '، '.join(parts)) if parts else ''
+            if missing:
+                lbl = ' و'.join('الذهاب' if m == 'go' else 'العودة' for m in missing)
+                seat_warning = (
+                    f'تم تأكيد الدفع لكن لم يُخصَّص مقعد {lbl} — الرحلة ممتلئة أو انتهى موعدها. '
+                    f'الطالب لن يظهر في كشف الركاب حتى يُخصَّص له مقعد يدوياً من لوحة التشغيل.')
+                notify_staff('حجز يومي مؤكد بدون مقعد',
+                             f'{sub.student.full_name or sub.student.username}: {seat_warning}',
+                             link='/subscriptions', severity='warning')
 
         pending_seat = ' — سيتم تخصيص مقعدك من الإدارة قريباً وتظهر تذكرتك بعدها' if seat_warning else ''
         notify(sub.student, 'تم تأكيد اشتراكك',
@@ -181,10 +207,13 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         # otherwise the seat stays «taken» forever and blocks new subscribers.
         from apps.operations.models import TermSeatLock
         TermSeatLock.objects.filter(subscription=sub, active=True).update(active=False)
-        # Daily: free the seats that were HELD for this rejected booking.
+        # Daily: free this booking's seats (a rejected payment rides nowhere).
+        # Re-paying later and approving takes the seat back if still free.
         if sub.subscription_type.startswith('daily'):
             from apps.operations.models import SeatRequest as _SR
-            sub.seat_requests.filter(status=_SR.Status.HELD).update(status=_SR.Status.CANCELLED)
+            sub.seat_requests.filter(
+                status__in=[_SR.Status.HELD, _SR.Status.CONFIRMED],
+            ).update(status=_SR.Status.CANCELLED)
         notify(sub.student, 'تم رفض إثبات الدفع', reason or 'يرجى إعادة رفع إثبات دفع صحيح',
                link='/bookings', severity='error')
         return Response(SubscriptionSerializer(sub).data)

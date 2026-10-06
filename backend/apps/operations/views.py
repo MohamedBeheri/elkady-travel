@@ -563,17 +563,10 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
         if request.user.role not in STAFF_ROLES:
             return Response(status=403)
         date = request.data.get('date') or timezone.localdate().isoformat()
+        # Students whose waiting-list booking got a seat are notified by the
+        # allocation itself — re-notifying every rider on each press was spam
+        # (and told HELD riders they were «في قائمة الانتظار»).
         count = run_daily_allocation(date)
-        # Notify newly confirmed / still-waiting students.
-        for trip in DailyTrip.objects.filter(date=date, direction='go'):
-            for r in trip.seat_requests.exclude(status=SeatRequest.Status.CANCELLED).select_related('student'):
-                if r.status == SeatRequest.Status.CONFIRMED:
-                    notify(r.student, 'تم تأكيد مقعدك', f'رحلة {trip.date} - {trip.route}',
-                           link='/daily', severity='success')
-                else:
-                    notify(r.student, 'أنت في قائمة الانتظار',
-                           f'ترتيبك {r.queue_position} لرحلة {trip.date} - {trip.route}',
-                           link='/daily', severity='warning')
         return Response({'allocated_trips': count, 'date': date})
 
 
@@ -590,6 +583,23 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         if self.request.user.role == 'student':
             return qs.filter(student=self.request.user)
         return qs
+
+    # Seats are only ever created/changed through the booking actions below.
+    # The plain REST verbs let a student POST/PATCH a seat straight to «مؤكد»
+    # (no payment), or onto another student — staff only now.
+    def _staff_only(self, request):
+        if request.user.role not in STAFF_ROLES:
+            return Response({'detail': 'غير مصرح'}, status=403)
+        return None
+
+    def create(self, request, *args, **kwargs):
+        return self._staff_only(request) or super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return self._staff_only(request) or super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        return self._staff_only(request) or super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['post'], url_path='book')
     def book(self, request):
@@ -684,6 +694,19 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
                     legs.append(('return', _get_or_create_trip(
                         date, route, return_slot=ReturnSlot.objects.get(pk=ret_slot_id), direction='return'),
                         d.get('ret_seat')))
+                # One booking per trip: re-booking a trip you already hold used
+                # to silently take over the existing (maybe already paid) seat.
+                dup = (SeatRequest.objects.filter(student=user, daily_trip__in=[t for _k, t, _s in legs])
+                       .exclude(status=SeatRequest.Status.CANCELLED).select_related('daily_trip').first())
+                if dup:
+                    leg = 'العودة' if dup.daily_trip.direction == 'return' else 'الذهاب'
+                    if dup.status == SeatRequest.Status.CONFIRMED:
+                        raise ValueError(f'لديك حجز مؤكد بالفعل على رحلة {leg} يوم {dup.daily_trip.date} — '
+                                         f'تذكرتك موجودة في «تذاكري».')
+                    if dup.status == SeatRequest.Status.HELD:
+                        raise ValueError(f'لديك حجز على رحلة {leg} يوم {dup.daily_trip.date} بانتظار الدفع — '
+                                         f'ادفع الحجز الحالي من «حجوزاتي» بدل حجز جديد.')
+                    raise ValueError(f'أنت بالفعل في قائمة انتظار رحلة {leg} يوم {dup.daily_trip.date}.')
                 # A leg with no seat picked and no free seat left → the whole
                 # booking goes on the waiting list (no seat held, no payment yet).
                 full = [(k, t) for k, t, seat in legs

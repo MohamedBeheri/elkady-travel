@@ -65,7 +65,7 @@ function PaymentPanel({ sub, title, onBack, onPaid }: any) {
     if (!methodId) { message.error('اختر وسيلة الدفع'); return }
     if (!file) { message.error('ارفع صورة إثبات الدفع'); return }
     const fd = new FormData(); fd.append('payment_method', String(methodId)); fd.append('payment_reference', reference); fd.append('payment_proof', file)
-    try { await submitPayment({ id: sub.id, body: fd }).unwrap(); onPaid() } catch { message.error('تعذر الإرسال') }
+    try { await submitPayment({ id: sub.id, body: fd }).unwrap(); onPaid() } catch (e: any) { message.error(e?.data?.detail || 'تعذر الإرسال') }
   }
 
   return (
@@ -514,14 +514,14 @@ function SubscriptionBooking({ unis, termOpen = true, monthlyOpen = true }: any)
         subscription_type: subType, route: routeId, university, pickup_point: pickupId, amount: price,
       }).unwrap()
       setCreated(sub)
-    } catch { message.error('تعذر إنشاء الاشتراك') }
+    } catch (e: any) { message.error(e?.data?.detail || 'تعذر إنشاء الاشتراك') }
   }
 
   const pay = async () => {
     if (!methodId) { message.error('اختر وسيلة الدفع'); return }
     if (!file) { message.error('ارفع صورة إثبات الدفع'); return }
     const fd = new FormData(); fd.append('payment_method', String(methodId)); fd.append('payment_reference', reference); fd.append('payment_proof', file)
-    try { await submitPayment({ id: created.id, body: fd }).unwrap(); setCreated({ ...created, _paid: true }) } catch { message.error('تعذر الإرسال') }
+    try { await submitPayment({ id: created.id, body: fd }).unwrap(); setCreated({ ...created, _paid: true }) } catch (e: any) { message.error(e?.data?.detail || 'تعذر الإرسال') }
   }
 
   if (created?._paid) {

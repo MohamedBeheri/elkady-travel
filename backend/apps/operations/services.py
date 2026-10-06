@@ -66,22 +66,60 @@ def allocate_trip(trip_id):
     seated = [r for r in reqs if r.seat_number]
     queue = [r for r in reqs if not r.seat_number]
 
-    capacity = max(trip.effective_capacity - len(seated), 0)
-    confirmed = 0
     for pos, req in enumerate(seated, start=1):
         req.queue_position = pos
         req.save(update_fields=['queue_position'])
+
+    # Waiting list (no seat yet): promote in priority order onto a REAL free
+    # seat. A daily rider gets it HELD until they pay — it used to be flipped
+    # straight to «مؤكد» with no seat and no payment, so it showed in the
+    # manifest with an empty seat and no ticket. Term/monthly already paid.
+    promoted = []
     for pos, req in enumerate(queue, start=len(seated) + 1):
         req.queue_position = pos
-        if confirmed < capacity:
-            new_status = SeatRequest.Status.CONFIRMED
-            confirmed += 1
+        if req.status != SeatRequest.Status.WAITING:
+            req.save(update_fields=['queue_position'])
+            continue
+        seat = _first_free_seat_on_trip(trip, req.student)
+        if not seat:
+            req.save(update_fields=['queue_position'])
+            continue
+        req.seat_number = seat
+        if req.priority_type in ('term', 'monthly'):
+            req.status = SeatRequest.Status.CONFIRMED
+            if not req.qr_token:
+                req.qr_token = new_token()
         else:
-            new_status = SeatRequest.Status.WAITING
-        req.status = new_status
-        req.save(update_fields=['status', 'queue_position'])
+            req.status = SeatRequest.Status.HELD
+        req.save(update_fields=['status', 'queue_position', 'seat_number', 'qr_token'])
+        promoted.append(req)
 
+    if promoted:
+        _after_waiting_promotion(trip, promoted)
     return trip
+
+
+def _after_waiting_promotion(trip, promoted):
+    """A waiting-list booking got a seat: once none of its legs is still
+    waiting, its draft subscription opens for payment, and the student is told."""
+    from apps.bookings.models import Subscription
+    from apps.notifications.models import notify
+    for req in promoted:
+        sub = req.subscription
+        if req.status == SeatRequest.Status.HELD and sub and sub.status == Subscription.Status.DRAFT \
+                and not sub.seat_requests.filter(status=SeatRequest.Status.WAITING).exists():
+            sub.status = Subscription.Status.PAYMENT_PENDING
+            sub.save(update_fields=['status', 'updated_at'])
+        dir_label = 'عودة' if trip.direction == 'return' else 'ذهاب'
+        if req.status == SeatRequest.Status.HELD:
+            title, body, link = ('توفر لك مقعد',
+                                 f'مقعد رقم {req.seat_number} — {dir_label} {trip.date} على {trip.route}. '
+                                 f'ادفع الآن من «حجوزاتي» لتأكيد الحجز.', '/bookings')
+        else:
+            title, body, link = ('تم تأكيد مقعدك',
+                                 f'مقعد رقم {req.seat_number} — {dir_label} {trip.date} على {trip.route}', '/tickets')
+        student = req.student
+        transaction.on_commit(lambda s=student, t=title, b=body, l=link: notify(s, t, b, link=l, severity='success'))
 
 
 @transaction.atomic
@@ -320,11 +358,20 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
 
     status = (SeatRequest.Status.CONFIRMED if priority_type == 'monthly'
               else SeatRequest.Status.HELD)
-    req, _ = SeatRequest.objects.get_or_create(
+    req, created = SeatRequest.objects.get_or_create(
         daily_trip=trip, student=student,
         defaults={'university_id': university_id, 'priority_type': priority_type,
                   'subscription': subscription},
     )
+    # One booking per student per trip. Re-booking used to reuse the same row:
+    # a PAID seat dropped back to «معلّق» and moved onto the new unpaid booking,
+    # so the admin's approval of the paid one confirmed nothing.
+    if not created:
+        if req.status == SeatRequest.Status.CONFIRMED:
+            raise ValueError('لديك حجز مؤكد بالفعل على هذه الرحلة — تذكرتك موجودة في «تذاكري».')
+        if (req.status == SeatRequest.Status.HELD and subscription is not None
+                and req.subscription_id and req.subscription_id != subscription.id):
+            raise ValueError('لديك حجز على هذه الرحلة بانتظار الدفع — ادفع الحجز الحالي من «حجوزاتي» بدل حجز جديد.')
     req.seat_number = seat_number
     req.university_id = university_id
     req.priority_type = priority_type
@@ -374,10 +421,13 @@ def reschedule_seat(*, trip, student, university_id, subscription, pickup_point_
     seat_number = _first_free_seat_on_trip(trip, student)
     if not seat_number:
         raise ValueError('لا توجد مقاعد متاحة في هذا الميعاد، برجاء اختيار ميعاد آخر.')
-    req, _ = SeatRequest.objects.get_or_create(
+    req, created = SeatRequest.objects.get_or_create(
         daily_trip=trip, student=student,
         defaults={'university_id': university_id, 'priority_type': 'daily', 'subscription': subscription},
     )
+    if (not created and req.subscription_id != subscription.id and req.status in (
+            SeatRequest.Status.HELD, SeatRequest.Status.CONFIRMED, SeatRequest.Status.WAITING)):
+        raise ValueError('لديك حجز آخر على هذا الميعاد بالفعل — اختر ميعاداً مختلفاً.')
     req.seat_number = seat_number
     req.university_id = university_id
     req.priority_type = 'daily'
@@ -399,6 +449,57 @@ def confirm_seat_payment(seat_request):
         seat_request.qr_token = new_token()
     seat_request.save(update_fields=['status', 'qr_token'])
     return seat_request
+
+
+DAILY_LEGS = {'daily_go': ('go',), 'daily_return': ('return',), 'daily_round': ('go', 'return')}
+
+
+@transaction.atomic
+def confirm_daily_subscription_seats(subscription):
+    """Admin approved a daily booking's payment → make sure every leg it paid
+    for has a CONFIRMED seat. Returns (confirmed_reqs, missing_directions).
+
+    Besides the usual HELD seats this covers a booking re-paid after a
+    rejection (its seats were freed — take the same seat back if still free,
+    else the first free one) and a waiting-list leg that never got a seat.
+    """
+    student = subscription.student
+    done = []
+    for req in subscription.seat_requests.filter(status=SeatRequest.Status.HELD):
+        done.append(confirm_seat_payment(req))
+    # Held seats of this student on this route that lost their subscription link.
+    for req in SeatRequest.objects.filter(
+            student=student, status=SeatRequest.Status.HELD, subscription__isnull=True,
+            daily_trip__route=subscription.route, daily_trip__date__gte=timezone.localdate()):
+        req.subscription = subscription
+        req.save(update_fields=['subscription'])
+        done.append(confirm_seat_payment(req))
+
+    legs = set(subscription.seat_requests.values_list('daily_trip__direction', flat=True)) \
+        or set(DAILY_LEGS.get(subscription.subscription_type, ('go',)))
+    have = set(subscription.seat_requests.filter(status=SeatRequest.Status.CONFIRMED)
+               .values_list('daily_trip__direction', flat=True))
+    missing = []
+    for direction in sorted(legs - have):
+        req = (subscription.seat_requests
+               .filter(daily_trip__direction=direction,
+                       status__in=[SeatRequest.Status.CANCELLED, SeatRequest.Status.WAITING],
+                       daily_trip__date__gte=timezone.localdate())
+               .order_by('-id').first())
+        if not req:
+            missing.append(direction)
+            continue
+        trip = DailyTrip.objects.select_for_update().get(pk=req.daily_trip_id)
+        seat = req.seat_number
+        if not seat or _seat_occupied(trip, seat, exclude_student=student):
+            seat = _first_free_seat_on_trip(trip, student)
+        if not seat:
+            missing.append(direction)
+            continue
+        req.seat_number = seat
+        req.save(update_fields=['seat_number'])
+        done.append(confirm_seat_payment(req))
+    return done, missing
 
 
 @transaction.atomic
