@@ -59,16 +59,25 @@ def allocate_trip(trip_id):
     )
     reqs.sort(key=_order_key)
 
-    capacity = trip.effective_capacity
+    # Seat-map bookings (a physical seat already picked) are authoritative:
+    # their status is driven by payment (HELD → CONFIRMED by the admin), never
+    # by queue order. Re-deriving it here used to flip paid seats to waiting
+    # (vanishing from the admin lists) and unpaid HELD seats to confirmed.
+    seated = [r for r in reqs if r.seat_number]
+    queue = [r for r in reqs if not r.seat_number]
+
+    capacity = max(trip.effective_capacity - len(seated), 0)
     confirmed = 0
-    for pos, req in enumerate(reqs, start=1):
+    for pos, req in enumerate(seated, start=1):
+        req.queue_position = pos
+        req.save(update_fields=['queue_position'])
+    for pos, req in enumerate(queue, start=len(seated) + 1):
         req.queue_position = pos
         if confirmed < capacity:
             new_status = SeatRequest.Status.CONFIRMED
             confirmed += 1
         else:
             new_status = SeatRequest.Status.WAITING
-        # Only persist when something actually changed.
         req.status = new_status
         req.save(update_fields=['status', 'queue_position'])
 
@@ -319,7 +328,10 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
     req.seat_number = seat_number
     req.university_id = university_id
     req.priority_type = priority_type
-    req.subscription = subscription
+    # Never detach an already-linked booking (the return leg is booked with no
+    # subscription) — approval finds the held seats through this link.
+    if subscription is not None or not req.subscription_id:
+        req.subscription = subscription
     if pickup_point_id:
         req.pickup_point_id = pickup_point_id
     req.status = status

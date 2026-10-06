@@ -1,4 +1,5 @@
 import django_filters
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -150,7 +151,13 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             from apps.operations.models import SeatRequest as _SR
             from apps.operations.services import confirm_seat_payment
             parts = []
-            for req in sub.seat_requests.filter(status=_SR.Status.HELD):
+            held = list(sub.seat_requests.filter(status=_SR.Status.HELD))
+            # Orphans: held seats of this student on this route that lost their
+            # subscription link (e.g. return leg booked through the seat map).
+            held += list(_SR.objects.filter(
+                student=sub.student, status=_SR.Status.HELD, subscription__isnull=True,
+                daily_trip__route=sub.route, daily_trip__date__gte=timezone.localdate()))
+            for req in held:
                 confirm_seat_payment(req)
                 parts.append(f"مقعد {req.seat_number}")
             seat_msg = (' — ' + '، '.join(parts)) if parts else ''
