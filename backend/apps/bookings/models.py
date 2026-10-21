@@ -108,6 +108,9 @@ class Subscription(models.Model):
         self.rejection_reason = ''
         if self.subscription_type == 'monthly':
             self.valid_until = timezone.localdate() + timezone.timedelta(days=MONTHLY_DAYS)
+        elif self.subscription_type == 'term':
+            from apps.config_app.models import CompanySettings
+            self.valid_until = CompanySettings.load().term_end_date
         self.save(update_fields=['status', 'verified_at', 'verified_by',
                                  'rejection_reason', 'valid_until', 'updated_at'])
 

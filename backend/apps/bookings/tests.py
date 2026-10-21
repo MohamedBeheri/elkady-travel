@@ -149,3 +149,55 @@ class MonthlyExpiryTests(APITestCase):
         # a seat-map booking is now an ordinary paid daily booking, not a free monthly one
         self.assertEqual(self._book_seat(self.today + timedelta(days=1)).status_code, 201)
         self.assertEqual(SeatRequest.objects.get(student=self.student).status, 'held')
+
+
+class TermExpiryTests(MonthlyExpiryTests):
+    """Same lifecycle for a term subscription, driven by the admin's term end date."""
+
+    def setUp(self):
+        super().setUp()
+        cs = CompanySettings.load()
+        cs.booking_term_open = True
+        cs.term_end_date = self.today + timedelta(days=60)
+        cs.save()
+
+    def _subscribe_term(self):
+        self.client.force_authenticate(self.student)
+        r = self.client.post('/api/bookings/subscriptions/', {
+            'subscription_type': 'term', 'route': self.route.id, 'university': self.uni.id,
+            'pickup_point': self.pp.id, 'amount': '1'}, format='json')
+        self.assertEqual(r.status_code, 201, r.content)
+        sub_id = r.json()['id']
+        self.client.post(f'/api/bookings/subscriptions/{sub_id}/submit-payment/')
+        self.client.force_authenticate(self.admin)
+        return sub_id, self.client.post(f'/api/bookings/subscriptions/{sub_id}/approve/')
+
+    def test_term_runs_until_term_end_then_closes(self):
+        sub_id, r = self._subscribe_term()
+        self.assertEqual(r.status_code, 200, r.content)
+        sub = Subscription.objects.get(pk=sub_id)
+        self.assertEqual(sub.valid_until, self.today + timedelta(days=60))
+        self.assertEqual(len(self._term_tickets()), 2)
+        # admin moves the end date → the subscription follows
+        self.client.force_authenticate(self.admin)
+        self.client.patch('/api/config/company/', {'term_end_date': str(self.today - timedelta(days=1))}, format='json')
+        sub.refresh_from_db()
+        self.assertEqual(sub.valid_until, self.today - timedelta(days=1))
+        expire_due_subscriptions()
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, 'expired')
+        self.assertEqual(self._term_tickets(), [])
+
+    def test_cannot_approve_term_after_term_ended(self):
+        cs = CompanySettings.load()
+        cs.term_end_date = self.today - timedelta(days=1)
+        cs.save()
+        sub_id, r = self._subscribe_term()
+        self.assertEqual(r.status_code, 400, r.content)
+        self.assertNotEqual(Subscription.objects.get(pk=sub_id).status, 'confirmed')
+
+    # the monthly-only tests below don't apply to the term flow
+    test_approval_sets_thirty_days = test_still_open_on_last_day_closed_the_day_after = None
+    test_first_request_of_the_day_closes_ended_subscriptions = test_admin_extend_reopens_with_seats = None
+    test_cannot_confirm_attendance_after_end_date = test_no_free_booking_beyond_end_date = None
+    test_expired_student_cannot_book_on_the_subscription = None

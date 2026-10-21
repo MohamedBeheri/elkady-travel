@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -168,9 +169,16 @@ def company_settings(request):
     if request.method in ('PUT', 'PATCH'):
         if not IsStaff().has_permission(request, None):
             return Response(status=403)
+        old_term_end = obj.term_end_date
         ser = CompanySettingsSerializer(obj, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
+        if obj.term_end_date != old_term_end:
+            # Moving the term's end date moves every current term subscription with it.
+            from apps.bookings.models import Subscription
+            Subscription.objects.filter(
+                subscription_type='term', status=Subscription.Status.CONFIRMED,
+            ).filter(Q(valid_until=old_term_end) | Q(valid_until__isnull=True)).update(valid_until=obj.term_end_date)
         return Response(ser.data)
     from django.utils import timezone
     # Exposed so the admin header can show the SERVER clock — the one every

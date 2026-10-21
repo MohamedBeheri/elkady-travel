@@ -1,4 +1,4 @@
-import { Card, Col, Row, Progress, Table, Tag, Switch, Space, TimePicker, App as AntdApp } from 'antd'
+import { Card, Col, Row, Progress, Table, Tag, Switch, Space, TimePicker, DatePicker, App as AntdApp } from 'antd'
 import dayjs from 'dayjs'
 import {
   TeamOutlined, ClockCircleOutlined, DollarOutlined, CarOutlined,
@@ -36,6 +36,13 @@ function BookingTogglesCard() {
       message.success(t ? `الحجز اليومي هيتقفل تلقائياً الساعة ${t.format('HH:mm')}` : 'تم إلغاء الإغلاق التلقائي بالوقت')
     } catch { message.error('تعذّر الحفظ') }
   }
+  const termEnd = company?.term_end_date ? dayjs(company.term_end_date) : null
+  const saveTermEnd = async (d: dayjs.Dayjs | null) => {
+    try {
+      await save({ term_end_date: d ? d.format('YYYY-MM-DD') : null }).unwrap()
+      message.success(d ? `اشتراكات الترم صالحة حتى ${d.format('YYYY-MM-DD')} وتُقفل في اليوم التالي` : 'تم إلغاء تاريخ نهاية الترم')
+    } catch { message.error('تعذّر الحفظ') }
+  }
   return (
     <Card size="small" style={{ marginBottom: 14 }}
       title={<span><LockOutlined /> <b>فتح / إغلاق الحجز للجميع</b></span>}
@@ -57,6 +64,16 @@ function BookingTogglesCard() {
           {cutoffValue
             ? `يُغلق الحجز اليومي تلقائياً من الساعة ${cutoffValue.format('HH:mm')} حتى منتصف الليل، ويُفتح تلقائياً بعدها.`
             : 'اتركه فارغاً لتعطيل الإغلاق التلقائي بالوقت (يظل الحجز مفتوحاً طوال اليوم ما دام مفتوحاً بالمفتاح أعلاه).'}
+        </span>
+      </div>
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 600 }}>تاريخ نهاية الترم:</span>
+        <DatePicker value={termEnd} onChange={saveTermEnd} format="YYYY-MM-DD" allowClear
+          placeholder="بدون تاريخ انتهاء" style={{ width: 150 }} />
+        <span style={{ color: '#64748b', fontSize: 12 }}>
+          {termEnd
+            ? `آخر يوم ركوب لاشتراكات الترم ${termEnd.format('YYYY-MM-DD')} — في اليوم التالي تُقفل تلقائياً ويُحرَّر مقعدها. غيّره هنا عند بداية كل ترم جديد، وتغييره ينقل تاريخ انتهاء اشتراكات الترم الحالية معه.`
+            : 'بدون تاريخ: اشتراكات الترم لا تنتهي تلقائياً.'}
         </span>
       </div>
     </Card>

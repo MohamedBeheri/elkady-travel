@@ -326,6 +326,12 @@ class CompanySettings(models.Model):
         ),
     )
 
+    term_end_date = models.DateField(
+        null=True, blank=True, verbose_name=_('تاريخ نهاية الترم'),
+        help_text=_('آخر يوم ركوب لاشتراكات الترم؛ في اليوم التالي تُقفل تلقائياً ويُحرَّر مقعدها. '
+                    'غيّره كل ترم جديد. فارغ = اشتراك الترم بلا تاريخ انتهاء.'),
+    )
+
     class Meta:
         verbose_name = _('إعدادات الشركة')
         verbose_name_plural = _('إعدادات الشركة')

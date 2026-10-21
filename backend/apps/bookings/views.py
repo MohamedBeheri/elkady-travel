@@ -143,6 +143,12 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         if request.user.role not in STAFF_ROLES:
             return Response(status=403)
         sub = self.get_object()
+        if sub.subscription_type == 'term':
+            from django.utils import timezone
+            term_end = CompanySettings.load().term_end_date
+            if term_end and term_end < timezone.localdate():
+                return Response({'detail': f'تاريخ نهاية الترم في الإعدادات ({term_end}) عدّى — '
+                                           f'حدّثه للترم الجديد من لوحة التحكم قبل اعتماد اشتراكات الترم.'}, status=400)
         sub.approve(request.user)
 
         seat_msg = ''
