@@ -216,20 +216,19 @@ def _pickup_time_of(pickup_point_id, direction, slot_id):
     return t.time.strftime('%H:%M') if t else ''
 
 
-def _active_priority(student, route):
-    """Best confirmed subscription tier for this student on this route (term>monthly>daily)."""
-    subs = Subscription.objects.filter(
-        student=student, route=route, status=Subscription.Status.CONFIRMED,
-    ).values_list('subscription_type', flat=True)
-    subs = set(subs)
-    if 'term' in subs:
-        return 'term', Subscription.objects.filter(
-            student=student, route=route, subscription_type='term',
-            status=Subscription.Status.CONFIRMED).first()
-    if 'monthly' in subs:
-        return 'monthly', Subscription.objects.filter(
-            student=student, route=route, subscription_type='monthly',
-            status=Subscription.Status.CONFIRMED).first()
+def _active_priority(student, route, date=None):
+    """Best confirmed subscription tier for this student on this route (term>monthly>daily)
+    that is still valid on `date` — a monthly subscription past its «ينتهي في»
+    gives no seat priority (and no free confirmation), even before it is closed."""
+    date = date or timezone.localdate().isoformat()
+    subs = (Subscription.objects
+            .filter(student=student, route=route, status=Subscription.Status.CONFIRMED,
+                    subscription_type__in=['term', 'monthly'])
+            .filter(Q(valid_until__isnull=True) | Q(valid_until__gte=date)))
+    for tier in ('term', 'monthly'):
+        sub = subs.filter(subscription_type=tier).first()
+        if sub:
+            return tier, sub
     return 'daily', None
 
 
@@ -623,7 +622,7 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         route = Route.objects.get(pk=route_id)
         slot = MorningSlot.objects.get(pk=slot_id)
         trip = _get_or_create_trip(date, route, morning_slot=slot)
-        priority_type, sub = _active_priority(user, route)
+        priority_type, sub = _active_priority(user, route, date)
 
         req = request_seat(
             daily_trip=trip, student=user, subscription=sub,
@@ -873,7 +872,7 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             if not slot_id:
                 return Response({'detail': 'البيانات ناقصة'}, status=400)
             trip = _get_or_create_trip(date, route, morning_slot=MorningSlot.objects.get(pk=slot_id))
-            priority_type, sub = _active_priority(user, route)
+            priority_type, sub = _active_priority(user, route, date)
         try:
             kind, obj, msg = book_specific_seat(
                 trip=trip, student=user, seat_number=seat_number,

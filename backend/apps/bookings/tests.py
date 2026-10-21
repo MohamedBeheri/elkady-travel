@@ -107,3 +107,45 @@ class MonthlyExpiryTests(APITestCase):
         r = self.client.post('/api/operations/attendance/set/', {
             'lock_id': lock.id, 'date': str(self.today + timedelta(days=1)), 'attending': True}, format='json')
         self.assertEqual(r.status_code, 403, r.content)
+
+    def _book_seat(self, date):
+        cs = CompanySettings.load()
+        cs.booking_daily_open = True
+        cs.save()
+        cap = SeatCapacity.objects.filter(route=self.route).first()
+        self.client.force_authenticate(self.student)
+        return self.client.post('/api/operations/seat-requests/book-seat/', {
+            'date': str(date), 'route': self.route.id, 'direction': 'go',
+            'morning_slot': cap.morning_slot_id, 'university': self.uni.id}, format='json')
+
+    def test_no_free_booking_beyond_end_date(self):
+        from apps.operations.models import SeatRequest
+        sub = self._subscribe_and_approve()
+        Subscription.objects.filter(pk=sub.pk).update(valid_until=self.today + timedelta(days=1))
+        # inside the period → confirmed on the subscription (control)
+        self.assertEqual(self._book_seat(self.today + timedelta(days=1)).status_code, 201)
+        inside = SeatRequest.objects.get(student=self.student, daily_trip__date=self.today + timedelta(days=1))
+        self.assertEqual(inside.status, 'confirmed')
+        # a day after «ينتهي في» → no subscription privilege: held, waiting for payment
+        self.assertEqual(self._book_seat(self.today + timedelta(days=2)).status_code, 201)
+        after = SeatRequest.objects.get(student=self.student, daily_trip__date=self.today + timedelta(days=2))
+        self.assertEqual(after.status, 'held')
+        self.assertIsNone(after.subscription_id)
+
+    def test_expired_student_cannot_book_on_the_subscription(self):
+        from apps.operations.models import SeatRequest
+        sub = self._subscribe_and_approve()
+        lock = TermSeatLock.objects.filter(subscription=sub, direction='go').first()
+        Subscription.objects.filter(pk=sub.pk).update(valid_until=self.today - timedelta(days=1))
+        expire_due_subscriptions()
+        self.client.force_authenticate(self.student)
+        tomorrow = str(self.today + timedelta(days=1))
+        # attendance on the old standing seat is gone
+        r = self.client.post('/api/operations/attendance/set/', {
+            'lock_id': lock.id, 'date': tomorrow, 'attending': True}, format='json')
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(self.client.get(f'/api/operations/attendance/?date={tomorrow}').json()['seats'], [])
+        self.assertEqual(self._term_tickets(), [])
+        # a seat-map booking is now an ordinary paid daily booking, not a free monthly one
+        self.assertEqual(self._book_seat(self.today + timedelta(days=1)).status_code, 201)
+        self.assertEqual(SeatRequest.objects.get(student=self.student).status, 'held')
