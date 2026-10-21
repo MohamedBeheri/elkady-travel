@@ -4,6 +4,9 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.config_app.models import SUBSCRIPTION_TYPES
 
+# A monthly subscription rides for this many days after the admin approves it.
+MONTHLY_DAYS = 30
+
 
 class Subscription(models.Model):
     """A student's booking + payment record for a term / monthly / daily plan.
@@ -77,6 +80,10 @@ class Subscription(models.Model):
     rejection_reason = models.CharField(max_length=255, blank=True, verbose_name=_('سبب الرفض'))
 
     whatsapp_notified_at = models.DateTimeField(null=True, blank=True, verbose_name=_('آخر إشعار واتساب'))
+    # Last day the subscription may ride (inclusive). Set on approval for
+    # monthly; the day after it, the subscription closes (status EXPIRED) and
+    # its standing seats are freed — see services.expire_due_subscriptions.
+    valid_until = models.DateField(null=True, blank=True, verbose_name=_('صالح حتى'))
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -99,8 +106,10 @@ class Subscription(models.Model):
         self.verified_at = timezone.now()
         self.verified_by = by_user
         self.rejection_reason = ''
+        if self.subscription_type == 'monthly':
+            self.valid_until = timezone.localdate() + timezone.timedelta(days=MONTHLY_DAYS)
         self.save(update_fields=['status', 'verified_at', 'verified_by',
-                                 'rejection_reason', 'updated_at'])
+                                 'rejection_reason', 'valid_until', 'updated_at'])
 
     def reject(self, by_user, reason=''):
         self.status = self.Status.REJECTED

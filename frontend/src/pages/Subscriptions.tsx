@@ -10,7 +10,7 @@ import dayjs from 'dayjs'
 import {
   useSubscriptionsQuery, useDeleteSubscriptionMutation, useRoutesQuery, useUniversitiesQuery, useUsersQuery,
   usePublicPickupPointsQuery,
-  useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation,
+  useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation, useExtendSubscriptionMutation,
   useMissingSeatsQuery, useFillSeatsMutation,
 } from '../app/api'
 import { dedupePickups } from '../app/validators'
@@ -156,6 +156,19 @@ export default function Subscriptions() {
 
   const [del] = useDeleteSubscriptionMutation()
   const [markNotified] = useMarkSubscriptionNotifiedMutation()
+  const [extendSub] = useExtendSubscriptionMutation()
+  const extend = (r: any) => modal.confirm({
+    title: 'تمديد الاشتراك الشهري ٣٠ يوماً؟',
+    content: `${r.student_name} — ${r.status === 'expired' ? 'الاشتراك منتهي وسيُعاد فتحه ويُخصَّص له مقعد من جديد.' : `ينتهي حالياً يوم ${r.valid_until || '—'}.`} تأكد من استلام الدفع أولاً.`,
+    okText: 'تمديد', cancelText: 'إلغاء',
+    onOk: async () => {
+      try {
+        const res: any = await extendSub(r.id).unwrap()
+        if (res?.seat_warning) modal.warning({ title: 'تم التمديد — بدون مقعد', content: res.seat_warning, okText: 'فهمت' })
+        else message.success(`تم التمديد — صالح حتى ${res.valid_until}`)
+      } catch (e: any) { message.error(e?.data?.detail || 'تعذر التمديد') }
+    },
+  })
   const [clearNotified] = useClearSubscriptionNotifiedMutation()
 
   const fillOne = async (r: any, quiet = false) => {
@@ -257,11 +270,12 @@ export default function Subscriptions() {
           options={(unis?.results || []).map((u: any) => ({ value: u.id, label: u.name }))} />
         <Select placeholder="الحالة" allowClear style={{ width: 140 }} value={status} onChange={setStatus}
           options={[{ value: 'confirmed', label: 'مؤكد' }, { value: 'payment_submitted', label: 'قيد المراجعة' },
-            { value: 'rejected', label: 'مرفوض' }, { value: 'payment_pending', label: 'بانتظار الدفع' }]} />
+            { value: 'rejected', label: 'مرفوض' }, { value: 'payment_pending', label: 'بانتظار الدفع' },
+            { value: 'expired', label: 'منتهي' }]} />
       </Space>
 
       <Table
-        rowKey="id" loading={isFetching} scroll={{ x: 1550 }} dataSource={rows} tableLayout="fixed"
+        rowKey="id" loading={isFetching} scroll={{ x: 1670 }} dataSource={rows} tableLayout="fixed"
         pagination={{ pageSize: 20, showSizeChanger: true }}
         rowClassName={(r: any) => (r.whatsapp_notified_at ? 'sub-row-notified' : '')}
         columns={[
@@ -285,6 +299,12 @@ export default function Subscriptions() {
           { title: 'طريقة الدفع', dataIndex: 'method_name', width: 130, render: (v) => v || '—' },
           { title: 'الحالة', dataIndex: 'status_display', width: 140,
             render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]} style={{ whiteSpace: 'normal', display: 'inline-block' }}>{v}</Tag> },
+          { title: 'ينتهي في', dataIndex: 'valid_until', width: 120, render: (v, r: any) => {
+              if (!v) return '—'
+              const left = dayjs(v).diff(dayjs().startOf('day'), 'day')
+              const color = r.status === 'expired' || left < 0 ? 'default' : left <= 3 ? 'red' : left <= 7 ? 'orange' : 'green'
+              return <Tooltip title={left >= 0 && r.status === 'confirmed' ? `متبقي ${left} يوم` : 'منتهي'}><Tag color={color}>{v}</Tag></Tooltip>
+            } },
           {
             title: 'إجراءات', fixed: 'right', width: 200, render: (_, r: any) => (
               <Space>
@@ -302,6 +322,11 @@ export default function Subscriptions() {
                 {r.whatsapp_notified_at && (
                   <Tooltip title="إلغاء تعليم «تم الإرسال»">
                     <Button size="small" onClick={() => clearNotified(r.id)}>↺</Button>
+                  </Tooltip>
+                )}
+                {r.subscription_type === 'monthly' && ['confirmed', 'expired'].includes(r.status) && (
+                  <Tooltip title="تمديد ٣٠ يوماً (بعد استلام دفع الشهر الجديد)">
+                    <Button size="small" onClick={() => extend(r)}>+٣٠</Button>
                   </Tooltip>
                 )}
                 <Tooltip title="حذف الاشتراك"><Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove(r)} /></Tooltip>

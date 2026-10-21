@@ -178,9 +178,14 @@ def set_attendance(request):
             'detail': f'تأكيدات حضور رحلة الغد مُقفلة الآن (بعد الساعة {cutoff.strftime("%H:%M")}).',
         }, status=403)
     try:
-        lock = TermSeatLock.objects.get(pk=lock_id, student=user, active=True)
+        lock = TermSeatLock.objects.select_related('subscription').get(pk=lock_id, student=user, active=True)
     except TermSeatLock.DoesNotExist:
         return Response({'detail': 'غير موجود'}, status=404)
+    until = lock.subscription.valid_until if lock.subscription_id else None
+    if until and str(date) > until.isoformat():
+        return Response({
+            'detail': f'اشتراكك ينتهي يوم {until} — جدّد الاشتراك لتأكيد الحضور بعد هذا التاريخ.',
+        }, status=403)
     declining = attending in (False, 'false', 'False', 0, '0', 'no')
     if declining:
         SeatAbsence.objects.get_or_create(term_lock=lock, date=date, defaults={'created_by': user})
@@ -952,10 +957,13 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             absent_tomorrow = lock.id in absences
             pickup_time = '' if absent_tomorrow else _pickup_time_of(pp.id if pp else None, lock.direction, slot_id)
             status_note = 'معتذر لغد' if absent_tomorrow else f'مؤكد ({sub_label} - {dir_label})'
+            until = lock.subscription.valid_until if lock.subscription_id else None
+            period = f'حتى {until}' if until else f'طوال مدة {sub_label}'
             payload = f'ELKADY|SUB|مقعد {lock.seat_number}|{lock.route.name}|{dir_label}|{slot_label}|{user.full_name}'
             out.append({
                 'kind': 'term', 'id': lock.id, 'seat_number': lock.seat_number,
-                'date': f'الغد ({tomorrow}) — طوال مدة {sub_label}', 'route': lock.route.name,
+                'date': f'الغد ({tomorrow}) — {period}', 'route': lock.route.name,
+                'valid_until': str(until) if until else None,
                 'direction': lock.direction, 'direction_display': dir_label,
                 'slot': slot_label,
                 'status': 'absent' if absent_tomorrow else 'confirmed',

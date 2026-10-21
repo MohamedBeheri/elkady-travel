@@ -153,6 +153,7 @@ export default function MyBookings() {
           { title: 'الجامعة', dataIndex: 'university_name' },
           { title: 'المبلغ', dataIndex: 'amount', render: (v) => `${Number(v).toLocaleString()} ج.م` },
           { title: 'الحالة', dataIndex: 'status_display', render: (v, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
+          { title: 'ينتهي في', dataIndex: 'valid_until', render: (v) => v || '—' },
           {
             title: 'إجراء', render: (_, r: any) => (
               ['payment_pending', 'rejected'].includes(r.status)

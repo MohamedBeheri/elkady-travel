@@ -218,6 +218,30 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                link='/bookings', severity='error')
         return Response(SubscriptionSerializer(sub).data)
 
+    @action(detail=True, methods=['post'])
+    def extend(self, request, pk=None):
+        """Renew a monthly subscription for another period (paid outside the
+        app) — reopens it if it already closed and gives its seats back."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        sub = self.get_object()
+        if sub.subscription_type != 'monthly' or sub.status not in (
+                Subscription.Status.CONFIRMED, Subscription.Status.EXPIRED):
+            return Response({'detail': 'التمديد متاح للاشتراك الشهري المؤكد أو المنتهي فقط'}, status=400)
+        from .services import extend_subscription
+        sub, missing = extend_subscription(sub)
+        warning = ''
+        if missing:
+            lbl = ' و'.join('الذهاب' if m == 'go' else 'العودة' for m in missing)
+            warning = (f'تم التمديد لكن لم يُخصَّص مقعد {lbl} — الميعاد ممتلئ. '
+                       f'خصّصه من «اشتراكات بدون مقعد» بعد تفريغ مقعد أو زيادة السعة.')
+        notify(sub.student, 'تم تجديد اشتراكك',
+               f'اشتراك {sub.get_subscription_type_display()} على {sub.route} صالح حتى {sub.valid_until}',
+               link='/tickets', severity='success')
+        data = SubscriptionSerializer(sub).data
+        data['seat_warning'] = warning
+        return Response(data)
+
     @action(detail=True, methods=['post'], url_path='mark-notified')
     def mark_notified(self, request, pk=None):
         """Stamp whatsapp_notified_at so the admin UI can dim already-contacted rows."""

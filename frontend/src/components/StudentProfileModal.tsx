@@ -142,6 +142,7 @@ export function StudentProfileModal({ studentId, onClose }: { studentId: number 
             { title: 'المسار', dataIndex: 'route_name' },
             { title: 'المبلغ', dataIndex: 'amount', render: (v: any) => `${Number(v).toLocaleString()} ج.م` },
             { title: 'الحالة', dataIndex: 'status_display', render: (v: string, r: any) => <Tag color={STATUS_COLOR[r.status]}>{v}</Tag> },
+            { title: 'ينتهي في', dataIndex: 'valid_until', render: (v: string) => v || '—' },
             { title: 'الوسيلة', dataIndex: 'method_name', render: (v: string) => v || '—' },
             { title: 'المرجع', dataIndex: 'payment_reference', render: (v: string) => v || '—' },
             {

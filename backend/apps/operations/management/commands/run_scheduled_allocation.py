@@ -23,6 +23,12 @@ class Command(BaseCommand):
     help = 'Auto-lock tomorrow\'s term/monthly attendance and run allocation, once the configured cutoff has passed.'
 
     def handle(self, *args, **options):
+        # Close ended monthly subscriptions first, so their seats are free
+        # before tomorrow's attendance lock + allocation runs.
+        from apps.bookings.services import expire_due_subscriptions
+        closed = expire_due_subscriptions()
+        if closed:
+            self.stdout.write(f'{len(closed)} ended subscription(s) closed.')
         cs = CompanySettings.load()
         cutoff = cs.attendance_lock_time
         if not cutoff:
