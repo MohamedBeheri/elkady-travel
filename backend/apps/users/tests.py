@@ -1,14 +1,15 @@
-from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
+
+from apps.users.views import LoginThrottle
 
 
 class LoginThrottleTests(TestCase):
     def setUp(self):
-        cache.clear()
+        LoginThrottle.cache.clear()
 
     def tearDown(self):
-        cache.clear()
+        LoginThrottle.cache.clear()
 
     def test_wrong_passwords_on_one_account_are_limited_whatever_address_they_come_from(self):
         client = APIClient()
