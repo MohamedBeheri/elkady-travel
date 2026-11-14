@@ -210,6 +210,35 @@ class ReturnSlot(models.Model):
         return self.name
 
 
+class ReturnCapacity(models.Model):
+    """How many riders one route can carry home on one return slot.
+
+    Return trips can't call in extra vehicles the way going trips can, so this
+    number is a hard stop: once the riders of that route on that slot reach it,
+    booking closes by itself, and reopens the moment the admin raises it. A
+    route with no row here uses the slot's own «السعة» (ReturnSlot.capacity).
+    """
+    route = models.ForeignKey(
+        Route, on_delete=models.CASCADE, related_name='return_capacities', verbose_name=_('المسار'))
+    return_slot = models.ForeignKey(
+        ReturnSlot, on_delete=models.CASCADE, related_name='route_capacities', verbose_name=_('موعد العودة'))
+    total_seats = models.PositiveIntegerField(verbose_name=_('عدد المقاعد'))
+
+    class Meta:
+        verbose_name = _('سعة عودة')
+        verbose_name_plural = _('سعات العودة')
+        unique_together = [('route', 'return_slot')]
+
+    def __str__(self):
+        return f'{self.route} / {self.return_slot} = {self.total_seats}'
+
+
+def return_capacity(route_id, return_slot):
+    """Standing capacity of a return slot for one route (route row, else the slot's own)."""
+    row = ReturnCapacity.objects.filter(route_id=route_id, return_slot=return_slot).first()
+    return row.total_seats if row else return_slot.capacity
+
+
 class SeatCapacity(models.Model):
     """Total seats available for a route on a morning slot."""
     LAYOUT_CHOICES = [

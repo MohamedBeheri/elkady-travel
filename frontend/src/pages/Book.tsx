@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
-  useMorningSlotsQuery, useReturnSlotsQuery, useUniversitiesQuery,
+  useMorningSlotsQuery, useReturnSlotsQuery, useReturnSlotAvailabilityQuery, useUniversitiesQuery,
   usePublicPickupPointsQuery, usePricesQuery, useCapacitiesQuery,
   useSeatmapForQuery, useBookDailyMutation,
   useCreateSubscriptionMutation, usePaymentMethodsQuery, usePaymentAccountsQuery, useSubmitPaymentMutation,
@@ -209,6 +209,11 @@ function DailyFlow({ unis }: any) {
   const retQuery = wantRet && routeId && retSlot && dateStr ? { date: dateStr, route: routeId, direction: 'return', return_slot: retSlot } : undefined
   const { data: goMap, isFetching: goFetch } = useSeatmapForQuery(goQuery as any, { skip: !goQuery })
   const { data: retMap, isFetching: retFetch } = useSeatmapForQuery(retQuery as any, { skip: !retQuery })
+  // Which return slots of this route still have room on this date (the server
+  // closes a return slot by itself once it reaches the admin's capacity).
+  const { data: retAvail } = useReturnSlotAvailabilityQuery(
+    { date: dateStr as string, route: routeId as number }, { skip: !(wantRet && routeId && dateStr) })
+  const retAvailById: Record<number, any> = Object.fromEntries((retAvail?.slots || []).map((x: any) => [x.id, x]))
 
   // Reset chosen seats whenever the trip that owns them changes.
   useEffect(() => { setGoSeat(null) }, [routeId, goSlot, dateStr])
@@ -229,12 +234,17 @@ function DailyFlow({ unis }: any) {
   const mapFull = (m: any) => !!m && !(m.seats || []).some((x: any) =>
     x.raw_state === 'empty' && (!x.gender || !gender || x.gender === gender))
   const goFull = wantGo && seatSelection && !!goQuery && !goFetch && mapFull(goMap)
-  const retFull = wantRet && seatSelection && !!retQuery && !retFetch && mapFull(retMap)
-  const willWait = goFull || retFull
+  // Return is a hard stop, not a waiting list: a full slot can't be booked at
+  // all — the student picks another one (it reopens when the admin adds seats).
+  const retClosed = wantRet && !!retSlot && !!((!retFetch && retMap?.full) || retAvailById[retSlot]?.full)
+  // Room left by head count but no pickable seat on the map (capacity larger
+  // than the vehicle drawing) → the server assigns the seat.
+  const retAutoSeat = wantRet && seatSelection && !!retQuery && !retFetch && !retClosed && mapFull(retMap)
+  const willWait = goFull
 
   const canConfirm = !!(university && center && pickupId && dateStr && routeId
     && (!wantGo || (goSlot && (goSeat || !seatSelection || goFull)))
-    && (!wantRet || (retSlot && (retSeat || !seatSelection || retFull))))
+    && (!wantRet || (retSlot && !retClosed && (retSeat || !seatSelection || retAutoSeat))))
 
   const doBook = async () => {
     try {
@@ -405,9 +415,11 @@ function DailyFlow({ unis }: any) {
           <Form layout="vertical">
             <Form.Item label="موعد العودة" required style={{ maxWidth: 260 }}>
               <Select placeholder="اختر موعد العودة" value={retSlot} onChange={setRetSlot} disabled={!routeId}
-                options={(rSlots?.results || rSlots || []).map((s: any) => ({
+                options={(rSlots?.results || rSlots || []).filter((s: any) => s.active !== false).map((s: any) => ({
                   value: s.id,
-                  label: selPickup?.return_times?.[s.id] ? `${s.name} — نزولك ${selPickup.return_times[s.id]}` : s.name,
+                  disabled: !!retAvailById[s.id]?.full,
+                  label: (selPickup?.return_times?.[s.id] ? `${s.name} — نزولك ${selPickup.return_times[s.id]}` : s.name)
+                    + (retAvailById[s.id]?.full ? ' — مكتمل' : ''),
                 }))} />
             </Form.Item>
           </Form>
@@ -415,11 +427,13 @@ function DailyFlow({ unis }: any) {
             <Alert type="info" showIcon style={{ marginBottom: 12 }}
               message={`⏰ موعد نزولك في ${pointName}: ${selPickup.return_times[retSlot]}`} />
           )}
-          {!seatSelection
+          {retClosed ? (
+            <Alert type="error" showIcon style={{ fontWeight: 700 }}
+              message="ميعاد العودة ده اكتمل عدده — مفيش أماكن متاحة فيه. اختر ميعاد عودة تاني." />
+          ) : !seatSelection
             ? retSlot && <Alert type="success" showIcon message="سيتم تخصيص مقعد العودة تلقائياً (اختيار المقاعد غير مفعّل لهذا الخط)." />
-            : retQuery && (retFetch ? <Spin /> : retFull ? (
-              <Alert type="warning" showIcon style={{ fontWeight: 700 }}
-                message="رحلة العودة في هذا الميعاد ممتلئة — عند التأكيد سيتم تسجيلك في قائمة الانتظار (بدون دفع الآن) ونتواصل معك فور توفر مقعد." />
+            : retQuery && (retFetch ? <Spin /> : retAutoSeat ? (
+              <Alert type="success" showIcon message="سيتم تخصيص مقعد العودة تلقائياً." />
             ) : retMap && (
               <div style={{ textAlign: 'center' }}>
                 <SeatMap layout={retMap.layout} seats={retMap.seats} selected={retSeat} onSelect={setRetSeat} viewerGender={gender} />

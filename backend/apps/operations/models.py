@@ -38,6 +38,10 @@ class DailyTrip(models.Model):
     layout = models.CharField(max_length=12, default='bus50', verbose_name=_('نوع المركبة'))
     total_seats = models.PositiveIntegerField(default=49, verbose_name=_('إجمالي المقاعد'))
     allocated_at = models.DateTimeField(null=True, blank=True, verbose_name=_('وقت التخصيص'))
+    # Return trips only: the admin found an extra vehicle (or lost one) for THIS
+    # date — overrides the standing «سعة العودة» for this trip alone.
+    capacity_override = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name=_('سعة هذا اليوم فقط'))
 
     class Meta:
         verbose_name = _('رحلة يومية')
@@ -90,6 +94,13 @@ class DailyTrip(models.Model):
         """Live total-seat count: follows the admin config, falling back to the
         snapshot stored on the trip when no config row exists (e.g. return trips).
         """
+        if self.direction == self.Direction.RETURN and self.return_slot_id:
+            # Return trips: this day's override, else the standing per-route
+            # return capacity (see config_app.ReturnCapacity).
+            if self.capacity_override is not None:
+                return self.capacity_override
+            from apps.config_app.models import return_capacity
+            return return_capacity(self.route_id, self.return_slot)
         cap = self._capacity_row
         return cap.total_seats if cap else self.total_seats
 

@@ -26,7 +26,11 @@ from .services import (
     allocate_trip, book_specific_seat, build_seatmap, cancel_seat, confirm_seat_payment,
     make_qr, release_seat, request_seat, run_daily_allocation, reschedule_daily_booking,
     reschedule_lead_hours_left, DAILY_RESCHEDULE_LEAD_HOURS, _first_free_seat_on_trip, _get_or_create_trip,
+    RETURN_FULL_MSG, notify_return_fill, return_capacity_on, return_load, return_trip_full,
 )
+
+RETURN_STOPPED_MSG = 'ميعاد العودة ده متوقف حالياً من الإدارة — اختر ميعاد عودة تاني.'
+
 
 
 @api_view(['GET'])
@@ -111,6 +115,13 @@ def attendance(request):
         for o in avail:
             if o['id'] == chosen_id:
                 chosen_time = o['time']; break
+        if lock.direction == 'return':
+            # A full return slot can't take one more rider — except the rider's
+            # own default slot, where a subscriber always has priority.
+            for o in avail:
+                slot = ReturnSlot.objects.get(pk=o['id'])
+                subs, held = return_load(date, lock.route_id, slot.id, exclude_lock_id=lock.id)
+                o['full'] = (not o['is_default']) and subs + held >= return_capacity_on(date, lock.route_id, slot)
         pp = (lock.subscription.pickup_point if lock.subscription_id and lock.subscription.pickup_point_id
               else lock.student.pickup_point)
         out.append({
@@ -193,16 +204,38 @@ def set_attendance(request):
         AttendanceConfirmation.objects.filter(term_lock=lock, date=date).delete()
         return Response({'attending': False})
 
-    SeatAbsence.objects.filter(term_lock=lock, date=date).delete()
-    AttendanceConfirmation.objects.get_or_create(term_lock=lock, date=date)
     default_id = lock.return_slot_id if lock.direction == 'return' else lock.morning_slot_id
-    if slot_id and int(slot_id) != default_id:
-        # Save the per-day slot pick.
-        kwargs = {'return_slot_id': int(slot_id)} if lock.direction == 'return' else {'morning_slot_id': int(slot_id)}
-        DailySlotChoice.objects.update_or_create(term_lock=lock, date=date, defaults=kwargs)
-    else:
-        DailySlotChoice.objects.filter(term_lock=lock, date=date).delete()
-    return Response({'attending': True, 'chosen_slot_id': int(slot_id) if slot_id else default_id})
+    target_id = int(slot_id) if slot_id else default_id
+    with transaction.atomic():
+        trip = None
+        if lock.direction == 'return' and target_id:
+            try:
+                target = ReturnSlot.objects.get(pk=target_id)
+            except ReturnSlot.DoesNotExist:
+                return Response({'detail': 'ميعاد غير صحيح'}, status=400)
+            # Lock the trip row so two riders can't both take the last place.
+            trip = DailyTrip.objects.select_for_update().get(
+                pk=_get_or_create_trip(date, lock.route, return_slot=target, direction='return').pk)
+            # The rider's own default slot is always theirs (subscriber priority);
+            # moving to ANOTHER slot needs it to be running and to have room.
+            if target_id != default_id:
+                if not target.active:
+                    return Response({'detail': RETURN_STOPPED_MSG}, status=409)
+                if return_trip_full(trip, exclude_lock_id=lock.id):
+                    return Response({
+                        'detail': 'ميعاد العودة ده اكتمل عدده — اختر ميعاد تاني أو ارجع لميعادك الأساسي.',
+                    }, status=409)
+        SeatAbsence.objects.filter(term_lock=lock, date=date).delete()
+        AttendanceConfirmation.objects.get_or_create(term_lock=lock, date=date)
+        if target_id != default_id:
+            # Save the per-day slot pick.
+            kwargs = {'return_slot_id': target_id} if lock.direction == 'return' else {'morning_slot_id': target_id}
+            DailySlotChoice.objects.update_or_create(term_lock=lock, date=date, defaults=kwargs)
+        else:
+            DailySlotChoice.objects.filter(term_lock=lock, date=date).delete()
+        if trip is not None:
+            notify_return_fill(trip)
+    return Response({'attending': True, 'chosen_slot_id': target_id})
 
 
 def _pickup_time_of(pickup_point_id, direction, slot_id):
@@ -233,7 +266,8 @@ def _active_priority(student, route, date=None):
 
 
 class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = DailyTrip.objects.select_related('route', 'route__destination', 'route__return_destination', 'morning_slot').all()
+    queryset = DailyTrip.objects.select_related(
+        'route', 'route__destination', 'route__return_destination', 'morning_slot', 'return_slot').all()
     serializer_class = DailyTripSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ['date', 'route', 'morning_slot']
@@ -284,10 +318,23 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             trip = by_id.get(row['id'])
             if not trip:
                 continue
-            sm = build_seatmap(trip)
-            confirmed = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'term'))
-            held = sum(1 for s in sm['seats'] if s['raw_state'] == 'held')
             cap = row.get('total_seats') or 0
+            if trip.direction == 'return' and trip.return_slot_id:
+                # Return trips are counted by head (a subscriber moved here for the
+                # day keeps a seat number from another trip) — same count that
+                # closes booking, so the board never disagrees with it.
+                subs, _seats = return_load(trip.date, trip.route_id, trip.return_slot_id)
+                confirmed = subs + trip.seat_requests.filter(status=SeatRequest.Status.CONFIRMED).count()
+                held = trip.seat_requests.filter(status=SeatRequest.Status.HELD).count()
+                from apps.config_app.models import return_capacity
+                row['standing_capacity'] = return_capacity(trip.route_id, trip.return_slot)
+                row['capacity_override'] = trip.capacity_override
+                row['return_status'] = ('stopped' if not trip.return_slot.active
+                                        else 'full' if confirmed + held >= cap else 'open')
+            else:
+                sm = build_seatmap(trip)
+                confirmed = sum(1 for s in sm['seats'] if s['raw_state'] in ('booked', 'term'))
+                held = sum(1 for s in sm['seats'] if s['raw_state'] == 'held')
             row['confirmed_count'] = confirmed
             row['held_count'] = held
             row['available_seats'] = max(cap - confirmed - held, 0)
@@ -295,6 +342,62 @@ class DailyTripViewSet(viewsets.ReadOnlyModelViewSet):
             row['occupancy_percent'] = round((confirmed + held) * 100 / cap) if cap > 0 else 0
             row['is_full'] = row['available_seats'] <= 0 and cap > 0
         return Response({'date': date, 'trips': data})
+
+    @action(detail=True, methods=['post'], url_path='set-capacity')
+    def set_capacity(self, request, pk=None):
+        """Change a return trip's capacity: for this date only (an extra vehicle
+        today) or as the route's standing capacity on this slot. Raising it
+        reopens booking at once; lowering it never touches existing riders."""
+        if request.user.role not in STAFF_ROLES:
+            return Response(status=403)
+        trip = self.get_object()
+        if trip.direction != 'return' or not trip.return_slot_id:
+            return Response({'detail': 'تعديل السعة من هنا لرحلات العودة فقط'}, status=400)
+        raw = request.data.get('capacity')
+        scope = request.data.get('scope', 'day')
+        try:
+            capacity = None if raw in (None, '') else int(raw)
+        except (TypeError, ValueError):
+            return Response({'detail': 'اكتب عدد المقاعد رقماً صحيحاً'}, status=400)
+        if capacity is not None and capacity < 0:
+            return Response({'detail': 'عدد المقاعد لا يكون سالباً'}, status=400)
+        if scope == 'always':
+            if capacity is None:
+                return Response({'detail': 'اكتب عدد المقاعد'}, status=400)
+            from apps.config_app.models import ReturnCapacity
+            ReturnCapacity.objects.update_or_create(
+                route=trip.route, return_slot=trip.return_slot, defaults={'total_seats': capacity})
+            trip.capacity_override = None
+        else:
+            trip.capacity_override = capacity  # None clears the day's override
+        trip.save(update_fields=['capacity_override'])
+        from apps.fleet.models import audit
+        audit(request.user, 'update', 'return_capacity', trip.id,
+              summary=f'{trip.route} — {trip.slot_label} {trip.date}: السعة '
+                      f'{capacity if capacity is not None else "الأساسية"} '
+                      f'({"دائماً" if scope == "always" else "لهذا اليوم فقط"})')
+        return Response({'total_seats': trip.effective_capacity, 'capacity_override': trip.capacity_override})
+
+    @action(detail=False, methods=['get'], url_path='return-availability')
+    def return_availability(self, request):
+        """Which return slots still have room for this route on this date — the
+        booking screen uses it to mark full slots before the student picks one."""
+        date = request.query_params.get('date')
+        route_id = request.query_params.get('route')
+        if not (date and route_id):
+            return Response({'detail': 'البيانات ناقصة'}, status=400)
+        is_staff = request.user.role in STAFF_ROLES
+        exclude = {} if is_staff else {'exclude_student_id': request.user.id}
+        out = []
+        for slot in ReturnSlot.objects.filter(active=True):
+            subs, seats = return_load(date, route_id, slot.id, **exclude)
+            cap = return_capacity_on(date, route_id, slot)
+            row = {'id': slot.id, 'name': slot.name, 'full': subs + seats >= cap,
+                   'available': max(cap - subs - seats, 0)}
+            if is_staff:
+                row.update({'capacity': cap, 'riders': subs + seats})
+            out.append(row)
+        return Response({'date': date, 'slots': out})
 
     @action(detail=True, methods=['delete'], url_path='remove-if-empty')
     def remove_if_empty(self, request, pk=None):
@@ -669,6 +772,8 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         if want_ret and not ret_slot_id:
             return Response({'detail': 'اختر موعد العودة'}, status=400)
         route = Route.objects.get(pk=route_id)
+        if want_ret and user.role not in STAFF_ROLES and not ReturnSlot.objects.filter(pk=ret_slot_id, active=True).exists():
+            return Response({'detail': RETURN_STOPPED_MSG}, status=409)
 
         # Price is computed server-side (never trust the client) from PricingRule.
         def price_of(t):
@@ -711,6 +816,13 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
                         raise ValueError(f'لديك حجز على رحلة {leg} يوم {dup.daily_trip.date} بانتظار الدفع — '
                                          f'ادفع الحجز الحالي من «حجوزاتي» بدل حجز جديد.')
                     raise ValueError(f'أنت بالفعل في قائمة انتظار رحلة {leg} يوم {dup.daily_trip.date}.')
+                # A full RETURN slot is a hard stop, not a waiting list: there is
+                # no spare vehicle to call in for the way home, so the student
+                # must pick another slot (it reopens when the admin adds seats).
+                if want_ret:
+                    ret_trip = DailyTrip.objects.select_for_update().get(pk=legs[-1][1].pk)
+                    if return_trip_full(ret_trip, exclude_student_id=user.id):
+                        raise ValueError(RETURN_FULL_MSG)
                 # A leg with no seat picked and no free seat left → the whole
                 # booking goes on the waiting list (no seat held, no payment yet).
                 full = [(k, t) for k, t, seat in legs
@@ -796,6 +908,8 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
         route = Route.objects.get(pk=route_id)
         go_slot = MorningSlot.objects.get(pk=d['morning_slot']) if d.get('morning_slot') else None
         ret_slot = ReturnSlot.objects.get(pk=d['return_slot']) if d.get('return_slot') else None
+        if ret_slot and not ret_slot.active:
+            return Response({'detail': RETURN_STOPPED_MSG}, status=409)
 
         def _as_bool(v, default):
             if v is None:
@@ -864,7 +978,10 @@ class SeatRequestViewSet(viewsets.ModelViewSet):
             rs_id = request.data.get('return_slot')
             if not rs_id:
                 return Response({'detail': 'البيانات ناقصة'}, status=400)
-            trip = _get_or_create_trip(date, route, return_slot=ReturnSlot.objects.get(pk=rs_id), direction='return')
+            rs = ReturnSlot.objects.get(pk=rs_id)
+            if user.role not in STAFF_ROLES and not rs.active:
+                return Response({'detail': RETURN_STOPPED_MSG}, status=409)
+            trip = _get_or_create_trip(date, route, return_slot=rs, direction='return')
             # Return legs are booked/paid separately (no term/monthly seat priority).
             priority_type, sub = 'daily', None
         else:

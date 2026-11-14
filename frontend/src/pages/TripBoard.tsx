@@ -1,11 +1,11 @@
-import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Tooltip } from 'antd'
+import { Card, DatePicker, Button, Table, Tag, Drawer, App as AntdApp, Space, Empty, Progress, Divider, Tooltip, Modal, InputNumber, Radio, Alert } from 'antd'
 import { ThunderboltOutlined, FilePdfOutlined, CarOutlined, RollbackOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import dayjs from 'dayjs'
 import {
   useTripBoardQuery, useRunAllocationMutation, useTripPassengersQuery,
   useSeatmapQuery, useReleaseSeatMutation,
-  useDeleteEmptyTripMutation,
+  useDeleteEmptyTripMutation, useSetTripCapacityMutation,
 } from '../app/api'
 import SeatMap, { SeatLegend } from '../components/SeatMap'
 import { StudentLink } from '../components/StudentProfileModal'
@@ -138,6 +138,59 @@ function Passengers({ trip }: { trip: any }) {
   )
 }
 
+/* Return trips can't call in a spare vehicle, so their capacity is a hard stop.
+   This is where the admin raises it once a vehicle is found — for this date
+   only, or as the route's standing capacity on this slot. */
+function CapacityEditor({ trip, onClose }: { trip: any; onClose: () => void }) {
+  const { message } = AntdApp.useApp()
+  const [setCapacity, { isLoading }] = useSetTripCapacityMutation()
+  const [value, setValue] = useState<number | null>(trip.total_seats)
+  const [scope, setScope] = useState<'day' | 'always'>('day')
+  const riders = (trip.confirmed_count || 0) + (trip.held_count || 0)
+  const save = async (capacity: number | null, sc: 'day' | 'always') => {
+    try {
+      const res = await setCapacity({ id: trip.id, capacity, scope: sc }).unwrap()
+      message.success(`سعة الموعد الآن ${res.total_seats} — ${res.total_seats > riders ? 'الحجز مفتوح' : 'مكتمل'}`)
+      onClose()
+    } catch (e: any) { message.error(e?.data?.detail || 'تعذّر الحفظ') }
+  }
+  return (
+    <Modal open title={`سعة العودة: ${trip.slot_name} — ${trip.route_name}`} onCancel={onClose}
+      okText="حفظ" cancelText="إلغاء" confirmLoading={isLoading}
+      okButtonProps={{ disabled: value === null || value === undefined }}
+      onOk={() => save(value, scope)}>
+      <div style={{ marginBottom: 12, color: '#475569' }}>
+        الركاب الآن: <b>{riders}</b> من <b>{trip.total_seats}</b>
+        {trip.capacity_override != null && <Tag color="purple" style={{ marginInlineStart: 8 }}>سعة خاصة بهذا اليوم (الأساسية {trip.standing_capacity})</Tag>}
+      </div>
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <div>
+          <span style={{ fontWeight: 600, marginInlineEnd: 10 }}>عدد المقاعد:</span>
+          <InputNumber min={0} value={value} onChange={(v) => setValue(v as number | null)} style={{ width: 120 }} />
+        </div>
+        <Radio.Group value={scope} onChange={(e) => setScope(e.target.value)}>
+          <Space direction="vertical">
+            <Radio value="day">لهذا اليوم فقط ({trip.date})</Radio>
+            <Radio value="always">دائماً لهذا الخط على هذا الموعد</Radio>
+          </Space>
+        </Radio.Group>
+        {value != null && value < riders && (
+          <Alert type="warning" showIcon
+            message={`السعة أقل من عدد الركاب الحاليين (${riders}) — الحجوزات القائمة لن تتأثر، لكن الموعد سيبقى مكتملاً.`} />
+        )}
+        {value != null && value > riders && trip.return_status === 'full' && (
+          <Alert type="success" showIcon message={`سيُفتح الحجز تلقائياً لـ ${value - riders} راكب إضافي.`} />
+        )}
+        {trip.capacity_override != null && (
+          <Button size="small" loading={isLoading} onClick={() => save(null, 'day')}>
+            إلغاء سعة اليوم والرجوع للأساسية ({trip.standing_capacity})
+          </Button>
+        )}
+      </Space>
+    </Modal>
+  )
+}
+
 export default function TripBoard() {
   const { message, modal } = AntdApp.useApp()
   const [date, setDate] = useState(dayjs())
@@ -147,6 +200,7 @@ export default function TripBoard() {
   const [deleteEmptyTrip] = useDeleteEmptyTripMutation()
   const [openTrip, setOpenTrip] = useState<any>(null)
   const [seatTrip, setSeatTrip] = useState<any>(null)
+  const [capTrip, setCapTrip] = useState<any>(null)
 
   const doRun = async () => {
     try { const r = await runAllocation({ date: ds }).unwrap(); message.success(`تم تخصيص المقاعد لـ ${r.allocated_trips} رحلة`) }
@@ -206,6 +260,29 @@ export default function TripBoard() {
     },
   ]
 
+  // Return rows also show whether the slot still takes bookings, and let the
+  // admin change its capacity on the spot.
+  const RETURN_STATUS: Record<string, { color: string; label: string; tip: string }> = {
+    open: { color: 'green', label: 'متاح', tip: 'الحجز مفتوح على هذا الموعد' },
+    full: { color: 'red', label: 'مكتمل السعة', tip: 'الحجز متوقف تلقائياً — يرجع يفتح أول ما تزوّد السعة' },
+    stopped: { color: 'default', label: 'متوقف إدارياً', tip: 'الموعد غير نشط من الإعدادات — لا يستقبل حجوزات جديدة' },
+  }
+  const returnColumns = [
+    ...columns.slice(0, 2),
+    { title: 'الحالة', dataIndex: 'return_status', render: (v: string) => {
+        const st = RETURN_STATUS[v] || RETURN_STATUS.open
+        return <Tooltip title={st.tip}><Tag color={st.color} style={{ fontWeight: 700 }}>{st.label}</Tag></Tooltip>
+      } },
+    { title: 'السعة', dataIndex: 'total_seats', render: (v: number, r: any) => (
+      <Space size={4}>
+        <b>{v}</b>
+        {r.capacity_override != null && <Tooltip title={`سعة خاصة بهذا اليوم — الأساسية ${r.standing_capacity}`}><Tag color="purple">اليوم</Tag></Tooltip>}
+        <Button size="small" onClick={() => setCapTrip(r)}>تعديل</Button>
+      </Space>
+    ) },
+    ...columns.slice(3),
+  ]
+
   const trips = data?.trips || []
   const goTrips = trips.filter((t: any) => t.direction !== 'return')
   const returnTrips = trips.filter((t: any) => t.direction === 'return')
@@ -239,10 +316,10 @@ export default function TripBoard() {
           title={<Space><RollbackOutlined style={{ color: '#EC6A16' }} />رحلات العودة ({returnTrips.length})</Space>}
         >
           <Table
-            rowKey="id" loading={isFetching} dataSource={returnTrips} scroll={{ x: 800 }}
+            rowKey="id" loading={isFetching} dataSource={returnTrips} scroll={{ x: 950 }}
             pagination={returnTrips.length > 6 ? { pageSize: 6 } : false}
             locale={{ emptyText: <Empty description="لا توجد رحلات عودة لهذا اليوم بعد" /> }}
-            columns={columns}
+            columns={returnColumns}
           />
         </Card>
       </Space>
@@ -253,6 +330,8 @@ export default function TripBoard() {
       >
         {openTrip && <Passengers trip={openTrip} />}
       </Drawer>
+
+      {capTrip && <CapacityEditor trip={capTrip} onClose={() => setCapTrip(null)} />}
 
       <Drawer
         title={seatTrip ? `خريطة المقاعد: ${seatTrip.slot_name} — ${seatTrip.route_name}` : ''}

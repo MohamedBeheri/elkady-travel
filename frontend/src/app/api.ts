@@ -169,7 +169,7 @@ export const api = createApi({
     returnSlots: b.query<any, void>({ query: () => 'config/return-slots/', providesTags: ['ReturnSlot'] }),
     saveReturnSlot: b.mutation<any, any>({
       query: ({ id, ...body }) => ({ url: id ? `config/return-slots/${id}/` : 'config/return-slots/', method: id ? 'PATCH' : 'POST', body }),
-      invalidatesTags: ['ReturnSlot'],
+      invalidatesTags: ['ReturnSlot', 'DailyTrip', 'SeatMap', 'Attendance'],
     }),
     capacities: b.query<any, void>({ query: () => 'config/seat-capacities/', providesTags: ['Capacity'] }),
     saveCapacity: b.mutation<any, any>({
@@ -179,6 +179,15 @@ export const api = createApi({
     deleteCapacity: b.mutation<any, number>({
       query: (id) => ({ url: `config/seat-capacities/${id}/`, method: 'DELETE' }),
       invalidatesTags: ['Capacity'],
+    }),
+    returnCapacities: b.query<any, void>({ query: () => 'config/return-capacities/', providesTags: ['Capacity'] }),
+    saveReturnCapacity: b.mutation<any, any>({
+      query: ({ id, ...body }) => ({ url: id ? `config/return-capacities/${id}/` : 'config/return-capacities/', method: id ? 'PATCH' : 'POST', body }),
+      invalidatesTags: ['Capacity', 'DailyTrip', 'SeatMap', 'Attendance'],
+    }),
+    deleteReturnCapacity: b.mutation<any, number>({
+      query: (id) => ({ url: `config/return-capacities/${id}/`, method: 'DELETE' }),
+      invalidatesTags: ['Capacity', 'DailyTrip', 'SeatMap', 'Attendance'],
     }),
     prices: b.query<any, Record<string, any> | void>({
       query: (p) => `config/prices/${qs(p as any)}`, providesTags: ['Price'],
@@ -290,6 +299,14 @@ export const api = createApi({
     runAllocation: b.mutation<any, { date: string }>({
       query: (body) => ({ url: 'operations/daily-trips/run-allocation/', method: 'POST', body }),
       invalidatesTags: ['DailyTrip', 'SeatRequest', 'Dashboard'],
+    }),
+    setTripCapacity: b.mutation<any, { id: number; capacity: number | null; scope: 'day' | 'always' }>({
+      query: ({ id, ...body }) => ({ url: `operations/daily-trips/${id}/set-capacity/`, method: 'POST', body }),
+      invalidatesTags: ['DailyTrip', 'SeatMap', 'Capacity', 'Attendance'],
+    }),
+    returnSlotAvailability: b.query<any, { date: string; route: number }>({
+      query: (p) => `operations/daily-trips/return-availability/${qs(p as any)}`,
+      providesTags: ['DailyTrip', 'SeatMap', 'Attendance'],
     }),
     deleteEmptyTrip: b.mutation<any, number>({
       query: (id) => ({ url: `operations/daily-trips/${id}/remove-if-empty/`, method: 'DELETE' }),
@@ -531,7 +548,8 @@ export const {
   usePaymentQueueQuery, useApproveSubscriptionMutation, useRejectSubscriptionMutation,
   useMarkSubscriptionNotifiedMutation, useClearSubscriptionNotifiedMutation, useExtendSubscriptionMutation,
   useDailyTripsQuery, useTripBoardQuery, useTripPassengersQuery, useDayManifestQuery, useRunAllocationMutation,
-  useDeleteEmptyTripMutation,
+  useDeleteEmptyTripMutation, useSetTripCapacityMutation, useReturnSlotAvailabilityQuery,
+  useReturnCapacitiesQuery, useSaveReturnCapacityMutation, useDeleteReturnCapacityMutation,
   useSeatRequestsQuery, useBookSeatMutation, useCancelSeatMutation,
   useLayoutsQuery, useSeatmapForQuery, useSeatmapQuery, useBookSpecificSeatMutation, useBookDailyMutation,
   useRescheduleDailyMutation, useRescheduleEligibilityQuery, useDailyReschedulesQuery,

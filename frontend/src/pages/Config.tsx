@@ -13,6 +13,7 @@ import {
   usePricesQuery, useSavePriceMutation, useDeletePriceMutation,
   useMorningSlotsQuery, useSaveMorningSlotMutation,
   useReturnSlotsQuery, useSaveReturnSlotMutation,
+  useReturnCapacitiesQuery, useSaveReturnCapacityMutation, useDeleteReturnCapacityMutation,
   useCapacitiesQuery, useSaveCapacityMutation, useDeleteCapacityMutation,
   usePaymentAccountsQuery, useSavePaymentAccountMutation, useDeletePaymentAccountMutation, usePaymentMethodsQuery,
 } from '../app/api'
@@ -362,6 +363,9 @@ function SchedulesTab() {
   const { data: layouts } = useLayoutsQuery()
   const [saveM] = useSaveMorningSlotMutation()
   const [saveR] = useSaveReturnSlotMutation()
+  const { data: rcaps } = useReturnCapacitiesQuery()
+  const [saveRC] = useSaveReturnCapacityMutation()
+  const [delRC] = useDeleteReturnCapacityMutation()
   const [saveC, { isLoading: savingC }] = useSaveCapacityMutation()
   const [delC] = useDeleteCapacityMutation()
   const [genderCap, setGenderCap] = useState<any>(null)
@@ -374,9 +378,33 @@ function SchedulesTab() {
           fields={[{ name: 'code', label: 'الكود', required: true }, { name: 'name', label: 'الاسم', required: true }, { name: 'departure_time', label: 'الوقت', type: 'time', required: true }, { name: 'active', label: 'نشط', type: 'switch', initial: true }]} />
       </Card>
       <Card size="small" title="مواعيد العودة وسعتها">
+        <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>
+          «السعة» هنا هي عدد ركاب العودة المسموح به <b>لكل خط</b> على هذا الموعد — عند اكتمالها يتوقف الحجز على الموعد تلقائياً ويرجع يفتح أول ما تزوّدها.
+          لو خط سعته مختلفة، حدّدها له في الجدول التالي. إلغاء «نشط» يوقف الموعد إدارياً: لا يستقبل حجوزات جديدة، والحجوزات القائمة تبقى كما هي.
+        </div>
         <SimpleTab title="موعد عودة" rows={rslots?.results || rslots || []} onSave={saveR}
-          columns={[{ title: 'الاسم', dataIndex: 'name' }, { title: 'الوقت', dataIndex: 'departure_time' }, { title: 'السعة', dataIndex: 'capacity' }]}
-          fields={[{ name: 'code', label: 'الكود', required: true }, { name: 'name', label: 'الاسم', required: true }, { name: 'departure_time', label: 'الوقت', type: 'time', required: true }, { name: 'capacity', label: 'السعة', type: 'number', required: true }, { name: 'active', label: 'نشط', type: 'switch', initial: true }]} />
+          columns={[
+            { title: 'الاسم', dataIndex: 'name' }, { title: 'الوقت', dataIndex: 'departure_time' },
+            { title: 'السعة لكل خط', dataIndex: 'capacity' },
+            { title: 'الحالة', dataIndex: 'active', render: (v: boolean) => v ? <Tag color="green">يعمل</Tag> : <Tag color="red">متوقف إدارياً</Tag> },
+          ]}
+          fields={[{ name: 'code', label: 'الكود', required: true }, { name: 'name', label: 'الاسم', required: true }, { name: 'departure_time', label: 'الوقت', type: 'time', required: true }, { name: 'capacity', label: 'السعة لكل خط', type: 'number', required: true }, { name: 'active', label: 'نشط', type: 'switch', initial: true }]} />
+      </Card>
+      <Card size="small" title="سعة العودة لخط معيّن (اختياري — تتقدّم على سعة الموعد العامة)">
+        <div style={{ color: '#64748b', fontSize: 13, marginBottom: 10 }}>
+          أضف صفاً فقط للخط الذي تختلف عربيات عودته عن السعة العامة للموعد. لزيادة السعة ليوم واحد (عربية إضافية اليوم فقط) استخدم زر «السعة» في لوحة التشغيل.
+        </div>
+        <SimpleTab title="سعة عودة" rows={rcaps?.results || rcaps || []} onSave={saveRC} onDelete={delRC}
+          rowLabel={(r: any) => `${r.route_name} — ${r.slot_name}`}
+          columns={[
+            { title: 'المسار', dataIndex: 'route_name' }, { title: 'موعد العودة', dataIndex: 'slot_name' },
+            { title: 'عدد المقاعد', dataIndex: 'total_seats' },
+          ]}
+          fields={[
+            { name: 'route', label: 'المسار', type: 'select', required: true, options: (routes?.results || []).map((r: any) => ({ value: r.id, label: r.name })) },
+            { name: 'return_slot', label: 'موعد العودة', type: 'select', required: true, options: (rslots?.results || rslots || []).map((s: any) => ({ value: s.id, label: s.name })) },
+            { name: 'total_seats', label: 'عدد المقاعد', type: 'number', required: true },
+          ]} />
       </Card>
       <Card size="small" title="سعة المقاعد وتخصيص النوع (لكل مسار وموعد)">
         <SimpleTab title="سعة" rows={caps?.results || caps || []} onSave={saveC} onDelete={delC}

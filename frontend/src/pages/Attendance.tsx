@@ -104,7 +104,10 @@ function SeatCard({ s, isLoading, locked, confirm, decline }: any) {
           <Select style={{ width: '100%' }} value={pending} onChange={setPending} disabled={locked}
             options={(s.available_slots || []).map((o: any) => ({
               value: o.id,
-              label: `${o.name}${o.time ? ` — ⏰ ${o.time}` : ''}${o.is_default ? ' (افتراضي)' : ''}`,
+              // A full return slot can't take another rider (the rider's own
+              // default slot is never marked full — it is always theirs).
+              disabled: !!o.full && o.id !== s.chosen_slot_id,
+              label: `${o.name}${o.time ? ` — ⏰ ${o.time}` : ''}${o.is_default ? ' (افتراضي)' : ''}${o.full ? ' — مكتمل' : ''}`,
             }))} />
           {chosen?.time && s.attending && (
             <Tag icon={<ClockCircleOutlined />} color="blue" style={{ marginTop: 8 }}>

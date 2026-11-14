@@ -9,12 +9,12 @@ from config.pagination import LookupPagination
 from config.permissions import IsStaff, ReadOnlyOrStaff
 from .models import (
     College, CompanySettings, Destination, MorningSlot, PaymentAccount, PaymentMethod,
-    PickupPoint, PricingRule, ReturnSlot, Route, SeatCapacity, University,
+    PickupPoint, PricingRule, ReturnCapacity, ReturnSlot, Route, SeatCapacity, University,
 )
 from .serializers import (
     CollegeSerializer, CompanySettingsSerializer, DestinationSerializer, MorningSlotSerializer,
     PaymentAccountSerializer, PaymentMethodSerializer, PickupPointSerializer,
-    PricingRuleSerializer, ReturnSlotSerializer, RouteSerializer,
+    PricingRuleSerializer, ReturnCapacitySerializer, ReturnSlotSerializer, RouteSerializer,
     SeatCapacitySerializer, UniversitySerializer,
 )
 
@@ -136,6 +136,15 @@ class SeatCapacityViewSet(viewsets.ModelViewSet):
     permission_classes = [ReadOnlyOrStaff]
     pagination_class = LookupPagination
     filterset_fields = ['route', 'morning_slot']
+
+
+class ReturnCapacityViewSet(viewsets.ModelViewSet):
+    """Per-route capacity of each return slot (staff only — students never need the numbers)."""
+    queryset = ReturnCapacity.objects.select_related('route', 'return_slot').all()
+    serializer_class = ReturnCapacitySerializer
+    permission_classes = [IsStaff]
+    pagination_class = LookupPagination
+    filterset_fields = ['route', 'return_slot']
 
 
 class PricingRuleViewSet(viewsets.ModelViewSet):

@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CollegeViewSet, DestinationViewSet, MorningSlotViewSet, PaymentAccountViewSet,
     PaymentMethodViewSet, PickupPointViewSet, PricingRuleViewSet,
-    ReturnSlotViewSet, RouteViewSet, SeatCapacityViewSet, UniversityViewSet,
+    ReturnCapacityViewSet, ReturnSlotViewSet, RouteViewSet, SeatCapacityViewSet, UniversityViewSet,
     company_settings, pickup_times_matrix, pickup_times_bulk, permissions_matrix,
 )
 
@@ -17,6 +17,7 @@ router.register('pickup-points', PickupPointViewSet)
 router.register('morning-slots', MorningSlotViewSet)
 router.register('return-slots', ReturnSlotViewSet)
 router.register('seat-capacities', SeatCapacityViewSet)
+router.register('return-capacities', ReturnCapacityViewSet)
 router.register('prices', PricingRuleViewSet)
 router.register('payment-methods', PaymentMethodViewSet)
 router.register('payment-accounts', PaymentAccountViewSet)

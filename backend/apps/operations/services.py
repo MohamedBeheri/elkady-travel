@@ -252,7 +252,8 @@ def build_seatmap(trip, viewer=None, is_staff=False):
     slot_obj = trip.return_slot if trip.direction == 'return' else trip.morning_slot
     extra = [n for n in standing_seat_pool(trip.route, slot_obj, trip.direction, layout_id)
              if n not in seat_set(layout_id)]
-    for n in sorted(seat_set(layout_id)) + extra:
+    numbers = sorted(set(seat_set(layout_id)) | set(extra) | set(trip_seat_pool(trip)) | set(reqs))
+    for n in numbers:
         state, student_name, mine = 'empty', '', False
         if n in reqs:
             r = reqs[n]
@@ -271,7 +272,106 @@ def build_seatmap(trip, viewer=None, is_staff=False):
             'gender': genders.get(n, ''),
             'student': student_name if is_staff else ('أنت' if mine else ''),
         })
-    return {'layout': layout, 'seats': seats}
+    out = {'layout': layout, 'seats': seats}
+    if trip.direction == 'return' and trip.return_slot_id:
+        # Return trips close on a head count, not on the seat map (see return_load).
+        exclude = {'exclude_student_id': viewer.id} if (viewer is not None and not is_staff) else {}
+        subs, held = return_load(trip.date, trip.route_id, trip.return_slot_id, **exclude)
+        cap = trip.effective_capacity
+        out.update({'capacity': cap, 'riders': subs + held, 'full': subs + held >= cap,
+                    'slot_active': trip.return_slot.active})
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Return-trip capacity: a hard stop, counted in riders (not seat numbers).
+#
+# Going trips can take an extra vehicle on the day; return trips cannot, so a
+# return slot closes by itself once the riders of that route reach the admin's
+# capacity, and reopens the moment the capacity is raised. Subscribers moved
+# into a slot for the day keep a seat number from ANOTHER trip, so occupancy is
+# counted by head here, never by seat.
+# ---------------------------------------------------------------------------
+
+RETURN_FULL_MSG = 'ميعاد العودة ده اكتمل عدده — اختر ميعاد عودة تاني.'
+
+
+def return_riding_lock_ids(date, route_id, return_slot_id):
+    """Term/monthly seat locks riding this return slot on this date: attendance
+    confirmed, not absent, and honouring the rider's per-day slot choice."""
+    from .models import DailySlotChoice
+    confirmed = set(AttendanceConfirmation.objects.filter(
+        date=date, term_lock__route_id=route_id, term_lock__direction='return', term_lock__active=True,
+    ).values_list('term_lock_id', flat=True))
+    if not confirmed:
+        return set()
+    absent = set(SeatAbsence.objects.filter(date=date, term_lock_id__in=confirmed)
+                 .values_list('term_lock_id', flat=True))
+    chosen = dict(DailySlotChoice.objects.filter(date=date, term_lock_id__in=confirmed, return_slot__isnull=False)
+                  .values_list('term_lock_id', 'return_slot_id'))
+    default = dict(TermSeatLock.objects.filter(pk__in=confirmed).values_list('pk', 'return_slot_id'))
+    return {lid for lid in confirmed - absent
+            if (chosen.get(lid) or default.get(lid)) == return_slot_id}
+
+
+def return_load(date, route_id, return_slot_id, *, exclude_lock_id=None, exclude_student_id=None):
+    """(subscribers riding, daily seats held+confirmed) on one return slot of one route."""
+    locks = return_riding_lock_ids(date, route_id, return_slot_id)
+    locks.discard(exclude_lock_id)
+    reqs = SeatRequest.objects.filter(
+        daily_trip__date=date, daily_trip__route_id=route_id, daily_trip__direction='return',
+        daily_trip__return_slot_id=return_slot_id,
+        status__in=[SeatRequest.Status.HELD, SeatRequest.Status.CONFIRMED])
+    if exclude_student_id:
+        reqs = reqs.exclude(student_id=exclude_student_id)
+    return len(locks), reqs.count()
+
+
+def return_capacity_on(date, route_id, return_slot):
+    """Capacity of a return slot for one route on one date: that day's override
+    if the admin set one on the trip, else the standing «سعة العودة»."""
+    from apps.config_app.models import return_capacity
+    override = (DailyTrip.objects
+                .filter(date=date, route_id=route_id, direction='return', return_slot=return_slot,
+                        capacity_override__isnull=False)
+                .values_list('capacity_override', flat=True).first())
+    return override if override is not None else return_capacity(route_id, return_slot)
+
+
+def return_trip_full(trip, **exclude):
+    """True when a return trip has no room for one more rider."""
+    subs, seats = return_load(trip.date, trip.route_id, trip.return_slot_id, **exclude)
+    return subs + seats >= trip.effective_capacity
+
+
+def notify_return_fill(trip):
+    """Tell the staff the moment a return trip reaches (or passes) its capacity,
+    so they can add a vehicle and raise it while there is still time."""
+    from apps.notifications.models import notify_staff
+    subs, seats = return_load(trip.date, trip.route_id, trip.return_slot_id)
+    load, cap = subs + seats, trip.effective_capacity
+    if load < cap or cap <= 0:
+        return
+    where = f'{trip.route} — {trip.slot_label} يوم {trip.date}'
+    if load == cap:
+        title, body = 'موعد عودة اكتمل', (
+            f'{where}: {load} من {cap}. الحجز اتقفل تلقائياً — لو وفّرت عربية زوّد السعة من لوحة التشغيل.')
+    else:
+        title, body = 'موعد عودة تجاوز سعته', (
+            f'{where}: {load} راكب والسعة {cap} (مشترك أكّد على ميعاده الأساسي). وفّر مقاعد أو زوّد السعة.')
+    transaction.on_commit(lambda: notify_staff(title, body, link='/board', severity='warning'))
+
+
+def trip_seat_pool(trip):
+    """Seat numbers a booking may take on this trip. A return trip whose
+    capacity is larger than its vehicle gets extra numbers after the last seat."""
+    seats = sorted(seat_set(trip.layout if trip.layout in LAYOUTS else DEFAULT_LAYOUT))
+    if trip.direction == 'return' and trip.return_slot_id:
+        extra = trip.effective_capacity - len(seats)
+        if extra > 0:
+            top = seats[-1] if seats else 0
+            seats += list(range(top + 1, top + 1 + extra))
+    return seats
 
 
 def _lock_filter_for(trip):
@@ -306,8 +406,11 @@ def _seat_occupied(trip, seat_number, exclude_student=None):
 
 def _first_free_seat_on_trip(trip, student):
     """Lowest bookable seat free on this trip and gender-compatible with the student."""
+    if trip.direction == 'return' and trip.return_slot_id \
+            and return_trip_full(trip, exclude_student_id=student.id):
+        return None
     genders = _seat_gender_map(trip)
-    for n in sorted(seat_set(trip.layout if trip.layout in LAYOUTS else DEFAULT_LAYOUT)):
+    for n in trip_seat_pool(trip):
         if _seat_occupied(trip, n, exclude_student=student):
             continue
         g = genders.get(n, '')
@@ -328,12 +431,15 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
     auto-assigns the lowest free gender-compatible seat.
     """
     trip = DailyTrip.objects.select_for_update().get(pk=trip.pk)
+    is_return = trip.direction == 'return' and bool(trip.return_slot_id)
+    if is_return and return_trip_full(trip, exclude_student_id=student.id):
+        raise ValueError(RETURN_FULL_MSG)
     if seat_number in (None, '', 0, '0'):
         seat_number = _first_free_seat_on_trip(trip, student)
         if not seat_number:
             raise ValueError('لا توجد مقاعد متاحة في هذه الرحلة.')
     seat_number = int(seat_number)
-    if seat_number not in seat_set(trip.layout):
+    if seat_number not in trip_seat_pool(trip):
         raise ValueError('رقم المقعد غير صحيح لهذه المركبة.')
     if _seat_occupied(trip, seat_number, exclude_student=student):
         raise ValueError('هذا المقعد محجوز بالفعل، اختر مقعداً آخر.')
@@ -385,6 +491,8 @@ def book_specific_seat(*, trip, student, seat_number, university_id, priority_ty
     if status == SeatRequest.Status.CONFIRMED and not req.qr_token:
         req.qr_token = new_token()
     req.save()
+    if is_return:
+        notify_return_fill(trip)
     msg = ('تم تأكيد مقعدك.' if status == SeatRequest.Status.CONFIRMED
            else 'تم حجز المقعد مؤقتاً — بانتظار تأكيد الدفع من الإدارة.')
     return 'seat', req, msg
@@ -438,6 +546,8 @@ def reschedule_seat(*, trip, student, university_id, subscription, pickup_point_
     if not req.qr_token:
         req.qr_token = new_token()
     req.save()
+    if trip.direction == 'return' and trip.return_slot_id:
+        notify_return_fill(trip)
     return req
 
 
@@ -491,7 +601,10 @@ def confirm_daily_subscription_seats(subscription):
             continue
         trip = DailyTrip.objects.select_for_update().get(pk=req.daily_trip_id)
         seat = req.seat_number
-        if not seat or _seat_occupied(trip, seat, exclude_student=student):
+        if trip.direction == 'return' and trip.return_slot_id \
+                and return_trip_full(trip, exclude_student_id=student.id):
+            seat = None  # the return slot filled up meanwhile — no room to take the seat back
+        elif not seat or _seat_occupied(trip, seat, exclude_student=student):
             seat = _first_free_seat_on_trip(trip, student)
         if not seat:
             missing.append(direction)
