@@ -4,6 +4,31 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+MINIBUS_SEATS = 15  # the «هاي إيس» layout
+
+
+def keep_minibus_routes_at_their_vehicle(apps, schema_editor):
+    """Until now a return booking on a minibus route stopped at the vehicle's
+    15 seats (the seat map ran out). The return capacity now comes from the
+    slot's own «السعة», which may say 50 — so pin those routes to 15 on every
+    return slot that allows more, and the new rule is never looser than the old
+    one. The admin can change any of these rows afterwards."""
+    Route = apps.get_model('config_app', 'Route')
+    SeatCapacity = apps.get_model('config_app', 'SeatCapacity')
+    ReturnSlot = apps.get_model('config_app', 'ReturnSlot')
+    ReturnCapacity = apps.get_model('config_app', 'ReturnCapacity')
+    slots = list(ReturnSlot.objects.all())
+    for route in Route.objects.all():
+        # Same row the old code read for a route's return vehicle.
+        vehicle = SeatCapacity.objects.filter(route=route).order_by('id').first()
+        if not vehicle or vehicle.layout != 'hiace15':
+            continue
+        for slot in slots:
+            if slot.capacity > MINIBUS_SEATS:
+                ReturnCapacity.objects.get_or_create(
+                    route=route, return_slot=slot, defaults={'total_seats': MINIBUS_SEATS})
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -25,4 +50,5 @@ class Migration(migrations.Migration):
                 'unique_together': {('route', 'return_slot')},
             },
         ),
+        migrations.RunPython(keep_minibus_routes_at_their_vehicle, migrations.RunPython.noop),
     ]
